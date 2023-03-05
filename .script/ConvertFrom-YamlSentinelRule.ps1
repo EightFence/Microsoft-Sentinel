@@ -30,8 +30,8 @@ else {
 $detections = (Get-ChildItem -Path $SourcePath)
 
 foreach ($detection in $detections) {
-    Write-Host "Solution being proccesed: $($detection.name)"
     Write-Host ""
+    Write-Host "Solution being proccesed: $($detection.name)"
 
     # Set default values
     $detectionOutputFolder = "$OutputFolder/$($detection.Name)"
