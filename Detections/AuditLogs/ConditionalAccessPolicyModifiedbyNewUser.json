@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/25a7f951-54b7-4cf5-9862-ebc04306c590')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/25a7f951-54b7-4cf5-9862-ebc04306c590')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Conditional Access Policy Modified by New User",
+        "query": "let known_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName has \"conditional access policy\"\n  | where Result =~ \"success\"\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | summarize by userPrincipalName);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName has \"conditional access policy\"\n  | where Result =~ \"success\"\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend CAPolicyName = tostring(TargetResources[0].displayName)\n  | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | where userPrincipalName !in (known_users)\n  | extend NewPolicyValues = TargetResources[0].modifiedProperties[0].newValue\n  | extend OldPolicyValues = TargetResources[0].modifiedProperties[0].oldValue\n  | project-reorder TimeGenerated, OperationName, CAPolicyName, userPrincipalName, ipAddress, NewPolicyValues, OldPolicyValues\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "userPrincipalName",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ipAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          }
+        },
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "description": "'Detects a Conditional Access Policy being modified by a user who has not modified a policy in the last 14 days.\n  A threat actor may try to modify policies to weaken the security controls in place.\n  Investigate any change to ensure they are approved.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-infrastructure#conditional-access'\n",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "queryPeriod": "14d",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}

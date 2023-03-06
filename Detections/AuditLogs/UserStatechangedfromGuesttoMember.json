@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a09a0b8e-30fe-4ebf-94a0-cffe50f579cd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a09a0b8e-30fe-4ebf-94a0-cffe50f579cd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "User State changed from Guest to Member",
+        "query": "AuditLogs\n  | where OperationName =~ \"Update user\"\n  | where Result =~ \"success\"\n  | mv-expand TargetResources\n  | mv-expand TargetResources.modifiedProperties\n  | where TargetResources_modifiedProperties.displayName =~ \"TargetId.UserType\"\n  | extend UpdatingServicePrincipal = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)\n  | extend UpdatingUserPrincipal = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend UpdatingUser = iif(isnotempty(UpdatingServicePrincipal), UpdatingServicePrincipal, UpdatingUserPrincipal)\n  | extend UpdatedUserPrincipalName = tostring(TargetResources.userPrincipalName)\n  | project-reorder TimeGenerated, UpdatedUserPrincipalName, UpdatingUser\n  | where parse_json(tostring(TargetResources_modifiedProperties.newValue)) =~ \"\\\"Member\\\"\" and parse_json(tostring(TargetResources_modifiedProperties.oldValue)) =~ \"\\\"Guest\\\"\"\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "UpdatingUser",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "UpdatedUserPrincipalName",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "severity": "Medium",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          }
+        },
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "description": "'Detects when a guest account in a tenant is converted to a member of the tenant.\n  Monitoring guest accounts and the access they are provided is important to detect potential account abuse.\n  Accounts converted to members should be investigated to ensure the activity was legitimate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
+        "tactics": [
+          "Persistence"
+        ],
+        "queryPeriod": "1d",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}

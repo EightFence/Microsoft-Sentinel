@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cc5780ce-3245-4bba-8bc1-e9048c2257ce')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cc5780ce-3245-4bba-8bc1-e9048c2257ce')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Changes to Application Ownership",
+        "query": "AuditLogs\n  | where Category =~ \"ApplicationManagement\"\n  | where OperationName =~ \"Add owner to application\"\n  | extend appName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  | extend UPN = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend UpdatedBy = iif(isnotempty(appName), appName, UPN)\n  | extend mod_props = TargetResources[0].modifiedProperties\n  | extend AddedUser = TargetResources[0].userPrincipalName\n  | mv-expand mod_props\n  | where mod_props.displayName =~ \"Application.DisplayName\"\n  | extend AppName = tostring(parse_json(tostring(mod_props.newValue)))\n  | project-reorder TimeGenerated, OperationName, AppName, AddedUser, UpdatedBy\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "UpdatedBy",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AddedUser",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "severity": "Medium",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          }
+        },
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "description": "'Detects changes to the ownership of an appplicaiton.\n  Monitor these changes to make sure that they were authorized.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#new-owner'\n",
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "queryPeriod": "1d",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}
