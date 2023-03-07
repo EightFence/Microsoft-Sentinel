@@ -1,6 +1,12 @@
+<picture>
+<p align="center">
+  <img src="https://github.com/nextfence/.github-private/blob/main/profile/img/EightFence.png">
+</p>
+</picture>
+
 # Microsoft Sentinel
 
-This project contains all the Microsoft Sentinel context build by EightFence for the Community.
+This project contains all the Microsoft Sentinel content build by #EightFence for the Community.
 
 ## Solutions
 
