@@ -1,6 +1,6 @@
 <picture>
 <p align="center">
-  <img src="https://github.com/nextfence/.github-private/blob/main/profile/img/EightFence.png">
+  <img src="https://github.com/nextfence/.github/blob/main/profile/img/EightFence.png">
 </p>
 </picture>
 
