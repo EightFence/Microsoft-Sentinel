@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/60dfc193-0f73-4279-b43c-110ade02b201')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/60dfc193-0f73-4279-b43c-110ade02b201')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'An overly permissive key policy was created, resulting in KMS keys where the kms:Encrypt action is accessible to everyone (even outside of the organization). This could mean that your account is compromised and that the attacker is using the encryption key to compromise other organizations.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Suspicious overly permessive KMS key policy created",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where EventName in (\"CreateKey\",\"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement\n| mvexpand Statement\n| extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))\n| where Effect =~ \"Allow\" and (Action == \"kms:Encrypt\" or Action == \"kms:*\") and Principal == \"*\"\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Impact"
+        ]
+      }
+    }
+  ]
+}

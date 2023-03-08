@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c63ae777-d5e0-4113-8c9a-c2c9d3d09fcd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c63ae777-d5e0-4113-8c9a-c2c9d3d09fcd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies the host and account that executed AdFind by hash and filename in addition to common and unique flags that are used by many threat actors in discovery.'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "Probable AdFind Recon Tool Usage",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let args = dynamic([\"objectcategory\",\"domainlist\",\"dcmodes\",\"adinfo\",\"trustdmp\",\"computers_pwdnotreqd\",\"Domain Admins\", \"objectcategory=person\", \"objectcategory=computer\", \"objectcategory=*\",\"dclist\"]);\nlet parentProcesses = dynamic([\"pwsh.exe\",\"powershell.exe\",\"cmd.exe\"]);\nDeviceProcessEvents\n//looks for execution from a shell\n| where InitiatingProcessFileName in (parentProcesses)\n// main filter\n| where FileName =~ \"AdFind.exe\" or SHA256 == \"c92c158d7c37fea795114fa6491fe5f145ad2f8c08776b18ae79db811e8e36a3\"\n   // AdFind common Flags to check for from various threat actor TTPs\n    or ProcessCommandLine has_any (args)\n| extend AccountCustomEntity = AccountName, HostCustomEntity = DeviceName, ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = ProcessCommandLine, AlgorithmCustomEntity = \"SHA256\", FileHashCustomEntity = SHA256\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "ProcessId",
+                "columnName": "ProcessCustomEntity"
+              },
+              {
+                "identifier": "CommandLine",
+                "columnName": "CommandLineCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "FileHash",
+            "fieldMappings": [
+              {
+                "identifier": "Algorithm",
+                "columnName": "AlgorithmCustomEntity"
+              },
+              {
+                "identifier": "Value",
+                "columnName": "FileHashCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Discovery"
+        ]
+      }
+    }
+  ]
+}

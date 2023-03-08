@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e7470b35-0128-4508-bfc9-e01cfb3c2eb7')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e7470b35-0128-4508-bfc9-e01cfb3c2eb7')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'This query detects a macro invoking ShellBrowserWindow COM Objects evade naive parent/child Office detection rules.\nRef: https://blog.menasec.net/2019/02/threat-hunting-doc-with-macro-invoking.html'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "Detecting Macro Invoking ShellBrowserWindow COM Objects",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "Event\n | where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID==1\n | parse EventData with * 'Image\">' Image \"<\" * 'CommandLine\">' CommandLine \"<\" * 'ParentImage\">' ParentImage \"<\" *\n | where ParentImage has \"svchost.exe\" and Image has \"rundll32.exe\" and CommandLine has \"{c08afd90-f2a1-11d1-8455-00a0c91f3880}\"\n | parse EventData with * 'ProcessGuid\">' ProcessGuid \"<\" * 'Description\">' Description \"<\" * 'CurrentDirectory\">' CurrentDirectory \"<\" * 'User\">' User \"<\" * 'LogonGuid\">' LogonGuid \"<\" * 'ParentProcessGuid\">' ParentProcessGuid \"<\" * 'ParentImage\">' ParentImage \"<\" * 'ParentCommandLine\">' ParentCommandLine \"<\" * 'ParentUser\">' ParentUser \"<\" *\n | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "CommandLine"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Computer"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "User"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "LateralMovement"
+        ]
+      }
+    }
+  ]
+}

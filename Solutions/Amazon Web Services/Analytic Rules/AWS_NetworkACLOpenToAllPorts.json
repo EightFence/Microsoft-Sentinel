@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f8ea7d50-e33b-4b9d-9c3e-a59fcbcee281')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f8ea7d50-e33b-4b9d-9c3e-a59fcbcee281')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Detected network ACL with all the ports open to a specified CIDR. This could lead to potential lateral movements or initial access attacks. Make sure to mitigate this risk.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Network ACL with all the open ports to a specified CIDR",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where EventName in ('CreateNetworkAclEntry', 'ReplaceNetworkAclEntry') and isempty(ErrorMessage) and isempty(ErrorCode)\n| extend ruleAction = tostring(parse_json(RequestParameters)['ruleAction']),\n         egress=parse_json(RequestParameters)['egress'],\n         total_ports=(toint(parse_json(parse_json(RequestParameters)['portRange'])['to']) - toint(parse_json(parse_json(RequestParameters)['portRange'])['from'])),\n         aclProtocol=parse_json(RequestParameters)['aclProtocol']\n| where isnotempty(total_ports)\n| where ruleAction == 'allow' and egress == false and aclProtocol == '-1' and (total_ports > 1024)\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "DefenseEvasion"
+        ]
+      }
+    }
+  ]
+}

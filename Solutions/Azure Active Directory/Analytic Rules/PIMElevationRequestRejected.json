@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7d7e20f8-3384-4b71-811c-f5e950e8306c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7d7e20f8-3384-4b71-811c-f5e950e8306c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies when a user is rejected for a privileged role elevation via PIM. Monitor rejections for indicators of attacker compromise of the requesting account.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
+        "queryFrequency": "2h",
+        "queryPeriod": "2h",
+        "name": "PIM Elevation Request Rejected",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AuditLogs\n| where ActivityDisplayName =~'Add member to role completed (PIM activation)'\n| where Result == \"failure\"\n| extend Role = tostring(TargetResources[3].displayName)\n| extend User = tostring(TargetResources[2].displayName)\n| project-reorder TimeGenerated, User, Role, OperationName, Result, ResultDescription\n| extend InitiatingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n| extend AccountCustomEntity = User, IPCustomEntity = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingUser"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Persistence"
+        ]
+      }
+    }
+  ]
+}

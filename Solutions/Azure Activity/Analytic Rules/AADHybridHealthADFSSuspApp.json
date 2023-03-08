@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d9938c3b-16f9-444d-bc22-ea9a9110e0fd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d9938c3b-16f9-444d-bc22-ea9a9110e0fd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'This detection uses AzureActivity logs (Administrative category) to a suspicious application adding a server instance to an Azure AD Hybrid health AD FS service or deleting the AD FS service instance.\nUsually the Azure AD Connect Health Agent application with ID cf6d7e68-f018-4e0a-a7b3-126e053fb88d and ID cb1056e2-e479-49de-ae31-7812af012ed8 is used to perform those operations.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Azure Active Directory Hybrid Health AD FS Suspicious Application",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "// Azure AD Connect Health Agent - cf6d7e68-f018-4e0a-a7b3-126e053fb88d\n// Azure Active Directory Connect - cb1056e2-e479-49de-ae31-7812af012ed8\nlet appList = dynamic(['cf6d7e68-f018-4e0a-a7b3-126e053fb88d','cb1056e2-e479-49de-ae31-7812af012ed8']);\nlet operationNamesList = dynamic(['Microsoft.ADHybridHealthService/services/servicemembers/action','Microsoft.ADHybridHealthService/services/delete']);\nAzureActivity\n| where CategoryValue == 'Administrative'\n| where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'\n| where _ResourceId contains 'AdFederationService'\n| where OperationNameValue in~ (operationNamesList)\n| extend claimsJson = parse_json(Claims)\n| extend AppId = tostring(claimsJson.appid)\n| extend AccountName = tostring(claimsJson.name)\n| where AppId !in (appList)\n| project-away claimsJson\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "CredentialAccess",
+          "DefenseEvasion"
+        ]
+      }
+    }
+  ]
+}

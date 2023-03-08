@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/482c24b9-a700-4b2a-85d3-1c42110ba78c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/482c24b9-a700-4b2a-85d3-1c42110ba78c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Detects multiple rejects on rare ports.'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "14d",
+        "name": "OCI - Multiple rejects on rare ports",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let threshold = 50;\nlet r_dports = \nOCILogs\n| where EventType contains 'vcn.flowlogs'\n| where ipv4_is_private(DstIpAddr)\n| where ipv4_is_private(SrcIpAddr) == False\n| summarize count() by DstPortNumber\n| top 10 by count_ asc\n| summarize dports = makeset(DstPortNumber)\n| extend k = 1;\nOCILogs\n| where EventType contains 'vcn.flowlogs'\n| where data_action_s =~ 'REJECT'\n| where ipv4_is_private(DstIpAddr)\n| where ipv4_is_private(SrcIpAddr) == False\n| extend k = 1\n| join kind=innerunique (r_dports) on k\n| where dports has tostring(DstPortNumber)\n| summarize count() by SrcIpAddr, bin(TimeGenerated, 5m)\n| where count_ > threshold\n| extend IPCustomEntity = SrcIpAddr\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Reconnaissance"
+        ]
+      }
+    }
+  ]
+}

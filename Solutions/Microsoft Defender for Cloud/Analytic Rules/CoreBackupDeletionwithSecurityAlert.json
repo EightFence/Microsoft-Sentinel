@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/011c84d8-85f0-4370-b864-24c13455aa94')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/011c84d8-85f0-4370-b864-24c13455aa94')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'This query will help detect attackers attempt to delete backup containers in correlation with other alerts that could have triggered to help possibly reveal more details of attacker activity. \nThough such an activity could be legitimate as part of business operation, some ransomware actors may perform such operation to cause interruption to regular business services.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "CoreBackUp Deletion in correlation with other related security alerts",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "SecurityAlert\n| extend Extprop = parse_json(ExtendedProperties)\n| extend Computer = iff(isnotempty(toupper(tostring(Extprop[\"Compromised Host\"]))), toupper(tostring(Extprop[\"Compromised Host\"])), tostring(parse_json(Entities)[0].HostName))\n| extend Account = iff(isnotempty(tolower(tostring(Extprop[\"User Name\"]))), tolower(tostring(Extprop[\"User Name\"])), tolower(tostring(Extprop[\"user name\"])))\n| extend IpAddress = tostring(parse_json(ExtendedProperties).[\"IpAddress\"]) \n| project TimeGenerated, AlertName, Computer, Account, IpAddress, ExtendedProperties\n| extend timestamp = TimeGenerated, Account, MachineName = Computer, IpAddress\n| join kind=inner\n(\nCoreAzureBackup\n| where State =~ \"Deleted\"\n| where OperationName =~ \"BackupItem\"\n| extend data = split(BackupItemUniqueId, \";\")\n| extend AzureLocation = data[0], VaultId=data[1], MachineName=data[2], DrivesBackedUp=data[3]\n| project timestamp = TimeGenerated, AzureLocation, VaultId, tostring(MachineName), DrivesBackedUp, State, BackupItemUniqueId, _ResourceId, OperationName, BackupItemFriendlyName\n)\non MachineName\n| project timestamp, AlertName, HostCustomEntity = MachineName, AccountCustomEntity = Account, ResourceCustomEntity = _ResourceId, IPCustomEntity = IpAddress, VaultId, AzureLocation, DrivesBackedUp, State, BackupItemUniqueId, OperationName, BackupItemFriendlyName\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "AzureResource",
+            "fieldMappings": [
+              {
+                "identifier": "ResourceId",
+                "columnName": "ResourceCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Impact"
+        ]
+      }
+    }
+  ]
+}

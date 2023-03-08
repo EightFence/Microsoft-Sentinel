@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1ff56009-db01-4615-8211-d4fda21da02d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1ff56009-db01-4615-8211-d4fda21da02d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.\nThis permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.\nAn adversary could use this permission to add an Azure AD object to an Admin directory role and escalate privileges.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions\nRef : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n",
+        "queryFrequency": "2h",
+        "queryPeriod": "2h",
+        "name": "Azure AD Role Management Permission Grant",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AuditLogs\n| where Category == \"ApplicationManagement\" and LoggedByService == \"Core Directory\" and OperationName in (\"Add delegated permission grant\", \"Add app role assignment to service principal\")\n| mv-expand TargetResource = TargetResources\n//| where tostring(TargetResource[\"displayName\"]) == \"Microsoft Graph\"\n| mv-expand modifiedProperty = TargetResource[\"modifiedProperties\"]\n| where tostring(modifiedProperty[\"displayName\"]) in (\"AppRole.Value\", \"DelegatedPermissionGrant.Scope\")\n| extend PermissionGrant = trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"newValue\"]))\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply modifiedProperty = TargetResource[\"modifiedProperties\"] on (\n    summarize modifiedProperties = make_bag(\n        pack(tostring(modifiedProperty[\"displayName\"]),\n            pack(\"oldValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"oldValue\"])),\n                \"newValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"newValue\"])))))\n)\n| extend\n    //AppDisplayName for operation \"Add delegated permission grant\" will be in operation \"Consent to application\" (usually same CorrelationId)\n    AppDisplayName = tostring(modifiedProperties[\"ServicePrincipal.DisplayName\"][\"newValue\"]),\n    AppServicePrincipalId = tostring(modifiedProperties[\"ServicePrincipal.ObjectID\"][\"newValue\"]),\n    Initiator = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"displayName\"]), tostring(InitiatedBy[\"user\"][\"userPrincipalName\"])),\n    InitiatorId = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"]), tostring(InitiatedBy[\"user\"][\"id\"]))\n| project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Initiator"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AppDisplayName"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Persistence",
+          "Impact"
+        ]
+      }
+    }
+  ]
+}

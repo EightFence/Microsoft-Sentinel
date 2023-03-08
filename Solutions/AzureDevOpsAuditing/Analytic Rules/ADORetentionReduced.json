@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/71d374e0-1cf8-4e50-aecd-ab6c519795c2')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/71d374e0-1cf8-4e50-aecd-ab6c519795c2')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'AzureDevOps retains items such as run records and produced artifacts for a configurable amount of time. An attacker looking to reduce the footprint left by their malicious activity may look to reduce the retention time for artifacts and runs.\nThis query will look for where retention has been reduced to the minimum level - 1, or reduced by more than half.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Azure DevOps Retention Reduced",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AzureDevOpsAuditing\n| where OperationName =~ \"Pipelines.PipelineRetentionSettingChanged\"\n| where Data.SettingName in (\"PurgeArtifacts\", \"PurgeRuns\")\n| where Data.NewValue == 1 or Data.NewValue < Data.OldValue/2\n| project-reorder TimeGenerated, OperationName, ActorUPN, IpAddress, UserAgent, Data\n| extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress\n",
+        "status": "Available",
+        "severity": "Low",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "DefenseEvasion"
+        ]
+      }
+    }
+  ]
+}

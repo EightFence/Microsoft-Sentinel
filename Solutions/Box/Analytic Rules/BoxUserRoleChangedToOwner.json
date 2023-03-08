@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/174c31c9-22ec-42e5-8226-814391c08200')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/174c31c9-22ec-42e5-8226-814391c08200')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Detects when user collaboration role is changed to owner.'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "14d",
+        "name": "Box - User role changed to owner",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let lbperiod = 14d;\nlet lbtime = 1h;\nBoxEvents\n| where TimeGenerated between (ago(lbperiod) .. ago(lbtime))\n| where EventType =~ 'COLLABORATION_INVITE'\n| where AdditionalDetailsRole !~ 'Owner'\n| summarize min(TimeGenerated) by AccessibleByName, FileDirectory, AdditionalDetailsRole\n| project AccessibleByName, FileDirectory, InitialRole = AdditionalDetailsRole\n|join (BoxEvents\n          | where EventType =~ 'COLLABORATION_ROLE_CHANGE'\n          | summarize max(TimeGenerated) by AccessibleByName, FileDirectory, AdditionalDetailsRole\n          | project AccessibleByName, FileDirectory, NewRole = AdditionalDetailsRole\n          ) on FileDirectory, AccessibleByName\n| where NewRole =~ 'Owner'\n| project AccessibleByName, FileDirectory\n| extend AccountCustomEntity = AccessibleByName\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "PrivilegeEscalation"
+        ]
+      }
+    }
+  ]
+}

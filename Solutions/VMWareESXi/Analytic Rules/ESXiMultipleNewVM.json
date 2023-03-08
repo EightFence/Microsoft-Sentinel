@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bdea247f-7d17-498c-ac0e-c7e764cbdbbe')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bdea247f-7d17-498c-ac0e-c7e764cbdbbe')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Detects when multiple new VMs were started.'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "VMware ESXi - Multiple new VMs started",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let threshold = 5;\nlet a_vm = \nVMwareESXi\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| summarize vm_l = makeset(DstHostname)\n| extend k=1;\nVMwareESXi\n| where SyslogMessage has ('VmPoweredOnEvent')\n| extend DstHostname = extract(@'\\[\\d+\\]\\s+\\[(.*?)\\s+on', 1, SyslogMessage)\n| extend SrcUsername = extract(@'\\[info\\]\\s+\\[(.*?)\\]', 1, SyslogMessage)\n| extend k = 1\n| join (a_vm) on k\n| where vm_l !has DstHostname\n| summarize n_vm = makeset(DstHostname) by SrcUsername, bin(TimeGenerated, 10m)\n| where array_length(n_vm) >= threshold\n| extend HostCustomEntity = n_vm\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "InitialAccess"
+        ]
+      }
+    }
+  ]
+}

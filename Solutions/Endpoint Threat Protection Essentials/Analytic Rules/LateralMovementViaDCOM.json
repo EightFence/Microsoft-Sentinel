@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/50cbf34a-4cdd-45d7-b3f5-8b53a1d0d14f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/50cbf34a-4cdd-45d7-b3f5-8b53a1d0d14f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'This query detects a fairly uncommon attack technique using the Windows Distributed Component Object Model (DCOM) to make a remote execution call to another computer system and gain lateral movement throughout the network.\nRef: http://thenegative.zone/incident%20response/2017/02/04/MMC20.Application-Lateral-Movement-Analysis.html'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "Lateral Movement via DCOM",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID==1\n| parse EventData with * 'CommandLine\">' CommandLine \"<\" * 'ParentCommandLine\">' ParentCommandLine \"<\" *\n| where ParentCommandLine == \"C:\\\\Windows\\\\System32\\\\svchost.exe -k DcomLaunch\" and CommandLine == \"C:\\\\Windows\\\\System32\\\\mmc.exe -Embedding\"\n| parse EventData with * 'ProcessGuid\">' ProcessGuid \"<\" * 'Image\">' Image \"<\" * 'Description\">' Description \"<\" * 'CurrentDirectory\">' CurrentDirectory \"<\" * 'User\">' User \"<\" * 'LogonGuid\">' LogonGuid \"<\" * 'ParentProcessGuid\">' ParentProcessGuid \"<\" * 'ParentImage\">' ParentImage \"<\" * 'ParentCommandLine\">' ParentCommandLine \"<\" * 'ParentUser\">' ParentUser \"<\" *\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "CommandLine"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Computer"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "User"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "LateralMovement"
+        ]
+      }
+    }
+  ]
+}

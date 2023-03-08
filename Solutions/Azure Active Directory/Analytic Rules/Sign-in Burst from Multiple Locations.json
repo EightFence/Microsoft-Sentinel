@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d3980830-dd9d-40a5-911f-76b44dfdce16')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d3980830-dd9d-40a5-911f-76b44dfdce16')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'This alerts when there Signin burst from multiple locations in GitHub (AAD SSO).'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "GitHub Signin Burst from Multiple Locations",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let aadFunc = (tableName:string){\ntable(tableName)\n| where AppDisplayName == \"GitHub.com\"\n| where ResultType == 0\n| summarize CountOfLocations = dcount(Location), Locations = make_set(Location), BurstStartTime = min(TimeGenerated), BurstEndTime = max(TimeGenerated) by UserPrincipalName, Type\n| where CountOfLocations > 1\n| extend timestamp = BurstStartTime, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "CredentialAccess"
+        ]
+      }
+    }
+  ]
+}

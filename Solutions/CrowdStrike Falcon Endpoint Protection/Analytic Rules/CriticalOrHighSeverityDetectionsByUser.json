@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4465ebde-b381-45f7-ad08-7d818070a11c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4465ebde-b381-45f7-ad08-7d818070a11c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Creates an incident when a large number of Critical/High severity CrowdStrike Falcon sensor detections is triggered by a single user'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "Critical or High Severity Detections by User",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let timeframe = 1h;\nlet threshold = 15; // update threshold value based on organization's preference\nlet NoteableEvents = CrowdStrikeFalconEventStream\n| where TimeGenerated > ago(timeframe)\n| where EventType == \"DetectionSummaryEvent\"\n| where Severity in (\"Critical\", \"High\")\n| summarize Total = count() by DstUserName\n| where Total > threshold;\nCrowdStrikeFalconEventStream\n| where TimeGenerated > ago(timeframe)\n| where EventType == \"DetectionSummaryEvent\"\n| where Severity in (\"Critical\", \"High\")\n| join kind=inner (NoteableEvents) on DstUserName\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), Total = count() by DstHostName, SrcIpAddr, DstUserName, FileName, FileHash, Message\n| extend timestamp = StartTimeUtc, AccountCustomEntity = DstUserName, HostCustomEntity = DstHostName, IPCustomEntity = SrcIpAddr, FileHashCustomEntity = FileHash\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "FileHash",
+            "fieldMappings": [
+              {
+                "identifier": "Algorithm",
+                "columnName": "MD5"
+              },
+              {
+                "identifier": "Value",
+                "columnName": "FileHashCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": null
+      }
+    }
+  ]
+}

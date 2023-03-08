@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/89a86f70-615f-4a79-9621-6f68c50f365f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/89a86f70-615f-4a79-9621-6f68c50f365f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies Palo Alto Threat signatures from unusual IP addresses which are not historically seen. \nThis detection is also leveraged and required for MDE and PAN Fusion scenario\nhttps://docs.microsoft.com/Azure/sentinel/fusion-scenario-reference#network-request-to-tor-anonymization-service-followed-by-anomalous-traffic-flagged-by-palo-alto-networks-firewall'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "7d",
+        "name": "Palo Alto Threat signatures from Unusual IP addresses",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let starttime = 7d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet HistThreshold = 25; \nlet CurrThreshold = 10; \nlet HistoricalThreats = CommonSecurityLog\n| where isnotempty(SourceIP)\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where DeviceVendor =~ \"Palo Alto Networks\"\n| where Activity =~ \"THREAT\" and SimplifiedDeviceAction =~ \"alert\" \n| where DeviceEventClassID in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')\n| summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceVendor;\nlet CurrentHourThreats =  CommonSecurityLog\n| where isnotempty(SourceIP)\n| where TimeGenerated > ago(timeframe)\n| where DeviceVendor =~ \"Palo Alto Networks\"\n| where Activity =~ \"THREAT\" and SimplifiedDeviceAction =~ \"alert\" \n| where DeviceEventClassID in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')\n| summarize TotalEvents = count(), ThreatTypes = make_set(DeviceEventClassID), DestinationIpList = make_set(DestinationIP), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by SourceIP, DeviceAction, DeviceProduct, DeviceVendor;\nCurrentHourThreats \n| where TotalEvents < CurrThreshold\n| join kind = leftanti (HistoricalThreats \n| where TotalEvents > HistThreshold) on SourceIP\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIP"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Discovery",
+          "Exfiltration",
+          "CommandAndControl"
+        ]
+      }
+    }
+  ]
+}

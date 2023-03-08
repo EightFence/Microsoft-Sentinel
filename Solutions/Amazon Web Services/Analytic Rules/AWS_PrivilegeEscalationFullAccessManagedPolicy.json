@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/afb4191b-a142-4065-a0da-f721ee3d006c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/afb4191b-a142-4065-a0da-f721ee3d006c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on FullAccess managed policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Privilege escalation with FullAccess managed policy",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) has \"FullAccess\" and tostring(parse_json(RequestParameters).policyArn) !has \"Admin\"\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityAccountId\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "PrivilegeEscalation"
+        ]
+      }
+    }
+  ]
+}

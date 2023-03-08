@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ffcd575b-3d54-482a-a6d8-d0de13b6ac63')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ffcd575b-3d54-482a-a6d8-d0de13b6ac63')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URLCustomEntity"
+              }
+            ]
+          }
+        ],
+        "queryFrequency": "1h",
+        "description": "'Identifies a match in CommonSecurityLog table from any Email IOC from TI'\n",
+        "queryPeriod": "14d",
+        "name": "TI map Email entity to CommonSecurityLog",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)\n    // Filtering PAN Logs for specific event type to match relevant email entities\n    | where DeviceVendor == \"Palo Alto Networks\" and  DeviceEventClassID == \"wildfire\" and ApplicationProtocol in (\"smtp\",\"pop3\")\n    | extend DestinationUserID = tolower(DestinationUserID)\n    | where DestinationUserID matches regex emailregex\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.DestinationUserID\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, DestinationUserID\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient,\nEmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,\nDestinationIP, DestinationPort, Protocol, ApplicationProtocol\n| extend timestamp = CommonSecurityLog_TimeGenerated, AccountCustomEntity = DestinationUserID, IPCustomEntity = SourceIP, URLCustomEntity = Url\n",
+        "severity": "Medium",
+        "tactics": [
+          "Impact"
+        ]
+      }
+    }
+  ]
+}

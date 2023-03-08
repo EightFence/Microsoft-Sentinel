@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c6258d51-7b82-4942-8293-94c1dcf91595')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c6258d51-7b82-4942-8293-94c1dcf91595')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'42Crunch API protection against first-time access'\n",
+        "queryFrequency": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "name": "API - Rate limiting",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let firstRec = apifirewall_log_1_CL\n| where TimeGenerated >= ago(5m) \n| project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g\n| where Instance_Name_s == \"Instance_9\" and URI_Path_s has \"/api/login\" |\ntop 1 by Timestamp_t desc;\nlet ipAddress = toscalar(firstRec | summarize by Source_IP_s);\nlet secondRec = apifirewall_log_1_CL\n| where TimeGenerated >= ago(7d) \n| project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g\n| where Instance_Name_s == \"Instance_9\" and URI_Path_s has \"/api/login\" and Source_IP_s == ipAddress;\nlet recCount = iff((toscalar(secondRec | count) > 1), 0, 1);\nsecondRec | take recCount\n",
+        "status": "Available",
+        "severity": "Low",
+        "queryPeriod": "5m",
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "Source_IP_s"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Hostname_s"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Instance_Name_s"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Discovery",
+          "InitialAccess"
+        ]
+      }
+    }
+  ]
+}

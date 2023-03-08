@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/86a036b2-3686-42eb-b417-909fc0867771')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/86a036b2-3686-42eb-b417-909fc0867771')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'This detection uses AzureActivity logs (Administrative category) to identify the deletion of an Azure AD Hybrid health AD FS service instance in a tenant.\nA threat actor can create a new AD Health ADFS service and create a fake server to spoof AD FS signing logs.\nThe health AD FS service can then be deleted after it is not longer needed via HTTP requests to Azure.\nMore information in this blog https://o365blog.com/post/hybridhealthagent/'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Azure Active Directory Hybrid Health AD FS Service Delete",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AzureActivity\n| where CategoryValue == 'Administrative'\n| where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'\n| where _ResourceId contains 'AdFederationService'\n| where OperationNameValue =~ 'Microsoft.ADHybridHealthService/services/delete'\n| extend claimsJson = parse_json(Claims)\n| extend AppId = tostring(claimsJson.appid)\n| extend AccountName = tostring(claimsJson.name)\n| project-away claimsJson\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "DefenseEvasion"
+        ]
+      }
+    }
+  ]
+}

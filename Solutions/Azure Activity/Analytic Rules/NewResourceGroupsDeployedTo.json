@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9fb57e58-3ed8-4b89-afcf-c8e786508b1c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9fb57e58-3ed8-4b89-afcf-c8e786508b1c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen Caller.'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "14d",
+        "name": "Suspicious Resource deployment",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let szOperationNames = dynamic([\"Microsoft.Compute/virtualMachines/write\", \"Microsoft.Resources/deployments/write\"]);\nlet starttime = 14d;\nlet endtime = 1d;\nlet RareCaller = AzureActivity\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationNameValue in~ (szOperationNames)\n| project ResourceGroup, Caller, OperationNameValue, CallerIpAddress\n| join kind=rightantisemi (\nAzureActivity\n| where TimeGenerated > ago(endtime)\n| where OperationNameValue in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityStatusValue = makeset(ActivityStatusValue), OperationIds = makeset(OperationId), CallerIpAddress = makeset(CallerIpAddress) \nby ResourceId, Caller, OperationNameValue, Resource, ResourceGroup\n) on Caller, ResourceGroup \n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress);\nlet Counts = RareCaller | summarize ActivityCountByCaller = count() by Caller;\nRareCaller | join kind= inner (Counts) on Caller | project-away Caller1\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = tostring(CallerIpAddress)\n| sort by ActivityCountByCaller desc nulls last \n",
+        "status": "Available",
+        "severity": "Low",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Impact"
+        ]
+      }
+    }
+  ]
+}

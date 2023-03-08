@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4b11568b-3f5f-4ba1-80c8-7f1dc8390eb7')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies when the volume of documents uploaded to or downloaded from Sharepoint by new IP addresses\nexceeds a threshold (default is 50).'\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "14d",
+        "name": "SharePointFileOperation via previously unseen IPs",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let threshold = 50;\nlet szSharePointFileOperation = \"SharePointFileOperation\";\nlet szOperations = dynamic([\"FileDownloaded\", \"FileUploaded\"]);\nlet starttime = 14d;\nlet endtime = 1d;\nlet historicalActivity =\nOfficeActivity\n| where TimeGenerated between(ago(starttime)..ago(endtime))\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| summarize historicalCount = count() by ClientIP, RecordType, Operation;\nlet recentActivity = OfficeActivity\n| where TimeGenerated > ago(endtime)\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| summarize min(Start_Time), max(Start_Time), recentCount = count() by ClientIP, RecordType, Operation;\nlet RareIP = recentActivity | join kind= leftanti ( historicalActivity ) on ClientIP, RecordType, Operation\n// More than 50 downloads/uploads from a new IP\n| where recentCount > threshold;\nOfficeActivity\n| where TimeGenerated >= ago(endtime)\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| join kind= inner (RareIP) on ClientIP, RecordType, Operation\n| where Start_Time between(min_Start_Time .. max_Start_Time)\n| summarize StartTimeUtc = min(min_Start_Time), EndTimeUtc = max(max_Start_Time) by RecordType, Operation, UserType, UserId, ClientIP, OfficeWorkload, Site_Url, OfficeObjectId, UserAgent, IPSeenCount = recentCount\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP, URLCustomEntity = Site_Url\n| order by IPSeenCount desc, ClientIP asc, Operation asc, UserId asc\n",
+        "status": "Available",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URLCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Exfiltration"
+        ]
+      }
+    }
+  ]
+}

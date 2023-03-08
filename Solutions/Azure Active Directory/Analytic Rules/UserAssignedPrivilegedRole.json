@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/050b9b3d-53d0-4364-a3da-1b678b8211ec')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/050b9b3d-53d0-4364-a3da-1b678b8211ec')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n",
+        "queryFrequency": "2h",
+        "queryPeriod": "2h",
+        "name": "User Assigned Privileged Role",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n// Uncomment below to not alert for PIM activations\n//| where Initiator != \"MS-PIM\"\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend AccountCustomEntity = Target\n",
+        "status": "Available",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Initiator"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Persistence"
+        ]
+      }
+    }
+  ]
+}
