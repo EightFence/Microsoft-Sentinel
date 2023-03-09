@@ -14,39 +14,39 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'\n",
-        "queryFrequency": "1d",
-        "queryPeriod": "14d",
-        "name": "Suspicious granting of permissions to an account",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "query": "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations below which an IP address is considered an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\nlet AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet createRoleAssignmentActivity = AzureActivity\n| where OperationNameValue =~ \"microsoft.authorization/roleassignments/write\";\nlet RoleAssignedActivity = createRoleAssignmentActivity \n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller\n| where count_ >= alertOperationThreshold\n| join kind = rightanti ( \ncreateRoleAssignmentActivity\n| where TimeGenerated > ago(endtime)\n| extend PrincipalId = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalId)\n| extend PrincipalType = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalType)\n| extend Scope = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).Scope)\n| extend RoleAddedDetails = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).requestbody)).Properties)).RoleDefinitionId) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), \nOperationIds = make_set(OperationId), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  \nby ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails\n) on CallerIpAddress, Caller\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress;\nlet RoleAssignedActivitywithRoleDetails = RoleAssignedActivity\n| extend RoleAssignedID = tostring(split(RoleAddedDetails, \"/\")[-1])\n| join kind = inner (AzureBuiltInRole \n) on $left.RoleAssignedID == $right.ID;\nRoleAssignedActivitywithRoleDetails\n| summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID\n| join kind = leftouter( IdentityInfo\n| summarize arg_max(TimeGenerated, *) by AccountObjectId\n) on $left.PrincipalId == $right.AccountObjectId\n| project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, \nResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity\n",
-        "status": "Available",
         "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
-        ]
+        ],
+        "name": "Suspicious granting of permissions to an account",
+        "description": "'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'\n",
+        "status": "Available",
+        "queryPeriod": "14d"
       }
     }
   ]
