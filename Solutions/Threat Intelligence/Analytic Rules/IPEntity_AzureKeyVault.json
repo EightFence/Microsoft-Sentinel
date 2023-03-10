@@ -15,36 +15,36 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True));\nlet IP_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n),\n(IoCList\n| where IoC_Type =~ 'IP'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_ipEntity = IoC\n| project-away  IoC_Type\n)\n);\nIP_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n        AzureDiagnostics\n       | where ResourceType =~ \"VAULTS\"\n       | where TimeGenerated >= ago(dt_lookBack)\n       | extend KeyVaultEvents_TimeGenerated = TimeGenerated, ClientIP = CallerIPAddress\n)\non $left.TI_ipEntity == $right.ClientIP\n| where KeyVaultEvents_TimeGenerated < ExpirationDateTime\n| summarize KeyVaultEvents_TimeGenerated = arg_max(KeyVaultEvents_TimeGenerated, *) by IndicatorId, ClientIP, IoC\n| project KeyVaultEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, ClientIP, ResourceId, SubscriptionId, OperationName, ResultType, CorrelationId, id_s, clientInfo_s, httpStatusCode_d, identity_claim_appid_g, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, Type\n| extend timestamp = KeyVaultEvents_TimeGenerated\n",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ClientIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ResourceId",
-                "identifier": "ResourceId"
-              }
-            ],
-            "entityType": "AzureResource"
-          }
-        ],
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
+        "name": "TI map IP entity to Azure Key Vault logs",
         "tactics": [
           "Impact"
         ],
-        "name": "TI map IP entity to Azure Key Vault logs",
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIP"
+              }
+            ]
+          },
+          {
+            "entityType": "AzureResource",
+            "fieldMappings": [
+              {
+                "identifier": "ResourceId",
+                "columnName": "ResourceId"
+              }
+            ]
+          }
+        ],
         "description": "'Identifies a match in Azure Key Vault logsfrom any IP IOC from TI'\n",
-        "queryPeriod": "14d"
+        "triggerOperator": "gt",
+        "severity": "Medium"
       }
     }
   ]
