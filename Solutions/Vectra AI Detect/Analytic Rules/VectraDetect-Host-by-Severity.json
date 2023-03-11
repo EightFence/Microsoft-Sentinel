@@ -14,14 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: \"Low\", \"Medium\", \"High\", \"Critical\" )   \nlet configured_level = dynamic([\"Low\", \"Medium\", \"High\", \"Critical\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                       threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                       threat_score >= 50 and certainty_score <= 50, \"High\", \n                       threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                       \"UNKNOWN\")\n| extend Severity = case( level == \"Low\", \"Low\",\n                          level == \"Medium\", \"Medium\",\n                          level == \"High\", \"Medium\",\n                          level == \"Critical\", \"High\",\n                          \"UNKNOWN\")\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(threat_score, *) by SourceHostName\n| project SourceHostName, level, Severity, TimeGenerated, SourceIP, threat_score, certainty_score, vectra_URL\n| extend HostCustomEntity = SourceHostName, IPCustomEntity = SourceIP, URLCustomEntity = vectra_URL, timestamp = TimeGenerated\n",
+        "triggerThreshold": 0,
         "name": "Vectra AI Detect - Suspected Compromised Host",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The host {{SourceHostName}} is in the {{level}} quadrant. Pivot to Detect UI with {{vectra_URL}}",
-          "alertTacticsColumnName": null,
-          "alertSeverityColumnName": "Severity",
-          "alertDisplayNameFormat": "Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity"
-        },
         "tactics": [
           "CredentialAccess",
           "Discovery",
@@ -31,42 +25,39 @@
           "Exfiltration",
           "Impact"
         ],
-        "queryPeriod": "1h",
-        "triggerThreshold": 0,
         "queryFrequency": "1h",
-        "status": "Available",
+        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: \"Low\", \"Medium\", \"High\", \"Critical\" )   \nlet configured_level = dynamic([\"Low\", \"Medium\", \"High\", \"Critical\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                       threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                       threat_score >= 50 and certainty_score <= 50, \"High\", \n                       threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                       \"UNKNOWN\")\n| extend Severity = case( level == \"Low\", \"Low\",\n                          level == \"Medium\", \"Medium\",\n                          level == \"High\", \"Medium\",\n                          level == \"Critical\", \"High\",\n                          \"UNKNOWN\")\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(threat_score, *) by SourceHostName\n| project SourceHostName, level, Severity, TimeGenerated, SourceIP, threat_score, certainty_score, vectra_URL\n| extend HostCustomEntity = SourceHostName, IPCustomEntity = SourceIP, timestamp = TimeGenerated\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity",
+          "alertSeverityColumnName": "Severity",
+          "alertDescriptionFormat": "The host {{SourceHostName}} is in the {{level}} quadrant. Pivot to Detect UI with {{vectra_URL}}",
+          "alertTacticsColumnName": null
+        },
+        "triggerOperator": "gt",
+        "description": "'Create an incident when a Host is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n",
+        "queryPeriod": "1h",
+        "severity": "High",
         "entityMappings": [
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "HostCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPCustomEntity"
               }
-            ]
-          },
-          {
-            "entityType": "URL",
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "URLCustomEntity"
-              }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "description": "'Create an incident when a Host is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n",
-        "triggerOperator": "gt",
-        "severity": "High"
+        "status": "Available"
       }
     }
   ]

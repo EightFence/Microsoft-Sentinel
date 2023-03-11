@@ -14,45 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )\n[@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv\"] with (format=\"csv\"));\nlet fileHashIndicators = covidIndicators\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n   CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n   | where isnotempty(FileHash)\n   | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n   )\non $left.FileHashValue == $right.FileHash\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue\n| project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity\n| extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName\n",
+        "triggerThreshold": 0,
         "name": "Microsoft COVID-19 file hash indicator matches",
         "tactics": [
           "Impact"
         ],
-        "queryPeriod": "14d",
-        "triggerThreshold": 0,
         "queryFrequency": "1h",
-        "status": "Available",
+        "query": "let dt_lookBack = 1h;\nlet covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )\n[@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv\"] with (format=\"csv\"));\nlet fileHashIndicators = covidIndicators\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n   CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n   | where isnotempty(FileHash)\n   | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n   )\non $left.FileHashValue == $right.FileHash\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue\n| project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity\n| extend timestamp = CommonSecurityLog_TimeGenerated, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName, AccountCustomEntity = SourceUserName\n",
+        "triggerOperator": "gt",
+        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed - as described at https://www.microsoft.com/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/'\n",
+        "queryPeriod": "14d",
+        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "AccountCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "HostCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPCustomEntity"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "identifier": "Value",
@@ -62,12 +63,11 @@
                 "identifier": "Algorithm",
                 "columnName": "FileHashType"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
-        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed - as described at https://www.microsoft.com/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/'\n",
-        "triggerOperator": "gt",
-        "severity": "Medium"
+        "status": "Available"
       }
     }
   ]
