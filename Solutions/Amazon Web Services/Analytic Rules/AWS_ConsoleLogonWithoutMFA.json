@@ -14,15 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "AWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),\":\")\n| where MFAUsed !~ \"Yes\" and LoginResult !~ \"Failure\"\n| where SessionIssuerUserName !contains \"AWSReservedSSO\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId\n| extend timestamp = StartTimeUtc, AccountCustomEntity = iif(isempty(UserIdentityUserName),substring(UserIdentityPrincipalid, toint(indexId)+1), UserIdentityUserName), IPCustomEntity = SourceIpAddress\n",
+        "name": "Login to AWS Management Console without MFA",
         "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "tactics": [
+          "DefenseEvasion",
+          "PrivilegeEscalation",
+          "Persistence",
+          "InitialAccess"
+        ],
         "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "status": "Available",
+        "description": "'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.\nYou can limit this detection to trigger for adminsitrative accounts if you do not have MFA enabled on all accounts.\nThis is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used\nand the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'\n",
+        "severity": "Low",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ]
           },
@@ -30,25 +43,12 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ]
           }
-        ],
-        "tactics": [
-          "DefenseEvasion",
-          "PrivilegeEscalation",
-          "Persistence",
-          "InitialAccess"
-        ],
-        "status": "Available",
-        "severity": "Low",
-        "queryPeriod": "1d",
-        "query": "AWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),\":\")\n| where MFAUsed !~ \"Yes\" and LoginResult !~ \"Failure\"\n| where SessionIssuerUserName !contains \"AWSReservedSSO\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId\n| extend timestamp = StartTimeUtc, AccountCustomEntity = iif(isempty(UserIdentityUserName),substring(UserIdentityPrincipalid, toint(indexId)+1), UserIdentityUserName), IPCustomEntity = SourceIpAddress\n",
-        "description": "'Multi-Factor Authentication (MFA) helps you to prevent credential compromise. This alert identifies logins to the AWS Management Console without MFA.\nYou can limit this detection to trigger for adminsitrative accounts if you do not have MFA enabled on all accounts.\nThis is done by looking at the eventName ConsoleLogin and if the AdditionalEventData field indicates MFA was NOT used\nand the ResponseElements field indicates NOT a Failure. Thereby indicating that a non-MFA login was successful.'\n",
-        "name": "Login to AWS Management Console without MFA",
-        "queryFrequency": "1d"
+        ]
       }
     }
   ]

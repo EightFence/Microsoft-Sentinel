@@ -14,15 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"s3:Create\" and Action contains \"s3:Get\" and Action contains \"s3:Put\" and Action contains \"s3:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "name": "Privilege escalation via CRUD S3 policy",
         "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "status": "Available",
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD S3 Policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
+        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ]
           },
@@ -30,22 +40,12 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ]
           }
-        ],
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "status": "Available",
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"s3:Create\" and Action contains \"s3:Get\" and Action contains \"s3:Put\" and Action contains \"s3:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD S3 Policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
-        "name": "Privilege escalation via CRUD S3 policy",
-        "queryFrequency": "1d"
+        ]
       }
     }
   ]
