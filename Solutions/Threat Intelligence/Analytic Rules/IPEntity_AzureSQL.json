@@ -14,28 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True));\nlet IP_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n),\n(IoCList\n| where IoC_Type =~ 'IP'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_ipEntity = IoC\n| project-away  IoC_Type\n)\n);\nIP_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n      AzureDiagnostics\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where ResourceProvider == 'MICROSOFT.SQL'\n      | where Category == 'SQLSecurityAuditEvents'\n      | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated\n      // projecting fields with column if exists as this is in AzureDiag and if the event is not in the table, then queries will fail due to event specific schemas\n      | extend ClientIP = column_ifexists(\"client_ip_s\", \"Not Available\"), Action = column_ifexists(\"action_name_s\", \"Not Available\"), \n      Application = column_ifexists(\"application_name_s\", \"Not Available\"), HostName = column_ifexists(\"host_name_s\", \"Not Available\")\n)\non $left.TI_ipEntity == $right.ClientIP\n| where SQLSecurityAuditEvents_TimeGenerated < ExpirationDateTime\n| summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by IndicatorId, ClientIP, IoC\n| project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, ResourceId, ClientIP, Action, Application, HostName, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = SQLSecurityAuditEvents_TimeGenerated\n",
-        "name": "TI map IP entity to Azure SQL Security Audit Events",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "tactics": [
-          "Impact"
-        ],
-        "triggerThreshold": 0,
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in SQLSecurityAuditEvents from any IP IOC from TI'\n",
-        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
-        ]
+        ],
+        "name": "TI map IP entity to Azure SQL Security Audit Events",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True));\nlet IP_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n),\n(IoCList\n| where IoC_Type =~ 'IP'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_ipEntity = IoC\n| project-away  IoC_Type\n)\n);\nIP_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n      AzureDiagnostics\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where ResourceProvider == 'MICROSOFT.SQL'\n      | where Category == 'SQLSecurityAuditEvents'\n      | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated\n      // projecting fields with column if exists as this is in AzureDiag and if the event is not in the table, then queries will fail due to event specific schemas\n      | extend ClientIP = column_ifexists(\"client_ip_s\", \"Not Available\"), Action = column_ifexists(\"action_name_s\", \"Not Available\"), \n      Application = column_ifexists(\"application_name_s\", \"Not Available\"), HostName = column_ifexists(\"host_name_s\", \"Not Available\")\n)\non $left.TI_ipEntity == $right.ClientIP\n| where SQLSecurityAuditEvents_TimeGenerated < ExpirationDateTime\n| summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by IndicatorId, ClientIP, IoC\n| project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, ResourceId, ClientIP, Action, Application, HostName, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = SQLSecurityAuditEvents_TimeGenerated\n",
+        "triggerThreshold": 0,
+        "description": "'Identifies a match in SQLSecurityAuditEvents from any IP IOC from TI'\n",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "severity": "Medium",
+        "queryPeriod": "14d"
       }
     }
   ]

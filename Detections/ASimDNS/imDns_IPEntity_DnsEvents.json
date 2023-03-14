@@ -14,61 +14,61 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Dvc"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IoC"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "name": "(Preview) TI map IP entity to DNS Events (ASIM DNS schema)",
+        "severity": "Medium",
         "triggerOperator": "gt",
         "tactics": [
           "Impact"
         ],
-        "triggerThreshold": 0,
+        "name": "(Preview) TI map IP entity to DNS Events (ASIM DNS schema)",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = materialize (\n  ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true\n  | extend IoC = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n  | where IoC != \"NO_IP\"\n);\nlet TI_IP_List=toscalar(IP_TI | summarize IP_List=make_set(IoC));\nIP_TI\n| join kind=innerunique // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated \n(\n  _Im_Dns(starttime=ago(dt_lookBack))\n  | where isnotempty(DnsResponseName)\n  | summarize imDns_mintime=min(TimeGenerated), imDns_maxtime=max(TimeGenerated) by SrcIpAddr, DnsQuery, DnsResponseName, Dvc, EventProduct, EventVendor\n  | where has_any_ipv4(DnsResponseName, TI_IP_List)\n  | mv-expand IoC = TI_IP_List\n  | extend IoC=tostring(IoC)\n  | where has_ipv4(DnsResponseName, IoC)\n)\non IoC\n| where imDns_mintime < ExpirationDateTime\n| project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, LatestIndicatorTime, ExpirationDateTime, ConfidenceScore, SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName\n",
         "customDetails": {
-          "ConfidenceScore": "ConfidenceScore",
-          "Description": "Description",
-          "DnsQuery": "DnsQuery",
-          "SourceIPAddress": "SrcIpAddr",
+          "DNSRequestTime": "imDns_mintime",
           "ThreatType": "ThreatType",
-          "ExpirationDateTime": "ExpirationDateTime",
-          "LatestIndicatorTime": "LatestIndicatorTime",
-          "IndicatorId": "IndicatorId",
+          "DnsQuery": "DnsQuery",
+          "ConfidenceScore": "ConfidenceScore",
+          "SourceIPAddress": "SrcIpAddr",
           "ActivityGroupNames": "ActivityGroupNames",
-          "DNSRequestTime": "imDns_mintime"
+          "ExpirationDateTime": "ExpirationDateTime",
+          "Description": "Description",
+          "LatestIndicatorTime": "LatestIndicatorTime",
+          "IndicatorId": "IndicatorId"
         },
-        "severity": "Medium",
+        "triggerThreshold": 0,
         "description": "'This rule identifies DNS requests for which response IP address is a known IoC. <br><br>\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema.'\n",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.",
-          "alertDisplayNameFormat": "The response {{IoC}} to DNS query matched an IoC"
+          "alertDisplayNameFormat": "The response {{IoC}} to DNS query matched an IoC",
+          "alertDescriptionFormat": "The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator."
         },
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Dvc",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IoC",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
         "queryPeriod": "14d"
       }
     }
