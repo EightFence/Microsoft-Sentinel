@@ -14,28 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
+        "queryFrequency": "1d",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Pete Bryan"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          }
-        },
         "entityMappings": [
           {
             "entityType": "Account",
@@ -56,12 +41,27 @@
             ]
           }
         ],
-        "severity": "Medium",
         "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend ServicePrincipal = tostring(TargetResources[0].displayName)\n  | extend SPID = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | where TargetResources_0_modifiedProperties.displayName =~ \"Role.DisplayName\"\n  | extend TargetRole = parse_json(tostring(TargetResources_0_modifiedProperties.newValue))\n  | where TargetRole contains \"admin\"\n  | extend AddedByApp = iif(\n  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)),\n  tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName),\n  tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  )\n  | extend AddedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddedBy = iif(isnotempty(AddedByApp), AddedByApp, AddedByUser)\n  | extend IpAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | project-reorder TimeGenerated, ServicePrincipal, SPID, TargetRole, AddedBy, IpAddress\n  | project-away AddedByApp, AddedByUser\n",
         "name": "Service Principal Assigned Privileged Role",
+        "metadata": {
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          }
+        },
         "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d"
+        "severity": "Medium"
       }
     }
   ]
