@@ -14,13 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let logonDiff = 10m;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ResultType == \"0\"\n| where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\")\n| project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1]), Type\n| join kind= inner (\n    table(tableName)\n    | where ResultType !in (\"0\", \"50140\")\n    | where ResultDescription !~ \"Other\"\n    | where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\")\n    | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type\n) on UserPrincipalName, AppDisplayName\n| where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock\n| summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type\n| extend timestamp = SuccessLogonTime\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "severity": "Medium",
-        "triggerThreshold": 0,
         "queryPeriod": "1d",
+        "query": "let logonDiff = 10m;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ResultType == \"0\"\n| where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\")\n| project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1]), Type\n| join kind= inner (\n    table(tableName)\n    | where ResultType !in (\"0\", \"50140\")\n    | where ResultDescription !~ \"Other\"\n    | where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\")\n    | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type\n) on UserPrincipalName, AppDisplayName\n| where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock\n| summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type\n| extend timestamp = SuccessLogonTime\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "status": "Available",
+        "tactics": [
+          "CredentialAccess",
+          "InitialAccess"
+        ],
         "queryFrequency": "1d",
         "name": "Successful logon from IP and failure from a different IP",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
@@ -51,11 +55,7 @@
           }
         ],
         "description": "'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP.\nThis may indicate a malicious attempt at password guessing based on knowledge of the users account.'\n",
-        "status": "Available",
-        "tactics": [
-          "CredentialAccess",
-          "InitialAccess"
-        ]
+        "triggerOperator": "gt"
       }
     }
   ]

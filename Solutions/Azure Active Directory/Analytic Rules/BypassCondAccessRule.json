@@ -14,13 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let threshold = 1;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ \"failure\"\n| extend CAP = parse_json(ConditionalAccessPolicies)\n| mv-apply CAP on (\n  project ConditionalAccessPoliciesName = CAP.displayName, result = CAP.result\n  | where result =~ \"failure\"\n)\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend Status = strcat(StatusCode, \": \", ResultDescription)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName)\nby UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type\n| where IPAddressCount > threshold and StatusDetails !has \"MFA successfully completed\"\n| mvexpand IPAddresses, Status, StatusDetails, CorrelationIds\n| extend Status = strcat(Status, \" \", StatusDetails)\n| summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName)\nby StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type\n| extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "severity": "Low",
-        "triggerThreshold": 0,
         "queryPeriod": "1d",
+        "query": "let threshold = 1;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ \"failure\"\n| extend CAP = parse_json(ConditionalAccessPolicies)\n| mv-apply CAP on (\n  project ConditionalAccessPoliciesName = CAP.displayName, result = CAP.result\n  | where result =~ \"failure\"\n)\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend Status = strcat(StatusCode, \": \", ResultDescription)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status), StatusDetails = make_list(StatusDetails), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName)\nby UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type\n| where IPAddressCount > threshold and StatusDetails !has \"MFA successfully completed\"\n| mvexpand IPAddresses, Status, StatusDetails, CorrelationIds\n| extend Status = strcat(Status, \" \", StatusDetails)\n| summarize IPAddresses = make_set(IPAddresses), Status = make_set(Status), CorrelationIds = make_set(CorrelationIds), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName)\nby StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type\n| extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = tostring(IPAddresses)\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "status": "Available",
+        "tactics": [
+          "InitialAccess",
+          "Persistence"
+        ],
         "queryFrequency": "1d",
         "name": "Attempt to bypass conditional access rule in Azure AD",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
@@ -42,11 +46,7 @@
           }
         ],
         "description": "'Identifies an attempt to Bypass conditional access rule(s) in Azure Active Directory.\nThe ConditionalAccessStatus column value details if there was an attempt to bypass Conditional Access\nor if the Conditional access rule was not satisfied (ConditionalAccessStatus == 1).\nReferences:\nhttps://docs.microsoft.com/azure/active-directory/conditional-access/overview\nhttps://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins\nhttps://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\nConditionalAccessStatus == 0 // Success\nConditionalAccessStatus == 1 // Failure\nConditionalAccessStatus == 2 // Not Applied\nConditionalAccessStatus == 3 // unknown'\n",
-        "status": "Available",
-        "tactics": [
-          "InitialAccess",
-          "Persistence"
-        ]
+        "triggerOperator": "gt"
       }
     }
   ]
