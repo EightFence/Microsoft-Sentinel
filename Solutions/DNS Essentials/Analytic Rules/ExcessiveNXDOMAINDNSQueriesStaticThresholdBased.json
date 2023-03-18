@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4ab8b09e-3c23-4974-afbe-7e653779eb2b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4ab8b09e-3c23-4974-afbe-7e653779eb2b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Client is generating excessive amount of DNS queries for non-existent domains. This can be an indication of possible C2 communications. \n\n'NXDOMAIN' error count threshold: '{{NXDOMAINthreshold}}'\n\nCurrent 'NXDOMAIN' error count from this client: '{{NXDOMAINCount}}'\n\nDNS queries requested by the client include:\n\n'{{DNSQueries}}'",
+          "alertDisplayNameFormat": "[Static threshold] Excessive NXDOMAIN DNS Queries has been detected from client IP: '{{SrcIpAddr}}'"
+        },
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "queryFrequency": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "1h",
+        "description": "'This rule generates an alert when the configured threshold for DNS queries to non-existent domains is breached. This helps in identifying possible C2 communications. \\n\\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'\n",
+        "query": "let lookback = 1h;\nlet threshold = materialize (_GetWatchlist('DNS_Solution_Monitoring_Configuration')\n  | where wl_RuleName == 'Excessive NXDOMAIN DNS Queries'\n      and wl_Type == 'Detection'\n  | project threshold=toint(wl_Threshold));\n_Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')\n| summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)\n| where NXDOMAINCount > toscalar(threshold)\n| join kind=inner (_Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')\n  | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| extend NXDOMAINthreshold=toint(toscalar(threshold))\n| project-away SrcIpAddr1\n",
+        "customDetails": {
+          "NXDOMAINthreshold": "NXDOMAINthreshold",
+          "DNSQueries": "DNSQueries",
+          "NXDOMAINCount": "NXDOMAINCount"
+        },
+        "triggerThreshold": 0,
+        "name": "Detect excessive NXDOMAIN DNS queries - Static threshold based (ASIM DNS Solution)",
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}

@@ -14,17 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "description": "' This query will detect logins from guest account which was recently deleted. \nFor any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'\n",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "description": "' This query will detect logins from guest account which was recently deleted. \nFor any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "InviteInitiator"
+                "columnName": "InviteInitiator",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -32,22 +31,29 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
+        "name": "Suspicious Login from deleted guest account",
+        "query": "let lookback = 1d;\nlet DeleteExtUsers = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"UserManagement\"\n| where OperationName =~ \"Delete external user\"\n| where Result =~ \"success\"\n| extend InviteInitiator = tostring(InitiatedBy.[\"user\"].[\"userPrincipalName\"])\n| extend Target = tostring(TargetResources[0].[\"displayName\"])\n| extend TargetUPN = tostring(extract(@\"UPN\\:\\s(.+)\\,\\sEmail\",1,Target)) , DeleteUserTime = TimeGenerated;\nDeleteExtUsers\n| join kind=inner (\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| extend LoginTime = TimeGenerated\n) on $left.TargetUPN == $right.UserPrincipalName\n| where DeleteUserTime > LoginTime\n",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "metadata": {
-          "author": {
-            "name": "Ashwin Patil"
+          "support": {
+            "tier": "Community"
           },
           "source": {
             "kind": "Community"
           },
-          "support": {
-            "tier": "Community"
+          "author": {
+            "name": "Ashwin Patil"
           },
           "categories": {
             "domains": [
@@ -55,13 +61,7 @@
               "Identity"
             ]
           }
-        },
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
-        "query": "let lookback = 1d;\nlet DeleteExtUsers = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"UserManagement\"\n| where OperationName =~ \"Delete external user\"\n| where Result =~ \"success\"\n| extend InviteInitiator = tostring(InitiatedBy.[\"user\"].[\"userPrincipalName\"])\n| extend Target = tostring(TargetResources[0].[\"displayName\"])\n| extend TargetUPN = tostring(extract(@\"UPN\\:\\s(.+)\\,\\sEmail\",1,Target)) , DeleteUserTime = TimeGenerated;\nDeleteExtUsers\n| join kind=inner (\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| extend LoginTime = TimeGenerated\n) on $left.TargetUPN == $right.UserPrincipalName\n| where DeleteUserTime > LoginTime\n",
-        "severity": "Medium",
-        "name": "Suspicious Login from deleted guest account"
+        }
       }
     }
   ]

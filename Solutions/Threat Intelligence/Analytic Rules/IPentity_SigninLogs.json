@@ -14,15 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "queryPeriod": "14d",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet aadFunc = (tableName:string){\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    table(tableName) | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n    | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)\n    | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n    // renaming time column so it is clear the log this came from\n    | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type\n)\non $left.TI_ipEntity == $right.IPAddress\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = SigninLogs_TimeGenerated, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress, URLCustomEntity = Url\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "tactics": [
-          "Impact"
-        ],
-        "queryFrequency": "1h",
-        "name": "TI map IP entity to SigninLogs",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
@@ -52,7 +44,15 @@
             ]
           }
         ],
+        "severity": "Medium",
+        "tactics": [
+          "Impact"
+        ],
+        "queryPeriod": "14d",
         "description": "'Identifies a match in SigninLogs from any IP IOC from TI'\n",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "name": "TI map IP entity to SigninLogs",
         "triggerOperator": "gt"
       }
     }

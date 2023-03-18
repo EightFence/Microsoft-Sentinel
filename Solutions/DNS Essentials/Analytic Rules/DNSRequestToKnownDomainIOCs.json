@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8e4a010a-972c-4124-8c27-1efcd7e3125a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8e4a010a-972c-4124-8c27-1efcd7e3125a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Alert Description: '{{Description}}'\n\nClient '{(SrcIpAddr)}' was detected as making request to '{(DnsQuery)}'",
+          "alertTacticsColumnName": "Tactic",
+          "alertSeverityColumnName\"": "Severity",
+          "alertDisplayNameFormat": "'{{Name}}' was detected. From client: '{{SrcIpAddr}}'"
+        },
+        "entityMappings": [
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "DnsQuery"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
+        "tactics": [
+          "Impact",
+          "CommandAndControl",
+          "Exfiltration",
+          "PrivilegeEscalation",
+          "InitialAccess",
+          "CredentialAccess"
+        ],
+        "queryFrequency": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "1h",
+        "description": "\"This rule identifies DNS requests to known domain IOCs in the [DNS query](https://learn.microsoft.com/azure/sentinel/normalization-schema-dns#query) logs. It evaluates DNS logs against 100+ known IOCs from the available Watchlist, which helps detect an attempt to communicate with known compromised domains.\\\\n\\\\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.\"\n",
+        "query": "let lookback = 1h;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n| summarize Count=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n",
+        "triggerThreshold": 0,
+        "name": "Detect DNS requests to known Domain IOCs (ASIM DNS Solution)",
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}
