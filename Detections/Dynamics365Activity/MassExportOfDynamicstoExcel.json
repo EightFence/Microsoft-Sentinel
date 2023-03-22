@@ -14,18 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "description": "'The query detects user exporting a large amount of records from Dynamics 365 to Excel, significantly more records exported than any other recent activity by that user.'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
         "queryPeriod": "7d",
+        "severity": "Medium",
+        "queryFrequency": "1d",
         "tactics": [
           "Collection"
         ],
+        "query": "let baseline_time = 7d;\nlet detection_time = 1d;\nDynamics365Activity\n| where TimeGenerated between(ago(baseline_time)..ago(detection_time-1d))\n| where OriginalObjectId contains 'ExportToExcel'\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| summarize sum(QueryCount) by UserId\n| extend HistoricalBaseline = sum_QueryCount\n| join (Dynamics365Activity\n| where TimeGenerated > ago(detection_time)\n| where OriginalObjectId contains 'ExportToExcel'\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| summarize sum(QueryCount) by UserId\n| extend CurrentExportRate = sum_QueryCount) on UserId\n| where CurrentExportRate > HistoricalBaseline\n| project UserId, HistoricalBaseline, CurrentExportRate\n| join kind=inner(Dynamics365Activity\n| where TimeGenerated > ago(detection_time)\n| where OriginalObjectId contains 'ExportToExcel'\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))) on UserId\n| project TimeGenerated, UserId, QueryCount, UserAgent, OriginalObjectId, ClientIP, HistoricalBaseline, CurrentExportRate, CorrelationId, CrmOrganizationUniqueName\n| summarize QuerySizes = make_set(QueryCount), MostRecentQuery = max(TimeGenerated), IPs = make_set(ClientIP), UserAgents = make_set(UserAgent) by UserId, CrmOrganizationUniqueName, HistoricalBaseline, CurrentExportRate\n| extend timestamp = MostRecentQuery, AccountCustomEntity = UserId\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "metadata": {
-          "categories": {
-            "domains": [
-              "Cloud Provider",
-              "IT Operations",
-              "Storage"
-            ]
+          "author": {
+            "name": "Microsoft"
           },
           "support": {
             "tier": "Microsoft"
@@ -33,28 +45,16 @@
           "source": {
             "kind": "Community"
           },
-          "author": {
-            "name": "Microsoft"
-          }
-        },
-        "query": "let baseline_time = 7d;\nlet detection_time = 1d;\nDynamics365Activity\n| where TimeGenerated between(ago(baseline_time)..ago(detection_time-1d))\n| where OriginalObjectId contains 'ExportToExcel'\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| summarize sum(QueryCount) by UserId\n| extend HistoricalBaseline = sum_QueryCount\n| join (Dynamics365Activity\n| where TimeGenerated > ago(detection_time)\n| where OriginalObjectId contains 'ExportToExcel'\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| summarize sum(QueryCount) by UserId\n| extend CurrentExportRate = sum_QueryCount) on UserId\n| where CurrentExportRate > HistoricalBaseline\n| project UserId, HistoricalBaseline, CurrentExportRate\n| join kind=inner(Dynamics365Activity\n| where TimeGenerated > ago(detection_time)\n| where OriginalObjectId contains 'ExportToExcel'\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))) on UserId\n| project TimeGenerated, UserId, QueryCount, UserAgent, OriginalObjectId, ClientIP, HistoricalBaseline, CurrentExportRate, CorrelationId, CrmOrganizationUniqueName\n| summarize QuerySizes = make_set(QueryCount), MostRecentQuery = max(TimeGenerated), IPs = make_set(ClientIP), UserAgents = make_set(UserAgent) by UserId, CrmOrganizationUniqueName, HistoricalBaseline, CurrentExportRate\n| extend timestamp = MostRecentQuery, AccountCustomEntity = UserId\n",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "name": "Mass Export of Dynamics 365 Records to Excel",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
+          "categories": {
+            "domains": [
+              "Cloud Provider",
+              "IT Operations",
+              "Storage"
             ]
           }
-        ],
-        "triggerOperator": "gt",
-        "description": "'The query detects user exporting a large amount of records from Dynamics 365 to Excel, significantly more records exported than any other recent activity by that user.'\n"
+        },
+        "name": "Mass Export of Dynamics 365 Records to Excel",
+        "status": "Available"
       }
     }
   ]

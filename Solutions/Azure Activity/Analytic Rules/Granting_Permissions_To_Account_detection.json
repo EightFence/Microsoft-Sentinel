@@ -14,39 +14,39 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
+        "queryFrequency": "1d",
+        "name": "Suspicious granting of permissions to an account",
         "status": "Available",
         "triggerOperator": "gt",
-        "query": "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations below which an IP address is considered an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\nlet AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet createRoleAssignmentActivity = AzureActivity\n| where OperationNameValue =~ \"microsoft.authorization/roleassignments/write\";\nlet RoleAssignedActivity = createRoleAssignmentActivity \n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller\n| where count_ >= alertOperationThreshold\n| join kind = rightanti ( \ncreateRoleAssignmentActivity\n| where TimeGenerated > ago(endtime)\n| extend PrincipalId = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalId)\n| extend PrincipalType = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalType)\n| extend Scope = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).Scope)\n| extend RoleAddedDetails = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).requestbody)).Properties)).RoleDefinitionId) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), \nOperationIds = make_set(OperationId), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  \nby ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails\n) on CallerIpAddress, Caller\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress;\nlet RoleAssignedActivitywithRoleDetails = RoleAssignedActivity\n| extend RoleAssignedID = tostring(split(RoleAddedDetails, \"/\")[-1])\n| join kind = inner (AzureBuiltInRole \n) on $left.RoleAssignedID == $right.ID;\nRoleAssignedActivitywithRoleDetails\n| summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID\n| join kind = leftouter( IdentityInfo\n| summarize arg_max(TimeGenerated, *) by AccountObjectId\n) on $left.PrincipalId == $right.AccountObjectId\n| project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, \nResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity\n",
-        "triggerThreshold": 0,
-        "name": "Suspicious granting of permissions to an account",
-        "severity": "Medium",
-        "description": "'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'\n",
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
         ],
         "queryPeriod": "14d",
-        "queryFrequency": "1d"
+        "description": "'Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "query": "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations below which an IP address is considered an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\nlet AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet createRoleAssignmentActivity = AzureActivity\n| where OperationNameValue =~ \"microsoft.authorization/roleassignments/write\";\nlet RoleAssignedActivity = createRoleAssignmentActivity \n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller\n| where count_ >= alertOperationThreshold\n| join kind = rightanti ( \ncreateRoleAssignmentActivity\n| where TimeGenerated > ago(endtime)\n| extend PrincipalId = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalId)\n| extend PrincipalType = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalType)\n| extend Scope = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).Scope)\n| extend RoleAddedDetails = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).requestbody)).Properties)).RoleDefinitionId) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), \nOperationIds = make_set(OperationId), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  \nby ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails\n) on CallerIpAddress, Caller\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress;\nlet RoleAssignedActivitywithRoleDetails = RoleAssignedActivity\n| extend RoleAssignedID = tostring(split(RoleAddedDetails, \"/\")[-1])\n| join kind = inner (AzureBuiltInRole \n) on $left.RoleAssignedID == $right.ID;\nRoleAssignedActivitywithRoleDetails\n| summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID\n| join kind = leftouter( IdentityInfo\n| summarize arg_max(TimeGenerated, *) by AccountObjectId\n) on $left.PrincipalId == $right.AccountObjectId\n| project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, \nResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity\n"
       }
     }
   ]
