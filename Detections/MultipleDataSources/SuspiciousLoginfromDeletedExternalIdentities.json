@@ -14,26 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Ashwin Patil"
-          }
-        },
         "queryFrequency": "1d",
-        "name": "Suspicious Login from deleted guest account",
-        "queryPeriod": "1d",
+        "query": "let lookback = 1d;\nlet DeleteExtUsers = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"UserManagement\"\n| where OperationName =~ \"Delete external user\"\n| where Result =~ \"success\"\n| extend InviteInitiator = tostring(InitiatedBy.[\"user\"].[\"userPrincipalName\"])\n| extend Target = tostring(TargetResources[0].[\"displayName\"])\n| extend TargetUPN = tostring(extract(@\"UPN\\:\\s(.+)\\,\\sEmail\",1,Target)) , DeleteUserTime = TimeGenerated;\nDeleteExtUsers\n| join kind=inner (\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| extend LoginTime = TimeGenerated\n) on $left.TargetUPN == $right.UserPrincipalName\n| where DeleteUserTime > LoginTime\n",
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -54,14 +38,30 @@
             ]
           }
         ],
-        "description": "' This query will detect logins from guest account which was recently deleted. \nFor any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'\n",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "let lookback = 1d;\nlet DeleteExtUsers = AuditLogs\n| where TimeGenerated > ago(lookback)\n| where Category =~ \"UserManagement\"\n| where OperationName =~ \"Delete external user\"\n| where Result =~ \"success\"\n| extend InviteInitiator = tostring(InitiatedBy.[\"user\"].[\"userPrincipalName\"])\n| extend Target = tostring(TargetResources[0].[\"displayName\"])\n| extend TargetUPN = tostring(extract(@\"UPN\\:\\s(.+)\\,\\sEmail\",1,Target)) , DeleteUserTime = TimeGenerated;\nDeleteExtUsers\n| join kind=inner (\nSigninLogs\n| where TimeGenerated > ago(lookback)\n| extend LoginTime = TimeGenerated\n) on $left.TargetUPN == $right.UserPrincipalName\n| where DeleteUserTime > LoginTime\n",
-        "triggerOperator": "gt",
         "tactics": [
           "PrivilegeEscalation"
-        ]
+        ],
+        "description": "' This query will detect logins from guest account which was recently deleted. \nFor any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'\n",
+        "metadata": {
+          "author": {
+            "name": "Ashwin Patil"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "name": "Suspicious Login from deleted guest account",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt"
       }
     }
   ]
