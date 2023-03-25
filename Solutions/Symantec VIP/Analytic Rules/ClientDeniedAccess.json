@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a9956d3a-07a9-44a6-a279-081a85020cae')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a9956d3a-07a9-44a6-a279-081a85020cae')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "Medium",
+        "name": "ClientDeniedAccess",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "status": "Available",
+        "queryPeriod": "1h",
+        "query": "\nlet threshold = 15;\nlet rejectedAccess = SymantecVIP\n| where isnotempty(RADIUSAuth)\n| where RADIUSAuth =~ \"Reject\"\n| summarize Total = count() by ClientIP, bin(TimeGenerated, 15m)\n| where Total > threshold\n| project ClientIP;\nSymantecVIP\n| where isnotempty(RADIUSAuth)\n| where RADIUSAuth =~ \"Reject\"\n| join kind=inner rejectedAccess on ClientIP\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by ClientIP, User\n| extend timestamp = StartTime, IPCustomEntity = ClientIP, AccountCustomEntity = User\n",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "queryFrequency": "1h",
+        "description": "'Creates an incident in the event a Client has an excessive amounts of denied access requests.'\n",
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}
