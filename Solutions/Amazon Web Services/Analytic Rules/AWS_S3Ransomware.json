@@ -14,20 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
         "name": "S3 bucket suspicious ransomware activity",
-        "queryFrequency": "1h",
-        "tactics": [
-          "Impact"
-        ],
-        "severity": "High",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ],
             "entityType": "Account"
@@ -35,17 +28,24 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryPeriod": "1h",
+        "severity": "High",
         "description": "'Suspicious S3 bucket activity indicating ransomware was detected.\nAn attacker might download all the objects in a compromised S3 bucket, encrypt them with his own key, then upload them back to the same bucket, overwriting the existing ones.'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
         "status": "Available",
-        "query": "let timeframe = 1h;\nlet lookback = 2h;\n// The attacker downloads the object(s) from the compromised bucket\nlet GetObject = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName == \"GetObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| project-rename StartTime = TimeGenerated;\n// Then, the attacker overwrites the same object(s) but encrypted with his own key\nlet PutObject = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"PutObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| extend kmsId = tostring(parse_json(RequestParameters).[\"x-amz-server-side-encryption-aws-kms-key-id\"])\n| where tostring(kmsId) !has tostring(RecipientAccountId) and kmsId <> \"\";\nPutObject\n| join kind=inner \n(\n   GetObject\n)\non $left.bucketName == $right.bucketName, $left.keyName == $right.keyName\n| where TimeGenerated > StartTime\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n"
+        "tactics": [
+          "Impact"
+        ],
+        "query": "let timeframe = 1h;\nlet lookback = 2h;\n// The attacker downloads the object(s) from the compromised bucket\nlet GetObject = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName == \"GetObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| project-rename StartTime = TimeGenerated;\n// Then, the attacker overwrites the same object(s) but encrypted with his own key\nlet PutObject = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"PutObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| extend kmsId = tostring(parse_json(RequestParameters).[\"x-amz-server-side-encryption-aws-kms-key-id\"])\n| where tostring(kmsId) !has tostring(RecipientAccountId) and kmsId <> \"\";\nPutObject\n| join kind=inner \n(\n   GetObject\n)\non $left.bucketName == $right.bucketName, $left.keyName == $right.keyName\n| where TimeGenerated > StartTime\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "queryFrequency": "1h"
       }
     }
   ]

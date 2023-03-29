@@ -14,15 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
         "name": "Detect DNS requests to known Domain IOCs (ASIM DNS Solution)",
-        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "DnsQuery",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "DnsQuery"
               }
             ],
             "entityType": "DNS"
@@ -30,13 +28,21 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SrcIpAddr",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
               }
             ],
             "entityType": "IP"
           }
         ],
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "status": "Available",
         "tactics": [
           "Impact",
           "CommandAndControl",
@@ -45,21 +51,15 @@
           "InitialAccess",
           "CredentialAccess"
         ],
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "queryPeriod": "1h",
+        "queryFrequency": "1h",
         "description": "\"This rule identifies DNS requests to known domain IOCs in the [DNS query](https://learn.microsoft.com/azure/sentinel/normalization-schema-dns#query) logs. It evaluates DNS logs against 100+ known IOCs from the available Watchlist, which helps detect an attempt to communicate with known compromised domains.\\\\n\\\\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.\"\n",
-        "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "query": "let lookback = 1h;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n| summarize Count=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n",
         "alertDetailsOverride": {
+          "alertSeverityColumnName\"": "Severity",
           "alertTacticsColumnName": "Tactic",
           "alertDescriptionFormat": "Alert Description: '{{Description}}'\n\nClient '{(SrcIpAddr)}' was detected as making request to '{(DnsQuery)}'",
-          "alertSeverityColumnName\"": "Severity",
           "alertDisplayNameFormat": "'{{Name}}' was detected. From client: '{{SrcIpAddr}}'"
-        },
-        "query": "let lookback = 1h;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n| summarize Count=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n"
+        }
       }
     }
   ]
