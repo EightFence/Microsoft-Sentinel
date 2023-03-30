@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/33e3b6da-2660-4cd7-9032-11be76db88d2')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/33e3b6da-2660-4cd7-9032-11be76db88d2')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "SourceHostName"
+              }
+            ]
+          }
+        ],
+        "severity": "Informational",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerThreshold": 0,
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\"\n    and DeviceEventClassID != \"hsc\"\n    and DeviceEventClassID != \"audit\"\n    and DeviceEventClassID != \"health\"\n    and DeviceEventClassID != \"asc\"\n| extend Category = coalesce(\n    column_ifexists(\"DeviceEventCategory\", \"\"), \n    extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n    \"\"\n    )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\" and AdditionalExtensions !contains \"account\"\n| extend source_entity = case(isnotempty(SourceHostName), SourceHostName,\n    \"UNKNWON\")\n| extend level = case(threat_score == 0 and certainty_score == 0, \"Info\",\n    threat_score < 50 and certainty_score < 50, \"Low\",\n    threat_score < 50 and certainty_score >= 50, \"Medium\", \n    threat_score >= 50 and certainty_score <= 50, \"High\", \n    threat_score >= 50 and certainty_score >= 50, \"Critical\",\n    \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",\n    level == \"Low\", \"Low\",\n    level == \"Medium\", \"Medium\",\n    level == \"High\", \"Medium\",\n    level == \"Critical\", \"High\",\n    \"UNKNOWN\")\n| summarize arg_max(threat_score, *) by source_entity, Activity\n| sort by TimeGenerated\n",
+        "queryFrequency": "5m",
+        "status": "Available",
+        "alertDetails": {
+          "alertDescriptionFormat": "Entity is a host. Category is {{Category}}. Threat score is {{threat_score}} and certainty score is {{certainty_score}}.",
+          "alertDynamicProperties": [
+            {
+              "value": "vectra_URL",
+              "alertProperty": "AlertLink"
+            },
+            {
+              "value": "DeviceVendor",
+              "alertProperty": "ProductName"
+            },
+            {
+              "value": "DeviceVendor",
+              "alertProperty": "ProviderName"
+            },
+            {
+              "value": "certainty_score",
+              "alertProperty": "ConfidenceScore"
+            }
+          ],
+          "alertSeverityColumnName": "Severity",
+          "alertDisplayNameFormat": "Vectra AI - {{Activity}} Detected"
+        },
+        "triggerOperator": "gt",
+        "tactics": [
+          "CredentialAccess",
+          "Discovery",
+          "LateralMovement",
+          "Collection",
+          "CommandAndControl",
+          "Exfiltration",
+          "Impact"
+        ],
+        "description": "'This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. This rule is focused on host's detections.'\n",
+        "name": "Vectra Host's Behaviors",
+        "queryPeriod": "5m"
+      }
+    }
+  ]
+}

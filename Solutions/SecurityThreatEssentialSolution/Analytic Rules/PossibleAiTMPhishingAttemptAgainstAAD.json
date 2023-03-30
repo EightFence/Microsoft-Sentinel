@@ -14,9 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Possible AiTM Phishing Attempt Against Azure AD",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -30,36 +30,36 @@
                 "identifier": "AadUserId",
                 "columnName": "Id"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
         "severity": "Medium",
-        "description": "'Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Azure AD sign ins that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address that made the sign in immediately before the sign in, that may indicate a user connecting to a phishing site at that IP address and having their authentication session hijacked.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/'\n",
         "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
+        "query": "let time_threshold = 10m;\nlet RiskySignins = materialize (SigninLogs\n| where TimeGenerated > ago(1d)\n| where ResultType == 0\n| where RiskLevelDuringSignIn =~ \"high\" or RiskLevelAggregated =~ \"high\"\n| extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, \"@\")[0], UPNSuffix=split(UserPrincipalName, \"@\")[1]);\nlet ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));\nRiskySignins\n| join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult=\"Success\", pack=True))\non $left.IPAddress == $right.DstIpAddr\n| where EventStartTime < TimeGenerated\n| extend TimeDelta = TimeGenerated - EventStartTime\n| where TimeDelta <= time_threshold\n| extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime\n| extend SrcUsername = column_ifexists(\"SrcUsername\", \"Unknown\")\n| project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dst, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername\n",
+        "queryFrequency": "1h",
         "status": "Available",
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Possible AiTM Phishing Attempt Against {{UserPrincipalName}} From {{IPAddress}}",
+          "alertDescriptionFormat": "Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Azure AD sign ins (in this case from {{UserPrincipalName}}) that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address (in this case {{IPAddress}}) that made the sign in immediately before the sign in, that may indicate a user connecting to a phishing site at that IP address and having their authentication session hijacked.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/\n"
+        },
         "tactics": [
           "InitialAccess",
           "DefenseEvasion",
           "CredentialAccess"
         ],
-        "query": "let time_threshold = 10m;\nlet RiskySignins = materialize (SigninLogs\n| where TimeGenerated > ago(1d)\n| where ResultType == 0\n| where RiskLevelDuringSignIn =~ \"high\" or RiskLevelAggregated =~ \"high\"\n| extend SignInTime = TimeGenerated, Name=split(UserPrincipalName, \"@\")[0], UPNSuffix=split(UserPrincipalName, \"@\")[1]);\nlet ips = todynamic(toscalar(RiskySignins | summarize make_list(IPAddress)));\nRiskySignins\n| join kind=inner (_Im_WebSession(starttime=ago(1d), ipaddr_has_any_prefix=ips, eventresult=\"Success\", pack=True))\non $left.IPAddress == $right.DstIpAddr\n| where EventStartTime < TimeGenerated\n| extend TimeDelta = TimeGenerated - EventStartTime\n| where TimeDelta <= time_threshold\n| extend NetworkEventStartTime = EventStartTime, NetworkEventEndTime = EventEndTime\n| extend SrcUsername = column_ifexists(\"SrcUsername\", \"Unknown\")\n| project-reorder SignInTime, UserPrincipalName, IPAddress, AppDisplayName, ClientAppUsed, DeviceDetail, LocationDetails, NetworkLocationDetails, RiskEventTypes, UserAgent, NetworkEventStartTime, NetworkEventEndTime, SrcIpAddr, DstIpAddr, DstPortNumber, Dst, DvcHostname, SrcBytes, NetworkProtocol, SrcUsername\n",
-        "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Possible AiTM Phishing Attempt Against {{UserPrincipalName}} From {{IPAddress}}",
-          "alertDescriptionFormat": "Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Azure AD sign ins (in this case from {{UserPrincipalName}}) that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address (in this case {{IPAddress}}) that made the sign in immediately before the sign in, that may indicate a user connecting to a phishing site at that IP address and having their authentication session hijacked.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/\n"
-        }
+        "description": "'Threat actors may attempt to phish users in order to hijack a users sign-in session, and skip the authentication process even if the user had enabled multifactor authentication (MFA) by stealing and replaying stolen credentials and session cookies.\nThis detection looks for successful Azure AD sign ins that had a high risk profile, indicating it had suspicious characteristics such as an unusual location, ISP, user agent, or use of anonymizer services.\nIt then looks for a network connection to the IP address that made the sign in immediately before the sign in, that may indicate a user connecting to a phishing site at that IP address and having their authentication session hijacked.\nRef: https://www.microsoft.com/security/blog/2022/07/12/from-cookie-theft-to-bec-attackers-use-aitm-phishing-sites-as-entry-point-to-further-financial-fraud/'\n",
+        "name": "Possible AiTM Phishing Attempt Against Azure AD",
+        "queryPeriod": "1d"
       }
     }
   ]
