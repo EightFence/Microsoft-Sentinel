@@ -15,15 +15,33 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "queryPeriod": "1d",
+        "status": "Available",
+        "description": "'This query looks for the Exchange server UM process writing suspicious files that may be indicative of webshells.\nReference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/'\n",
+        "triggerThreshold": 0,
         "name": "HAFNIUM UM Service writing suspicious file",
-        "triggerOperator": "gt",
+        "metadata": {
+          "author": {
+            "name": "Jessen"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "InitiatingProcessAccountUpn",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "InitiatingProcessAccountUpn"
               }
             ]
           },
@@ -31,8 +49,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ]
           },
@@ -40,8 +58,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "HostCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
               }
             ]
           },
@@ -49,8 +67,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "DeviceName"
               }
             ]
           },
@@ -58,37 +76,19 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ]
           }
         ],
-        "status": "Available",
+        "query": "let scriptExtensions = dynamic([\".php\", \".jsp\", \".js\", \".aspx\", \".asmx\", \".asax\", \".cfm\", \".shtml\"]);\nunion isfuzzy=true\n(SecurityEvent\n| where EventID == 4663\n| where Process has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n| where ObjectName has_any (scriptExtensions)\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress\n),\n  (WindowsEvent\n| where EventID == 4663 and EventData has_any (\"umworkerprocess.exe\", \"UMService.exe\") and EventData has_any (scriptExtensions) \n| where EventData has_any ('0x2','0x100', '0x10', '0x4')\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| where Process has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n| extend ObjectName = tostring(EventData.ObjectName)\n| where ObjectName has_any (scriptExtensions)\n| extend AccessMask = tostring(EventData.AccessMask)\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| extend Account = strcat(EventData.SubjectDomainName,\"\\\\\", EventData.SubjectUserName)\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress\n),\n(imFileEvent\n| where EventType == \"FileCreated\"\n| where ActingProcessName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n  and\n  TargetFileName has_any (scriptExtensions)\n| extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname\n),\n(DeviceFileEvents\n| where ActionType =~ \"FileCreated\"\n| where InitiatingProcessFileName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n| where FileName has_any(scriptExtensions)\n| extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountUpn, HostCustomEntity = DeviceName, IPCustomEntity = RequestSourceIP)\n",
+        "severity": "High",
+        "queryFrequency": "1d",
         "tactics": [
           "InitialAccess"
         ],
-        "severity": "High",
-        "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Threat Protection"
-            ]
-          },
-          "author": {
-            "name": "Jessen"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          }
-        },
-        "query": "let scriptExtensions = dynamic([\".php\", \".jsp\", \".js\", \".aspx\", \".asmx\", \".asax\", \".cfm\", \".shtml\"]);\nunion isfuzzy=true\n(SecurityEvent\n| where EventID == 4663\n| where Process has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n| where ObjectName has_any (scriptExtensions)\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress\n),\n  (WindowsEvent\n| where EventID == 4663 and EventData has_any (\"umworkerprocess.exe\", \"UMService.exe\") and EventData has_any (scriptExtensions) \n| where EventData has_any ('0x2','0x100', '0x10', '0x4')\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| where Process has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n| extend ObjectName = tostring(EventData.ObjectName)\n| where ObjectName has_any (scriptExtensions)\n| extend AccessMask = tostring(EventData.AccessMask)\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| extend Account = strcat(EventData.SubjectDomainName,\"\\\\\", EventData.SubjectUserName)\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IpAddress\n),\n(imFileEvent\n| where EventType == \"FileCreated\"\n| where ActingProcessName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n  and\n  TargetFileName has_any (scriptExtensions)\n| extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname\n),\n(DeviceFileEvents\n| where ActionType =~ \"FileCreated\"\n| where InitiatingProcessFileName has_any (\"umworkerprocess.exe\", \"UMService.exe\")\n| where FileName has_any(scriptExtensions)\n| extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountUpn, HostCustomEntity = DeviceName, IPCustomEntity = RequestSourceIP)\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "description": "'This query looks for the Exchange server UM process writing suspicious files that may be indicative of webshells.\nReference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/'\n"
+        "triggerOperator": "gt"
       }
     }
   ]
