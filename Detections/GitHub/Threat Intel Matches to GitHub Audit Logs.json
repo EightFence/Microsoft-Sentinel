@@ -14,12 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Identifies a match in GitHub_CL table from any IP IOC from TI'\n",
+        "tactics": [
+          "Impact"
+        ],
+        "queryPeriod": "1d",
+        "name": "TI map IP entity to GitHub_CL",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "query": "ThreatIntelligenceIndicator\n| where Action == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| join (\n  GitHubAudit\n  | extend GitHubAudit_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.IPaddress\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n| extend timestamp = GitHubAudit_TimeGenerated, IPCustomEntity = IPaddress, AccountCustomEntity = Actor\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ],
             "entityType": "Account"
@@ -27,24 +36,15 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "tactics": [
-          "Impact"
-        ],
-        "description": "'Identifies a match in GitHub_CL table from any IP IOC from TI'\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "name": "TI map IP entity to GitHub_CL",
-        "severity": "Medium",
-        "query": "ThreatIntelligenceIndicator\n| where Action == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| join (\n  GitHubAudit\n  | extend GitHubAudit_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.IPaddress\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n| extend timestamp = GitHubAudit_TimeGenerated, IPCustomEntity = IPaddress, AccountCustomEntity = Actor\n",
         "queryFrequency": "1h",
-        "queryPeriod": "1d"
+        "triggerOperator": "gt"
       }
     }
   ]
