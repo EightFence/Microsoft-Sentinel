@@ -14,37 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "description": "\"This rule identifies DNS requests to known domain IOCs in the [DNS query](https://learn.microsoft.com/azure/sentinel/normalization-schema-dns#query) logs. It evaluates DNS logs against 100+ known IOCs from the available Watchlist, which helps detect an attempt to communicate with known compromised domains.\\\\n\\\\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.\"\n",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DnsQuery",
-                "identifier": "DomainName"
-              }
-            ],
-            "entityType": "DNS"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SrcIpAddr",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
         "query": "let lookback = 1h;\nlet DNS_IOCs = materialize(_GetWatchlist('DNS_Solution_Domain_IOCs')\n  | where wl_Type == 'Detection' and wl_Enabled == 'TRUE'\n  | project\n      wl_DNSDomain,\n      wl_Name,\n      wl_Description,\n      wl_Type,\n      wl_ThresholdType,\n      wl_Threshold,\n      wl_Severity,\n      wl_Tactic,\n      wl_Enabled);\nlet Dynamic_DomainList=DNS_IOCs | summarize  make_set(wl_DNSDomain);\n_Im_Dns(starttime=ago(lookback),domain_has_any=toscalar(Dynamic_DomainList))\n| join kind=inner['DNS_IOCs'] where DnsQuery has wl_DNSDomain\n| project\n  SrcIpAddr,\n  DnsQuery,\n  EventResultDetails,\n  Name=wl_Name,\n  Description=wl_Description,\n  TimeGenerated,\n  Tactic=wl_Tactic,\n  Severity=wl_Severity\n| summarize Count=count(), EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated) by SrcIpAddr,DnsQuery, EventResultDetails, Name, Description, Tactic, Severity\n",
-        "name": "Detect DNS requests to known Domain IOCs (ASIM DNS Solution)",
-        "queryPeriod": "1h",
+        "queryFrequency": "1h",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "severity": "Medium",
+        "name": "Detect DNS requests to known Domain IOCs (ASIM DNS Solution)",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "'{{Name}}' was detected. From client: '{{SrcIpAddr}}'",
+          "alertSeverityColumnName\"": "Severity",
+          "alertTacticsColumnName": "Tactic",
+          "alertDescriptionFormat": "Alert Description: '{{Description}}'\n\nClient '{(SrcIpAddr)}' was detected as making request to '{(DnsQuery)}'"
+        },
+        "triggerThreshold": 0,
+        "description": "\"This rule identifies DNS requests to known domain IOCs in the [DNS query](https://learn.microsoft.com/azure/sentinel/normalization-schema-dns#query) logs. It evaluates DNS logs against 100+ known IOCs from the available Watchlist, which helps detect an attempt to communicate with known compromised domains.\\\\n\\\\nIt utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.\"\n",
         "tactics": [
           "Impact",
           "CommandAndControl",
@@ -53,13 +37,29 @@
           "InitialAccess",
           "CredentialAccess"
         ],
-        "alertDetailsOverride": {
-          "alertSeverityColumnName\"": "Severity",
-          "alertTacticsColumnName": "Tactic",
-          "alertDescriptionFormat": "Alert Description: '{{Description}}'\n\nClient '{(SrcIpAddr)}' was detected as making request to '{(DnsQuery)}'",
-          "alertDisplayNameFormat": "'{{Name}}' was detected. From client: '{{SrcIpAddr}}'"
-        },
-        "status": "Available"
+        "entityMappings": [
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "DnsQuery"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ]
+          }
+        ],
+        "status": "Available",
+        "queryPeriod": "1h",
+        "triggerOperator": "gt"
       }
     }
   ]

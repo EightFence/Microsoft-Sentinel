@@ -14,52 +14,52 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "description": "'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP.\nThis may indicate a malicious attempt at password guessing based on knowledge of the users account.'\n",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Name",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SuccessIPAddress",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "FailedIPAddress",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
         "query": "let logonDiff = 10m;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ResultType == \"0\"\n| where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\") // To remove false-positives, add more Apps to this array\n| project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, AppDisplayName, SuccessIPBlock = strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1]), Type\n| join kind= inner (\n    table(tableName)\n    | where ResultType !in (\"0\", \"50140\")\n    | where ResultDescription !~ \"Other\"\n    | where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\") // To remove false-positives, add more Apps to this array\n    | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, AppDisplayName, ResultType, ResultDescription, Type\n) on UserPrincipalName, AppDisplayName\n| where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock\n| summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, AppDisplayName, FailedIPAddress, ResultType, ResultDescription, Type\n| extend timestamp = SuccessLogonTime\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
+        "queryFrequency": "1d",
+        "severity": "Medium",
         "name": "Successful logon from IP and failure from a different IP",
-        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "description": "'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP.\nThis may indicate a malicious attempt at password guessing based on knowledge of the users account.'\n",
         "tactics": [
           "CredentialAccess",
           "InitialAccess"
         ],
-        "status": "Available"
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SuccessIPAddress"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "FailedIPAddress"
+              }
+            ]
+          }
+        ],
+        "status": "Available",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt"
       }
     }
   ]

@@ -14,61 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "HostCustomEntity",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "URLCustomEntity",
-                "identifier": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
         "query": "let endpointData = \n(union isfuzzy=true\n(SecurityEvent\n  | where EventID == 4688\n  | extend shortFileName = tostring(split(NewProcessName, '\\\\')[-1])\n  ),\n  (WindowsEvent\n  | where EventID == 4688\n  | extend  NewProcessName = tostring(EventData.NewProcessName)\n  | extend shortFileName = tostring(split(NewProcessName, '\\\\')[-1])\n  | extend TargetUserName = tostring(EventData.TargetUserName)\n  ));\n// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints\nCommonSecurityLog\n| where DeviceVendor =~ \"Trend Micro\"\n| where Activity =~ \"Deny List updated\" \n| where RequestURL endswith \".exe\"\n| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP\n| extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))\n| join (endpointData) on $left.suspectExeName == $right.shortFileName \n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, AccountCustomEntity = TargetUserName, HostCustomEntity = Computer, URLCustomEntity = RequestURL\n",
+        "queryFrequency": "1d",
+        "severity": "Medium",
         "name": "Network endpoint to host executable correlation",
-        "queryPeriod": "1d",
-        "tactics": [
-          "Execution"
-        ],
         "metadata": {
           "source": {
             "kind": "Community"
-          },
-          "author": {
-            "name": "timbMSFT"
           },
           "categories": {
             "domains": [
@@ -76,11 +28,59 @@
               "Networking"
             ]
           },
+          "author": {
+            "name": "timbMSFT"
+          },
           "support": {
             "tier": "Community"
           }
         },
-        "status": "Available"
+        "triggerThreshold": 0,
+        "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n",
+        "tactics": [
+          "Execution"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URLCustomEntity"
+              }
+            ]
+          }
+        ],
+        "status": "Available",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt"
       }
     }
   ]
