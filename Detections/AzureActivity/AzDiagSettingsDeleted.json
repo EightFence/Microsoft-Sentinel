@@ -14,8 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Azure Diagnostic settings removed from a resource",
+        "description": "'This query looks for diagnostic settings that are removed from a resource.\nThis could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.\nIf the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.'\n",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Caller"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "CallerIpAddress"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
         "triggerThreshold": 0,
+        "query": "AzureActivity\n  | where OperationNameValue == 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and ActivityStatusValue == \"Start\"\n  | extend ParentResource_a = split(_ResourceId,\"/\")\n  | extend ParentResourceLength = array_length(ParentResource_a)-4\n  | extend ParentResourceSplit = array_split(ParentResource_a,ParentResourceLength)\n  | extend resource = strcat_array(ParentResourceSplit[0],\"/\")\n  | project Diagdelete = TimeGenerated, Caller, ResourceProviderValue, _ResourceId, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated, resource, CallerIpAddress\n  | join kind=leftanti  ( AzureActivity\n  | where OperationNameValue != 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and OperationNameValue endswith \"/DELETE\"\n  | where ActivityStatusValue == 'Start'\n  | project Caller, ResourceProviderValue, resource = tostring(parse_json(Properties).resource), SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated) on $left.resource == $right.resource\n  | project Caller, ResourceProviderValue, resource, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start, CallerIpAddress\n",
+        "name": "Azure Diagnostic settings removed from a resource",
+        "queryPeriod": "2h",
         "metadata": {
           "categories": {
             "domains": [
@@ -23,45 +52,16 @@
               "Platform"
             ]
           },
-          "author": {
-            "name": "KennethMLdk"
+          "source": {
+            "kind": "Community"
           },
           "support": {
             "tier": "Community"
           },
-          "source": {
-            "kind": "Community"
+          "author": {
+            "name": "KennethMLdk"
           }
-        },
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerOperator": "gt",
-        "query": "AzureActivity\n  | where OperationNameValue == 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and ActivityStatusValue == \"Start\"\n  | extend ParentResource_a = split(_ResourceId,\"/\")\n  | extend ParentResourceLength = array_length(ParentResource_a)-4\n  | extend ParentResourceSplit = array_split(ParentResource_a,ParentResourceLength)\n  | extend resource = strcat_array(ParentResourceSplit[0],\"/\")\n  | project Diagdelete = TimeGenerated, Caller, ResourceProviderValue, _ResourceId, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated, resource, CallerIpAddress\n  | join kind=leftanti  ( AzureActivity\n  | where OperationNameValue != 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and OperationNameValue endswith \"/DELETE\"\n  | where ActivityStatusValue == 'Start'\n  | project Caller, ResourceProviderValue, resource = tostring(parse_json(Properties).resource), SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated) on $left.resource == $right.resource\n  | project Caller, ResourceProviderValue, resource, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start, CallerIpAddress\n",
-        "description": "'This query looks for diagnostic settings that are removed from a resource.\nThis could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.\nIf the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.'\n",
-        "queryPeriod": "2h",
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Caller",
-                "identifier": "Name"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "CallerIpAddress",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "queryFrequency": "1h"
+        }
       }
     }
   ]
