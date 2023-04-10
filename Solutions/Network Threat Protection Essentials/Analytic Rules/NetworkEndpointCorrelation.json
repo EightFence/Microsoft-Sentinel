@@ -14,13 +14,61 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "1d",
+        "tactics": [
+          "Execution"
+        ],
+        "severity": "Medium",
+        "status": "Available",
         "name": "Network endpoint to host executable correlation",
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URLCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
         "query": "let endpointData = \n(union isfuzzy=true\n(SecurityEvent\n  | where EventID == 4688\n  | extend shortFileName = tostring(split(NewProcessName, '\\\\')[-1])\n  ),\n  (WindowsEvent\n  | where EventID == 4688\n  | extend  NewProcessName = tostring(EventData.NewProcessName)\n  | extend shortFileName = tostring(split(NewProcessName, '\\\\')[-1])\n  | extend TargetUserName = tostring(EventData.TargetUserName)\n  ));\n// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints\nCommonSecurityLog\n| where DeviceVendor =~ \"Trend Micro\"\n| where Activity =~ \"Deny List updated\" \n| where RequestURL endswith \".exe\"\n| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP\n| extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))\n| join (endpointData) on $left.suspectExeName == $right.shortFileName \n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, AccountCustomEntity = TargetUserName, HostCustomEntity = Computer, URLCustomEntity = RequestURL\n",
-        "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n",
+        "triggerThreshold": 0,
         "queryFrequency": "1d",
         "metadata": {
-          "author": {
-            "name": "timbMSFT"
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -28,59 +76,11 @@
               "Networking"
             ]
           },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
+          "author": {
+            "name": "timbMSFT"
           }
         },
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "URLCustomEntity"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
-        "tactics": [
-          "Execution"
-        ],
-        "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "severity": "Medium"
+        "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n"
       }
     }
   ]
