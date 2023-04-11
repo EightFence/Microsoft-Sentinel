@@ -14,6 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
         "metadata": {
           "categories": {
             "domains": [
@@ -24,20 +26,20 @@
           "author": {
             "name": "Pete Bryan"
           },
-          "support": {
-            "tier": "Community"
-          },
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           }
         },
         "name": "Service Principal Assigned Privileged Role",
-        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend ServicePrincipal = tostring(TargetResources[0].displayName)\n  | extend SPID = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | where TargetResources_0_modifiedProperties.displayName =~ \"Role.DisplayName\"\n  | extend TargetRole = parse_json(tostring(TargetResources_0_modifiedProperties.newValue))\n  | where TargetRole contains \"admin\"\n  | extend AddedByApp = iif(\n  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)),\n  tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName),\n  tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  )\n  | extend AddedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddedBy = iif(isnotempty(AddedByApp), AddedByApp, AddedByUser)\n  | extend IpAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | project-reorder TimeGenerated, ServicePrincipal, SPID, TargetRole, AddedBy, IpAddress\n  | project-away AddedByApp, AddedByUser\n",
-        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "severity": "Medium",
-        "queryPeriod": "1d",
+        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
+        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend ServicePrincipal = tostring(TargetResources[0].displayName)\n  | extend SPID = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | where TargetResources_0_modifiedProperties.displayName =~ \"Role.DisplayName\"\n  | extend TargetRole = parse_json(tostring(TargetResources_0_modifiedProperties.newValue))\n  | where TargetRole contains \"admin\"\n  | extend AddedByApp = iif(\n  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)),\n  tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName),\n  tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  )\n  | extend AddedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddedBy = iif(isnotempty(AddedByApp), AddedByApp, AddedByUser)\n  | extend IpAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | project-reorder TimeGenerated, ServicePrincipal, SPID, TargetRole, AddedBy, IpAddress\n  | project-away AddedByApp, AddedByUser\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -59,9 +61,7 @@
           }
         ],
         "triggerThreshold": 0,
-        "tactics": [
-          "PrivilegeEscalation"
-        ]
+        "triggerOperator": "gt"
       }
     }
   ]
