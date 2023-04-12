@@ -14,18 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "tactics": [
-          "Persistence",
-          "DefenseEvasion"
-        ],
+        "status": "Available",
         "triggerOperator": "gt",
+        "description": "'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ],
             "entityType": "Account"
@@ -33,20 +30,23 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "name": "Office policy tampering",
-        "triggerThreshold": 0,
-        "description": "'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.'\n",
-        "queryFrequency": "1d",
         "query": "let opList = OfficeActivity \n| summarize by Operation\n//| where Operation startswith \"Remove-\" or Operation startswith \"Disable-\"\n| where Operation has_any (\"Remove\", \"Disable\")\n| where Operation contains \"AntiPhish\" or Operation contains \"SafeAttachment\" or Operation contains \"SafeLinks\" or Operation contains \"Dlp\" or Operation contains \"Audit\"\n| summarize make_set(Operation);\nOfficeActivity\n// Only admin or global-admin can disable/remove policy\n| where RecordType =~ \"ExchangeAdmin\"\n| where UserType in~ (\"Admin\",\"DcAdmin\")\n// Pass in interesting Operation list\n| where Operation in~ (opList)\n| extend ClientIPOnly = case( \nClientIP has \".\", tostring(split(ClientIP,\":\")[0]), \nClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\nClientIP\n)  \n| extend Port = case(\nClientIP has \".\", (split(ClientIP,\":\")[1]),\nClientIP has \"[\", tostring(split(ClientIP,\"]:\")[1]),\nClientIP\n)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP\n",
-        "severity": "Medium",
-        "status": "Available"
+        "name": "Office policy tampering",
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Persistence",
+          "DefenseEvasion"
+        ],
+        "queryFrequency": "1d",
+        "severity": "Medium"
       }
     }
   ]
