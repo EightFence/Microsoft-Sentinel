@@ -14,9 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
         "query": "let lookback = 1d;\nlet GlobalAdmins = IdentityInfo\n| where TimeGenerated > ago(lookback)\n| extend IsGlobalAdmin = set_has_element(AssignedRoles, \"Global Administrator\")\n| where IsGlobalAdmin == true\n| distinct AccountUPN;\nGlobalAdmins\n| join kind=inner ( AuditLogs\n| where TimeGenerated > ago(lookback)\n| where OperationName=~ \"Update user\" \n| where Result =~ \"success\" \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) , oldValue_ = tostring(TargetResources_modifiedProperties.oldValue), newValue_ = tostring(TargetResources_modifiedProperties.newValue)\n| where displayName_ == \"UserPrincipalName\" and oldValue_ !has \"#EXT\" and newValue_ has \"#EXT\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) \n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) , IPAddress = tostring(InitiatedBy.[\"user\"].[\"ipAddress\"])\n) on $left.AccountUPN == $right.oldValue_\n| project TimeGenerated, AADTenantId, IPAddress, Initiator, displayName_, oldValue_, newValue_\n",
-        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -46,31 +47,30 @@
             ]
           }
         ],
-        "triggerThreshold": 0,
+        "description": "' This query will detect if user properties of Global Administrator are updated by an existing user. Usually only user administrator or other global administrator can update such properties.\nInvestigate if such user change is an attempt to elevate an existing low privileged identity or rogue administrator activity'\n",
+        "name": "Suspicious modification of Global Administrator user properties",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
           "author": {
             "name": "Ashwin Patil"
           },
-          "support": {
-            "tier": "Community"
+          "source": {
+            "kind": "Community"
           },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
-          },
-          "source": {
-            "kind": "Community"
           }
         },
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "description": "' This query will detect if user properties of Global Administrator are updated by an existing user. Usually only user administrator or other global administrator can update such properties.\nInvestigate if such user change is an attempt to elevate an existing low privileged identity or rogue administrator activity'\n",
         "triggerOperator": "gt",
-        "name": "Suspicious modification of Global Administrator user properties",
-        "queryFrequency": "1d"
+        "queryPeriod": "1d"
       }
     }
   ]
