@@ -14,21 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "2h",
+        "queryFrequency": "2h",
+        "name": "User Assigned Privileged Role",
+        "severity": "High",
+        "description": "'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "tactics": [
           "Persistence"
         ],
-        "severity": "High",
+        "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(InitiatedBy.app.displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))\n// Uncomment below to not alert for PIM activations\n//| where Initiator != \"MS-PIM\"\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(Initiator,'@',0)[0]), InitiatorUPNSuffix = tostring(split(Initiator,'@',1)[0])\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "TargetName"
+                "columnName": "TargetName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "TargetUPNSuffix"
+                "columnName": "TargetUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -36,24 +43,17 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "InitiatorName"
+                "columnName": "InitiatorName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatorUPNSuffix"
+                "columnName": "InitiatorUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           }
         ],
-        "description": "'Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n",
-        "triggerOperator": "gt",
-        "queryPeriod": "2h",
-        "name": "User Assigned Privileged Role",
-        "queryFrequency": "2h",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(InitiatedBy.app.displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))\n// Uncomment below to not alert for PIM activations\n//| where Initiator != \"MS-PIM\"\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(Initiator,'@',0)[0]), InitiatorUPNSuffix = tostring(split(Initiator,'@',1)[0])\n"
+        "status": "Available"
       }
     }
   ]

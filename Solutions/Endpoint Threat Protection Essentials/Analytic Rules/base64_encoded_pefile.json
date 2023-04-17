@@ -14,18 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "name": "Base64 encoded Windows process command-lines",
+        "severity": "Medium",
+        "description": "'Identifies instances of a base64 encoded PE file header seen in the process command line parameter.'\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "tactics": [
           "Execution",
           "DefenseEvasion"
         ],
-        "severity": "Medium",
+        "query": "let ProcessCreationEvents=() {\nlet processEvents=(union isfuzzy=true\n(SecurityEvent\n| where EventID==4688\n| where isnotempty(CommandLine)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,\nFileName = Process, CommandLine, ParentProcessName\n),\n(WindowsEvent\n| where EventID==4688\n| where EventData has \"TVqQAAMAAAAEAAA\"\n| extend CommandLine = tostring(EventData.CommandLine)\n| where isnotempty(CommandLine)\n| extend ParentProcessName = tostring(EventData.ParentProcessName)\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,\nFileName = Process, CommandLine, ParentProcessName));\nprocessEvents};\nProcessCreationEvents\n| where CommandLine contains \"TVqQAAMAAAAEAAA\"\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ]
           },
@@ -33,20 +40,13 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
               }
             ]
           }
         ],
-        "description": "'Identifies instances of a base64 encoded PE file header seen in the process command line parameter.'\n",
-        "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "name": "Base64 encoded Windows process command-lines",
-        "triggerThreshold": 0,
-        "query": "let ProcessCreationEvents=() {\nlet processEvents=(union isfuzzy=true\n(SecurityEvent\n| where EventID==4688\n| where isnotempty(CommandLine)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,\nFileName = Process, CommandLine, ParentProcessName\n),\n(WindowsEvent\n| where EventID==4688\n| where EventData has \"TVqQAAMAAAAEAAA\"\n| extend CommandLine = tostring(EventData.CommandLine)\n| where isnotempty(CommandLine)\n| extend ParentProcessName = tostring(EventData.ParentProcessName)\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by Computer, Account = SubjectUserName, AccountDomain = SubjectDomainName,\nFileName = Process, CommandLine, ParentProcessName));\nprocessEvents};\nProcessCreationEvents\n| where CommandLine contains \"TVqQAAMAAAAEAAA\"\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Account, HostCustomEntity = Computer\n",
-        "status": "Available",
-        "queryFrequency": "1d"
+        "status": "Available"
       }
     }
   ]

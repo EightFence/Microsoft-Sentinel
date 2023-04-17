@@ -14,17 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "4h",
+        "queryFrequency": "4h",
+        "name": "Azure DevOps Administrator Group Monitoring",
+        "severity": "Medium",
+        "description": "'This detection monitors for additions to projects or project collection administration groups in an Azure DevOps Organization.'\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "tactics": [
           "Persistence"
         ],
-        "severity": "Medium",
+        "query": "// Change to true to monitor for Project Administrator adds to *any* project\nlet MonitorAllProjects = false;\n// If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects\nlet ProjectsToMonitor = dynamic(['<project_X>','<project_Y>']);\nAzureDevOpsAuditing\n| where Area == \"Group\" and OperationName == \"Group.UpdateGroupMembership.Add\"\n| where Details has 'Administrators'\n| where Details has \"was added as a member of group\" and (Details endswith '\\\\Project Administrators' or Details endswith '\\\\Project Collection Administrators')\n| parse Details with AddedIdentity ' was added as a member of group [' EntityName ']\\\\' GroupName\n| extend Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), AddedIdentityId = Data.MemberId\n| extend Severity = iif(Level == 'Organization', 'High', 'Medium'), AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added ', AddedIdentity, ' to the ', EntityName, ' ', Level)\n| where MonitorAllProjects == true or EntityName in (ProjectsToMonitor) or Level == 'Organization'\n| project TimeGenerated, Severity, Adder = ActorUPN, AddedIdentity, AddedIdentityId, AlertDetails, Level, EntityName, GroupName, ActorAuthType = AuthenticationMechanism,\n  ActorIpAddress = IpAddress, ActorUserAgent = UserAgent, RawDetails = Details\n| extend timestamp = TimeGenerated, AccountCustomEntity = Adder, IPCustomEntity = ActorIpAddress\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ]
           },
@@ -32,20 +39,13 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "description": "'This detection monitors for additions to projects or project collection administration groups in an Azure DevOps Organization.'\n",
-        "triggerOperator": "gt",
-        "queryPeriod": "4h",
-        "name": "Azure DevOps Administrator Group Monitoring",
-        "triggerThreshold": 0,
-        "query": "// Change to true to monitor for Project Administrator adds to *any* project\nlet MonitorAllProjects = false;\n// If MonitorAllProjects is false, trigger only on Project Administrator add for the following projects\nlet ProjectsToMonitor = dynamic(['<project_X>','<project_Y>']);\nAzureDevOpsAuditing\n| where Area == \"Group\" and OperationName == \"Group.UpdateGroupMembership.Add\"\n| where Details has 'Administrators'\n| where Details has \"was added as a member of group\" and (Details endswith '\\\\Project Administrators' or Details endswith '\\\\Project Collection Administrators')\n| parse Details with AddedIdentity ' was added as a member of group [' EntityName ']\\\\' GroupName\n| extend Level = iif(GroupName == 'Project Collection Administrators', 'Organization', 'Project'), AddedIdentityId = Data.MemberId\n| extend Severity = iif(Level == 'Organization', 'High', 'Medium'), AlertDetails = strcat('At ', TimeGenerated, ' UTC ', ActorUPN, '/', ActorDisplayName, ' added ', AddedIdentity, ' to the ', EntityName, ' ', Level)\n| where MonitorAllProjects == true or EntityName in (ProjectsToMonitor) or Level == 'Organization'\n| project TimeGenerated, Severity, Adder = ActorUPN, AddedIdentity, AddedIdentityId, AlertDetails, Level, EntityName, GroupName, ActorAuthType = AuthenticationMechanism,\n  ActorIpAddress = IpAddress, ActorUserAgent = UserAgent, RawDetails = Details\n| extend timestamp = TimeGenerated, AccountCustomEntity = Adder, IPCustomEntity = ActorIpAddress\n",
-        "status": "Available",
-        "queryFrequency": "4h"
+        "status": "Available"
       }
     }
   ]
