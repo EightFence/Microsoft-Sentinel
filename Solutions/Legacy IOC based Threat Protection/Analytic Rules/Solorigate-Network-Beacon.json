@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "query": "let domains = dynamic([\"incomeupdate.com\",\"zupertech.com\",\"databasegalore.com\",\"panhardware.com\",\"avsvmcloud.com\",\"digitalcollege.org\",\"freescanonline.com\",\"deftsecurity.com\",\"thedoccloud.com\",\"virtualdataserver.com\",\"lcomputers.com\",\"webcodez.com\",\"globalnetworkissues.com\",\"kubecloud.com\",\"seobundlekit.com\",\"solartrackingsystem.net\",\"virtualwebdata.com\"]);\n(union isfuzzy=true\n(CommonSecurityLog \n  | parse Message with * '(' DNSName ')' * \n  | where DNSName in~ (domains) or DestinationHostName has_any (domains) or RequestURL has_any(domains)\n  | extend AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName, IPCustomEntity = SourceIP\n  ),\n(_Im_Dns (domain_has_any=domains)\n  | extend DNSName = DnsQuery\n  | extend IPCustomEntity = SrcIpAddr\n  ),\n(VMConnection \n  | parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n  | where isnotempty(DNSName)\n  | where DNSName in~ (domains)\n  | extend IPCustomEntity = RemoteIp\n  ),\n(DeviceNetworkEvents \n  | where isnotempty(RemoteUrl) \n  | where RemoteUrl  has_any (domains)  \n  | extend DNSName = RemoteUrl\n  | extend IPCustomEntity = RemoteIP \n  | extend HostCustomEntity = DeviceName \n  ),\n(AzureDiagnostics \n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallApplicationRule\"\n  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n  | where isnotempty(DestinationHost)\n  | where DestinationHost has_any (domains)  \n  | extend DNSName = DestinationHost \n  | extend IPCustomEntity = SourceHost\n  ),\n(AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallNetworkRule\"\n  | where msg_s has_any (domains)\n  | parse msg_s with Protocol \" request from \" SourceIP \":\" SourcePortInt:int \" to \" TargetIP \":\" TargetPortInt:int *\n  | parse kind=regex flags=U msg_s with * \". Action\\\\: \" Action1a \"\\\\.\"\n  | parse msg_s with * \". Policy: \" Policy \". Rule Collection Group: \" RuleCollectionGroup \".\" *\n  | parse msg_s with * \" Rule Collection: \"  RuleCollection \". Rule: \" Rule \n  | extend DNSName = TargetIP \n  | extend IPCustomEntity = SourceIP\n  ),\n(AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallDnsProxy\"\n  | where msg_s has_any (domains)\n  | parse msg_s with \"DNS Request: \" SourceIP \":\" SourcePortInt:int \" - \" QueryID:int \" \" RequestType \" \" RequestClass \" \" hostname \". \" protocol \" \" details\n  | extend\n      ResponseDuration = extract(\"[0-9]*.?[0-9]+s$\", 0, msg_s),\n      SourcePort = tostring(SourcePortInt),\n      QueryID =  tostring(QueryID)\n  | extend DNSName = hostname\n  | extend IPCustomEntity = SourceIP\n  | project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s\n  | order by TimeGenerated\n  ),\n(AZFWApplicationRule\n  | where Fqdn has_any (domains)\n  | extend DNSName = Fqdn\n  | extend IPCustomEntity = SourceIp\n  ),\n(AZFWDnsQuery\n  | where isnotempty(QueryName)\n  | where QueryName has_any (domains)\n  | extend DNSName = QueryName\n  | extend IPCustomEntity = SourceIp\n  )\n  )\n",
         "description": "'Identifies a match across various data feeds for domains IOCs related to the Solorigate incident.\n References: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/, \n https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html?1'\n",
+        "queryPeriod": "6h",
+        "queryFrequency": "6h",
         "tactics": [
           "CommandAndControl"
         ],
-        "queryPeriod": "6h",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "DNS",
             "fieldMappings": [
               {
-                "identifier": "DomainName",
-                "columnName": "DNSName"
+                "columnName": "DNSName",
+                "identifier": "DomainName"
               }
-            ],
-            "entityType": "DNS"
+            ]
           }
         ],
-        "triggerOperator": "gt",
         "triggerThreshold": 0,
         "severity": "High",
-        "query": "let domains = dynamic([\"incomeupdate.com\",\"zupertech.com\",\"databasegalore.com\",\"panhardware.com\",\"avsvmcloud.com\",\"digitalcollege.org\",\"freescanonline.com\",\"deftsecurity.com\",\"thedoccloud.com\",\"virtualdataserver.com\",\"lcomputers.com\",\"webcodez.com\",\"globalnetworkissues.com\",\"kubecloud.com\",\"seobundlekit.com\",\"solartrackingsystem.net\",\"virtualwebdata.com\"]);\n(union isfuzzy=true\n(CommonSecurityLog \n  | parse Message with * '(' DNSName ')' * \n  | where DNSName in~ (domains) or DestinationHostName has_any (domains) or RequestURL has_any(domains)\n  | extend AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName, IPCustomEntity = SourceIP\n  ),\n(_Im_Dns (domain_has_any=domains)\n  | extend DNSName = DnsQuery\n  | extend IPCustomEntity = SrcIpAddr\n  ),\n(VMConnection \n  | parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n  | where isnotempty(DNSName)\n  | where DNSName in~ (domains)\n  | extend IPCustomEntity = RemoteIp\n  ),\n(DeviceNetworkEvents \n  | where isnotempty(RemoteUrl) \n  | where RemoteUrl  has_any (domains)  \n  | extend DNSName = RemoteUrl\n  | extend IPCustomEntity = RemoteIP \n  | extend HostCustomEntity = DeviceName \n  ),\n(AzureDiagnostics \n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallApplicationRule\"\n  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n  | where isnotempty(DestinationHost)\n  | where DestinationHost has_any (domains)  \n  | extend DNSName = DestinationHost \n  | extend IPCustomEntity = SourceHost\n  ),\n(AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallNetworkRule\"\n  | where msg_s has_any (domains)\n  | parse msg_s with Protocol \" request from \" SourceIP \":\" SourcePortInt:int \" to \" TargetIP \":\" TargetPortInt:int *\n  | parse kind=regex flags=U msg_s with * \". Action\\\\: \" Action1a \"\\\\.\"\n  | parse msg_s with * \". Policy: \" Policy \". Rule Collection Group: \" RuleCollectionGroup \".\" *\n  | parse msg_s with * \" Rule Collection: \"  RuleCollection \". Rule: \" Rule \n  | extend DNSName = TargetIP \n  | extend IPCustomEntity = SourceIP\n  ),\n(AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallDnsProxy\"\n  | where msg_s has_any (domains)\n  | parse msg_s with \"DNS Request: \" SourceIP \":\" SourcePortInt:int \" - \" QueryID:int \" \" RequestType \" \" RequestClass \" \" hostname \". \" protocol \" \" details\n  | extend\n      ResponseDuration = extract(\"[0-9]*.?[0-9]+s$\", 0, msg_s),\n      SourcePort = tostring(SourcePortInt),\n      QueryID =  tostring(QueryID)\n  | extend DNSName = hostname\n  | extend IPCustomEntity = SourceIP\n  | project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s\n  | order by TimeGenerated\n  ),\n(AZFWApplicationRule\n  | where Fqdn has_any (domains)\n  | extend DNSName = Fqdn\n  | extend IPCustomEntity = SourceIp\n  ),\n(AZFWDnsQuery\n  | where isnotempty(QueryName)\n  | where QueryName has_any (domains)\n  | extend DNSName = QueryName\n  | extend IPCustomEntity = SourceIp\n  )\n  )\n",
-        "name": "Solorigate Network Beacon",
-        "queryFrequency": "6h",
-        "status": "Available"
+        "triggerOperator": "gt",
+        "name": "Solorigate Network Beacon"
       }
     }
   ]
