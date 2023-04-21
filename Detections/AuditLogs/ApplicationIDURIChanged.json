@@ -14,35 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Detects changes to an Application ID URI.\n  Monitor these changes to make sure that they were authorized.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#appid-uri-added-modified-or-removed'\n",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "name": "Application ID URI Changed",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "UpdatedBy",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "URL",
-            "fieldMappings": [
-              {
-                "columnName": "NewURI",
-                "identifier": "Url"
-              }
-            ]
-          }
-        ],
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
+        "triggerThreshold": 0,
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan"
+          },
           "source": {
             "kind": "Community"
           },
@@ -50,18 +29,39 @@
             "domains": [
               "Security - Others"
             ]
-          },
-          "author": {
-            "name": "Pete Bryan"
-          },
-          "support": {
-            "tier": "Community"
           }
         },
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "description": "'Detects changes to an Application ID URI.\n  Monitor these changes to make sure that they were authorized.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#appid-uri-added-modified-or-removed'\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UpdatedBy"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "NewURI"
+              }
+            ]
+          }
+        ],
+        "query": "AuditLogs\n  | where Category == \"ApplicationManagement\"\n  | where OperationName has_any (\"Update Application\", \"Update Service principal\")\n  | extend appName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  | extend UPN = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend UpdatedBy = iif(isnotempty(appName), appName, UPN)\n  | extend mod_props = TargetResources[0].modifiedProperties\n  | extend AppName = tostring(TargetResources[0].displayName)\n  | mv-expand mod_props\n  | where mod_props.displayName has \"AppIdentifierUri\"\n  | extend OldURI = tostring(mod_props.oldValue)\n  | extend NewURI = tostring(mod_props.newValue)\n  | project-reorder TimeGenerated, OperationName, AppName, OldURI, NewURI, UpdatedBy\n",
+        "name": "Application ID URI Changed",
         "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "severity": "Medium",
-        "query": "AuditLogs\n  | where Category == \"ApplicationManagement\"\n  | where OperationName has_any (\"Update Application\", \"Update Service principal\")\n  | extend appName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  | extend UPN = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend UpdatedBy = iif(isnotempty(appName), appName, UPN)\n  | extend mod_props = TargetResources[0].modifiedProperties\n  | extend AppName = tostring(TargetResources[0].displayName)\n  | mv-expand mod_props\n  | where mod_props.displayName has \"AppIdentifierUri\"\n  | extend OldURI = tostring(mod_props.oldValue)\n  | extend NewURI = tostring(mod_props.newValue)\n  | project-reorder TimeGenerated, OperationName, AppName, OldURI, NewURI, UpdatedBy\n"
+        "queryPeriod": "1d",
+        "queryFrequency": "1d"
       }
     }
   ]
