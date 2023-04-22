@@ -14,23 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
+        "triggerThreshold": 0,
         "severity": "Medium",
         "status": "Available",
-        "query": "let starttime = 14d;\nlet timeframe = 1d;\nlet scorethreshold = 3;\nlet baselinethreshold = 50;\nlet aadFunc = (tableName:string){\n  // Failed Signins attempts with reasoning related to conditional access policies.\n  table(tableName)\n  | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))\n  | where ResultDescription has_any (\"conditional access\", \"CA\") or ResultType in (50005, 50131, 53000, 53001, 53002, 52003, 70044)\n  | extend UserPrincipalName = tolower(UserPrincipalName)\n  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet allSignins = union isfuzzy=true aadSignin, aadNonInt;\nlet TimeSeriesAlerts = \nallSignins\n| make-series DailyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step 1d by UserPrincipalName\n| extend (anomalies, score, baseline) = series_decompose_anomalies(DailyCount, scorethreshold, -1, 'linefit')\n| mv-expand DailyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n// Filtering low count events per baselinethreshold\n| where anomalies > 0 and baseline > baselinethreshold\n| extend AnomalyHour = TimeGenerated\n| project UserPrincipalName, AnomalyHour, TimeGenerated, DailyCount, baseline, anomalies, score;\n// Filter the alerts for specified timeframe\nTimeSeriesAlerts\n| where TimeGenerated > startofday(ago(timeframe))\n| join kind=inner ( \n  allSignins\n  | where TimeGenerated > startofday(ago(timeframe))\n  // create a new column and round to hour\n  | extend DateHour = bin(TimeGenerated, 1h)\n  | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName\n) on UserPrincipalName, $left.AnomalyHour == $right.DateHour\n| project LatestAnomalyTime, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = DailyCount, baseline, anomalies, score\n| extend timestamp = LatestAnomalyTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
-        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "queryFrequency": "1d",
-        "triggerThreshold": 0,
+        "query": "let starttime = 14d;\nlet timeframe = 1d;\nlet scorethreshold = 3;\nlet baselinethreshold = 50;\nlet aadFunc = (tableName:string){\n  // Failed Signins attempts with reasoning related to conditional access policies.\n  table(tableName)\n  | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))\n  | where ResultDescription has_any (\"conditional access\", \"CA\") or ResultType in (50005, 50131, 53000, 53001, 53002, 52003, 70044)\n  | extend UserPrincipalName = tolower(UserPrincipalName)\n  | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet allSignins = union isfuzzy=true aadSignin, aadNonInt;\nlet TimeSeriesAlerts = \nallSignins\n| make-series DailyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step 1d by UserPrincipalName\n| extend (anomalies, score, baseline) = series_decompose_anomalies(DailyCount, scorethreshold, -1, 'linefit')\n| mv-expand DailyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n// Filtering low count events per baselinethreshold\n| where anomalies > 0 and baseline > baselinethreshold\n| extend AnomalyHour = TimeGenerated\n| project UserPrincipalName, AnomalyHour, TimeGenerated, DailyCount, baseline, anomalies, score;\n// Filter the alerts for specified timeframe\nTimeSeriesAlerts\n| where TimeGenerated > startofday(ago(timeframe))\n| join kind=inner ( \n  allSignins\n  | where TimeGenerated > startofday(ago(timeframe))\n  // create a new column and round to hour\n  | extend DateHour = bin(TimeGenerated, 1h)\n  | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName\n) on UserPrincipalName, $left.AnomalyHour == $right.DateHour\n| project LatestAnomalyTime, OperationName, Category, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = DailyCount, baseline, anomalies, score\n| extend timestamp = LatestAnomalyTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "description": "' Identifies spike in failed sign-ins from user accounts due to conditional access policied.\nSpike is determined based on Time series anomaly which will look at historical baseline values.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -38,18 +41,15 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "description": "' Identifies spike in failed sign-ins from user accounts due to conditional access policied.\nSpike is determined based on Time series anomaly which will look at historical baseline values.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
         "name": "User Accounts - Sign in Failure due to CA Spikes",
-        "tactics": [
-          "InitialAccess"
-        ]
+        "triggerOperator": "gt"
       }
     }
   ]
