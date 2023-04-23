@@ -14,66 +14,66 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies when failed logon attempts are 20 or higher during a 10 minute period (2 failed logons per minute minimum) from valid account.'\n",
         "queryPeriod": "10m",
+        "triggerOperator": "gt",
         "query": "let threshold = 20;\nlet ReasontoSubStatus = datatable(SubStatus:string,Reason:string) [\n\"0xC000005E\", \"There are currently no logon servers available to service the logon request.\",\n\"0xC0000064\", \"User logon with misspelled or bad user account\", \n\"0xC000006A\", \"User logon with misspelled or bad password\",\n\"0xC000006D\", \"Bad user name or password\",\n\"0xC000006E\", \"Unknown user name or bad password\",\n\"0xC000006F\", \"User logon outside authorized hours\",\n\"0xC0000070\", \"User logon from unauthorized workstation\",\n\"0xC0000071\", \"User logon with expired password\",\n\"0xC0000072\", \"User logon to account disabled by administrator\",\n\"0xC00000DC\", \"Indicates the Sam Server was in the wrong state to perform the desired operation\",\n\"0xC0000133\", \"Clocks between DC and other computer too far out of sync\",\n\"0xC000015B\", \"The user has not been granted the requested logon type (aka logon right) at this machine\",\n\"0xC000018C\", \"The logon request failed because the trust relationship between the primary domain and the trusted domain failed\",\n\"0xC0000192\", \"An attempt was made to logon, but the Netlogon service was not started\",\n\"0xC0000193\", \"User logon with expired account\",\n\"0xC0000224\", \"User is required to change password at next logon\",\n\"0xC0000225\", \"Evidently a bug in Windows and not a risk\",\n\"0xC0000234\", \"User logon with account locked\",\n\"0xC00002EE\", \"Failure Reason: An Error occurred during Logon\",\n\"0xC0000413\", \"Logon Failure: The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine\"\n];\n(union isfuzzy=true\n(SecurityEvent \n| where EventID == 4625\n| where AccountType =~ \"User\"\n| where SubStatus !='0xc0000064' and Account !in ('\\\\', '-\\\\-')\n// SubStatus '0xc0000064' signifies 'Account name does not exist'\n| extend ResourceId = column_ifexists(\"_ResourceId\", _ResourceId), SourceComputerId = column_ifexists(\"SourceComputerId\", SourceComputerId)\n| lookup ReasontoSubStatus on SubStatus\n| extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID, \nActivity, Computer, Account, TargetAccount, TargetUserName, TargetDomainName, \nLogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress\n| where FailedLogonCount >= threshold\n),\n(\n(WindowsEvent \n| where EventID == 4625 and not(EventData has '0xc0000064')\n| extend TargetAccount = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| extend TargetUserSid = tostring(EventData.TargetUserSid)\n| extend AccountType=case(EventData.TargetUserName endswith \"$\" or TargetUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(TargetUserSid), \"\", \"User\")\n| where AccountType =~ \"User\"\n| extend SubStatus = tostring(EventData.SubStatus)\n| where SubStatus !='0xc0000064' and TargetAccount !in ('\\\\', '-\\\\-')\n// SubStatus '0xc0000064' signifies 'Account name does not exist'\n| extend ResourceId = column_ifexists(\"_ResourceId\", _ResourceId), SourceComputerId = column_ifexists(\"SourceComputerId\", \"\")\n| lookup ReasontoSubStatus on SubStatus\n| extend coalesce(Reason, strcat('Unknown reason substatus: ', SubStatus))\n| extend Activity=\"4625 - An account failed to log on.\"\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend TargetDomainName = tostring(EventData.TargetDomainName)\n| extend LogonType = tostring(EventData.LogonType)\n| extend Status= tostring(EventData.Status)\n| extend LogonProcessName = tostring(EventData.LogonProcessName)\n| extend WorkstationName = tostring(EventData.WorkstationName)\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend LogonTypeName=case(LogonType==2,\"2 - Interactive\", LogonType==3,\"3 - Network\", LogonType==4, \"4 - Batch\",LogonType==5, \"5 - Service\", LogonType==7, \"7 - Unlock\", LogonType==8, \"8 - NetworkCleartext\", LogonType==9, \"9 - NewCredentials\", LogonType==10, \"10 - RemoteInteractive\", LogonType==11, \"11 - CachedInteractive\",tostring(LogonType))\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), FailedLogonCount = count() by bin(TimeGenerated,10m), EventID, \nActivity, Computer, TargetAccount, TargetUserName, TargetDomainName, \nLogonType, LogonTypeName, LogonProcessName, Status, SubStatus, Reason, ResourceId, SourceComputerId, WorkstationName, IpAddress\n| where FailedLogonCount >= threshold\n)))\n| summarize arg_max(TimeGenerated, *) by Computer, TargetUserName, TargetDomainName\n",
-        "triggerThreshold": 0,
-        "tactics": [
-          "CredentialAccess"
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "TargetUserName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "TargetDomainName",
+                "identifier": "NTDomain"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Computer",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "IpAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
         ],
+        "description": "'Identifies when failed logon attempts are 20 or higher during a 10 minute period (2 failed logons per minute minimum) from valid account.'\n",
         "metadata": {
-          "support": {
-            "tier": "Community"
+          "source": {
+            "kind": "Community"
           },
           "author": {
             "name": "Shain"
-          },
-          "source": {
-            "kind": "Community"
           },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
+          },
+          "support": {
+            "tier": "Community"
           }
         },
-        "severity": "Low",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "TargetUserName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "TargetDomainName"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "Computer"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IpAddress"
-              }
-            ]
-          }
-        ],
-        "triggerOperator": "gt",
         "name": "Failed logon attempts by valid accounts within 10 mins",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "severity": "Low",
         "queryFrequency": "10m"
       }
     }
