@@ -14,15 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "query": "// For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups\nlet WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nunion isfuzzy=true\n(\nSecurityEvent\n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group\n| where EventID in (4728, 4732, 4756)\n| where AccountType == \"User\"\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| extend SimpleMemberName = substring(MemberName, 3, indexof_regex(MemberName, @\",OU|,CN\") - 3)\n| project TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid\n),\n(\nWindowsEvent\n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group\n| where EventID in (4728, 4732, 4756) and not(EventData has \"S-1-5-32-555\")\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(Account endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n| extend MemberName = tostring(EventData.MemberName)\n| where AccountType == \"User\"\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| extend SimpleMemberName = substring(MemberName, 3, indexof_regex(MemberName, @\",OU|,CN\") - 3)\n| extend MemberSid = tostring(EventData.MemberSid)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend TargetDomainName = tostring(EventData.TargetDomainName)\n| extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| project TimeGenerated, EventID, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid\n)\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "SimpleMemberName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "SimpleMemberName"
               }
             ],
             "entityType": "Account"
@@ -30,18 +27,24 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Computer"
               }
             ],
             "entityType": "Host"
           }
         ],
-        "description": "'Identifies when a user account has been added to a privileged built in domain local group or global group\nsuch as the Enterprise Admins, Cert Publishers or DnsAdmins. Be sure to verify this is an expected addition.'\n",
+        "severity": "Low",
+        "name": "User account added to built in domain local or global group",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "queryFrequency": "1d",
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
           "author": {
             "name": "Shain"
           },
@@ -53,16 +56,13 @@
           },
           "support": {
             "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
-        "name": "User account added to built in domain local or global group",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
-        "severity": "Low",
-        "queryFrequency": "1d"
+        "description": "'Identifies when a user account has been added to a privileged built in domain local group or global group\nsuch as the Enterprise Admins, Cert Publishers or DnsAdmins. Be sure to verify this is an expected addition.'\n",
+        "query": "// For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups\nlet WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nunion isfuzzy=true\n(\nSecurityEvent\n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group\n| where EventID in (4728, 4732, 4756)\n| where AccountType == \"User\"\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| extend SimpleMemberName = substring(MemberName, 3, indexof_regex(MemberName, @\",OU|,CN\") - 3)\n| project TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid\n),\n(\nWindowsEvent\n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group\n| where EventID in (4728, 4732, 4756) and not(EventData has \"S-1-5-32-555\")\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(Account endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n| extend MemberName = tostring(EventData.MemberName)\n| where AccountType == \"User\"\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| extend SimpleMemberName = substring(MemberName, 3, indexof_regex(MemberName, @\",OU|,CN\") - 3)\n| extend MemberSid = tostring(EventData.MemberSid)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend TargetDomainName = tostring(EventData.TargetDomainName)\n| extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| project TimeGenerated, EventID, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid\n)\n"
       }
     }
   ]
