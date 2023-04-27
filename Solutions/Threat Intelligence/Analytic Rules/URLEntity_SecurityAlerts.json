@@ -14,37 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "name": "TI Map URL Entity to SecurityAlert Data",
+        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in SecurityAlert data.'\n",
         "severity": "Medium",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(Url)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  SecurityAlert\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\" and ProductName == 'Azure Sentinel', true, false)\n  | where MSTI == false\n  // Extract URL from JSON data\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,Entities)\n  // We only want alerts that actually contain URL data\n  | where isnotempty(Url)\n  // Extract hostname from JSON data for entity mapping\n  | extend Compromised_Host = tostring(parse_json(ExtendedProperties).[\"Compromised Host\"])\n  | extend Alert_TimeGenerated = TimeGenerated\n) on Url\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName\n| project timestamp = Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host\n",
+        "name": "TI Map URL Entity to SecurityAlert Data",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Compromised_Host",
                 "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(Url)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  SecurityAlert\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\" and ProductName == 'Azure Sentinel', true, false)\n  | where MSTI == false\n  // Extract URL from JSON data\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,Entities)\n  // We only want alerts that actually contain URL data\n  | where isnotempty(Url)\n  // Extract hostname from JSON data for entity mapping\n  | extend Compromised_Host = tostring(parse_json(ExtendedProperties).[\"Compromised Host\"])\n  | extend Alert_TimeGenerated = TimeGenerated\n) on Url\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName\n| project timestamp = Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host\n",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
         "tactics": [
           "Impact"
-        ],
-        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in SecurityAlert data.'\n"
+        ]
       }
     }
   ]
