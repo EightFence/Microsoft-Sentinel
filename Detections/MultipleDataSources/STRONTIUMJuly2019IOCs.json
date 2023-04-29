@@ -14,46 +14,62 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "name": "Known STRONTIUM group domains - July 2019",
+        "severity": "High",
+        "description": "'Matches domain name IOCs related to Strontium group activity published July 2019 with CommonSecurityLog, DnsEvents and VMConnection dataTypes.\nReferences: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'\n",
         "tactics": [
           "CommandAndControl"
         ],
+        "query": "let DomainNames = dynamic([\"irf.services\",\"microsoft-onthehub.com\",\"msofficelab.com\",\"com-mailbox.com\",\"my-sharefile.com\",\"my-sharepoints.com\",\n\"accounts-web-mail.com\",\"customer-certificate.com\",\"session-users-activities.com\",\"user-profile-credentials.com\",\"verify-linke.com\",\"support-servics.net\",\n\"onedrive-sharedfile.com\",\"onedrv-live.com\",\"transparencyinternational-my-sharepoint.com\",\"transparencyinternational-my-sharepoints.com\",\"soros-my-sharepoint.com\"]);\n(union isfuzzy=true\n  (CommonSecurityLog \n  | parse Message with * '(' DNSName ')' * \n  | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP\n  ),\n  (_Im_Dns(domain_has_any=DomainNames)\n  | extend IPAddress = SrcIpAddr, DNSName = DnsQuery, Host = Dvc),\n  (VMConnection \n  | parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n  | extend IPAddress = RemoteIp, Host = Computer\n  ),\n  (AzureDiagnostics \n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallApplicationRule\"\n  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n  | extend DNSName = DestinationHost \n  | extend IPAddress = SourceHost\n  ),\n  (AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallDnsProxy\"\n  | project TimeGenerated,Resource, msg_s, Type\n  | parse msg_s with \"DNS Request: \" ClientIP \":\" ClientPort \" - \" QueryID \" \" Request_Type \" \" Request_Class \" \" Request_Name \". \" Request_Protocol \" \" Request_Size \" \" EDNSO_DO \" \" EDNS0_Buffersize \" \" Responce_Code \" \" Responce_Flags \" \" Responce_Size \" \" Response_Duration\n  | where  Request_Name  has_any (DomainNames)\n  | extend DNSName = Request_Name\n  | extend IPAddress = ClientIP\n  ),\n  (AZFWApplicationRule\n  | where isnotempty(Fqdn)\n  | where Fqdn has_any (DomainNames)  \n  | extend DNSName = Fqdn \n  | extend IPAddress = SourceIp\n  ),\n  (AZFWDnsQuery\n  | where isnotempty(QueryName)\n  | where QueryName has_any (DomainNames)\n  | extend DNSName = QueryName\n  | extend IPAddress = SourceIp\n  ),\n  (\n    _Im_WebSession(url_has_any=DomainNames)\n    | extend IPCustomEntity=IpAddr, HostCustomEntity=Hostname, AccoutCustomEntity=User\n  )\n)\n| where isnotempty(DNSName)\n| where DNSName  has_any (DomainNames)\n| extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = Account, HostCustomEntity = Host\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "AccountCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "HostCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPCustomEntity"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "query": "let DomainNames = dynamic([\"irf.services\",\"microsoft-onthehub.com\",\"msofficelab.com\",\"com-mailbox.com\",\"my-sharefile.com\",\"my-sharepoints.com\",\n\"accounts-web-mail.com\",\"customer-certificate.com\",\"session-users-activities.com\",\"user-profile-credentials.com\",\"verify-linke.com\",\"support-servics.net\",\n\"onedrive-sharedfile.com\",\"onedrv-live.com\",\"transparencyinternational-my-sharepoint.com\",\"transparencyinternational-my-sharepoints.com\",\"soros-my-sharepoint.com\"]);\n(union isfuzzy=true\n  (CommonSecurityLog \n  | parse Message with * '(' DNSName ')' * \n  | extend Account = SourceUserID, Host = DeviceName, IPAddress = SourceIP\n  ),\n  (_Im_Dns(domain_has_any=DomainNames)\n  | extend IPAddress = SrcIpAddr, DNSName = DnsQuery, Host = Dvc),\n  (VMConnection \n  | parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n  | extend IPAddress = RemoteIp, Host = Computer\n  ),\n  (AzureDiagnostics \n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallApplicationRule\"\n  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n  | extend DNSName = DestinationHost \n  | extend IPAddress = SourceHost\n  ),\n  (AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallDnsProxy\"\n  | project TimeGenerated,Resource, msg_s, Type\n  | parse msg_s with \"DNS Request: \" ClientIP \":\" ClientPort \" - \" QueryID \" \" Request_Type \" \" Request_Class \" \" Request_Name \". \" Request_Protocol \" \" Request_Size \" \" EDNSO_DO \" \" EDNS0_Buffersize \" \" Responce_Code \" \" Responce_Flags \" \" Responce_Size \" \" Response_Duration\n  | where  Request_Name  has_any (DomainNames)\n  | extend DNSName = Request_Name\n  | extend IPAddress = ClientIP\n  ),\n  (AZFWApplicationRule\n  | where isnotempty(Fqdn)\n  | where Fqdn has_any (DomainNames)  \n  | extend DNSName = Fqdn \n  | extend IPAddress = SourceIp\n  ),\n  (AZFWDnsQuery\n  | where isnotempty(QueryName)\n  | where QueryName has_any (DomainNames)\n  | extend DNSName = QueryName\n  | extend IPAddress = SourceIp\n  ),\n  (\n    _Im_WebSession(url_has_any=DomainNames)\n    | extend IPCustomEntity=IpAddr, HostCustomEntity=Hostname, AccoutCustomEntity=User\n  )\n)\n| where isnotempty(DNSName)\n| where DNSName  has_any (DomainNames)\n| extend timestamp = TimeGenerated, IPCustomEntity = IPAddress, AccountCustomEntity = Account, HostCustomEntity = Host\n",
-        "triggerThreshold": 0,
-        "description": "'Matches domain name IOCs related to Strontium group activity published July 2019 with CommonSecurityLog, DnsEvents and VMConnection dataTypes.\nReferences: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'\n",
-        "triggerOperator": "gt",
-        "severity": "High"
+        "name": "Known STRONTIUM group domains - July 2019",
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "metadata": {
+          "categories": {
+            "domains": [
+              "Security - 0-day Vulnerability"
+            ]
+          },
+          "author": {
+            "name": "petebryan"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          }
+        }
       }
     }
   ]
