@@ -14,48 +14,48 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "severity": "High",
-        "status": "Available",
-        "queryPeriod": "1d",
-        "tactics": [
-          "CommandAndControl",
-          "CredentialAccess"
-        ],
-        "description": "'THALLIUM spearphishing and command and control domains included in December 2019 DCU/MSTIC takedown. \n Matches domain name IOCs related to the THALLIUM activity group with CommonSecurityLog, DnsEvents, VMConnection and SecurityEvents dataTypes.\n References: https://blogs.microsoft.com/on-the-issues/2019/12/30/microsoft-court-action-against-nation-state-cybercrime/ '\n",
         "queryFrequency": "1d",
+        "status": "Available",
+        "query": "let DomainNames = dynamic([\"seoulhobi.biz\", \"reader.cash\", \"pieceview.club\", \"app-wallet.com\", \"bigwnet.com\", \"bitwoll.com\", \"cexrout.com\", \"change-pw.com\", \"checkprofie.com\", \"cloudwebappservice.com\", \"ctquast.com\", \"dataviewering.com\", \"day-post.com\", \"dialy-post.com\", \"documentviewingcom.com\", \"dovvn-mail.com\", \"down-error.com\", \"drivecheckingcom.com\", \"drog-service.com\", \"encodingmail.com\", \"filinvestment.com\", \"foldershareing.com\", \"golangapis.com\", \"hotrnall.com\", \"lh-logins.com\", \"login-use.com\", \"mail-down.com\", \"matmiho.com\", \"mihomat.com\", \"natwpersonal-online.com\", \"nidlogin.com\", \"nid-login.com\", \"nidlogon.com\", \"pw-change.com\", \"rnaii.com\", \"rnailm.com\", \"sec-live.com\", \"secrityprocessing.com\", \"securitedmode.com\", \"securytingmail.com\", \"set-login.com\", \"usrchecking.com\", \"com-serviceround.info\", \"mai1.info\", \"reviewer.mobi\", \"files-download.net\", \"fixcool.net\", \"hanrnaii.net\", \"office356-us.org\", \"smtper.org\"]);\n(union isfuzzy=true\n(CommonSecurityLog \n| parse Message with * '(' DNSName ')' * \n| where isnotempty(FileHash)\n| where DNSName in~ (DomainNames)\n| extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP\n),\n(_Im_Dns (domain_has_any=DomainNames)\n| extend DNSName = DnsQuery\n| extend IPAddress = SrcIpAddr\n),\n(VMConnection \n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| where isnotempty(DNSName)\n| where DNSName  in~ (DomainNames)\n| extend IPAddress = RemoteIp\n),\n(AzureDiagnostics \n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (DomainNames)  \n| extend DNSName = DestinationHost \n| extend IPCustomEntity = SourceHost \n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallNetworkRule\"\n| where msg_s has_any (DomainNames)\n| parse msg_s with Protocol \" request from \" SourceIP \":\" SourcePortInt:int \" to \" TargetIP \":\" TargetPortInt:int *\n| parse kind=regex flags=U msg_s with * \". Action\\\\: \" Action1a \"\\\\.\"\n| parse msg_s with * \". Policy: \" Policy \". Rule Collection Group: \" RuleCollectionGroup \".\" *\n| parse msg_s with * \" Rule Collection: \"  RuleCollection \". Rule: \" Rule\n| extend IPCustomEntity = SourceIP\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallDnsProxy\"\n| where msg_s has_any (DomainNames)\n| parse msg_s with \"DNS Request: \" SourceIP \":\" SourcePortInt:int \" - \" QueryID:int \" \" RequestType \" \" RequestClass \" \" hostname \". \" protocol \" \" details\n| extend\n    ResponseDuration = extract(\"[0-9]*.?[0-9]+s$\", 0, msg_s),\n    SourcePort = tostring(SourcePortInt),\n    QueryID =  tostring(QueryID)\n| extend IPCustomEntity = SourceIP\n| project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s\n| order by TimeGenerated\n),\n(AZFWApplicationRule\n| where Fqdn has_any (DomainNames)\n| extend IPCustomEntity = SourceIp\n),\n(AZFWDnsQuery\n| where isnotempty(QueryName)\n| where QueryName has_any (DomainNames)\n| extend DNSName = QueryName\n| extend IPCustomEntity = SourceIp\n)\n)\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress \n",
+        "severity": "High",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "AccountCustomEntity"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "HostCustomEntity"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPCustomEntity"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
         "name": "THALLIUM domains included in DCU takedown",
-        "query": "let DomainNames = dynamic([\"seoulhobi.biz\", \"reader.cash\", \"pieceview.club\", \"app-wallet.com\", \"bigwnet.com\", \"bitwoll.com\", \"cexrout.com\", \"change-pw.com\", \"checkprofie.com\", \"cloudwebappservice.com\", \"ctquast.com\", \"dataviewering.com\", \"day-post.com\", \"dialy-post.com\", \"documentviewingcom.com\", \"dovvn-mail.com\", \"down-error.com\", \"drivecheckingcom.com\", \"drog-service.com\", \"encodingmail.com\", \"filinvestment.com\", \"foldershareing.com\", \"golangapis.com\", \"hotrnall.com\", \"lh-logins.com\", \"login-use.com\", \"mail-down.com\", \"matmiho.com\", \"mihomat.com\", \"natwpersonal-online.com\", \"nidlogin.com\", \"nid-login.com\", \"nidlogon.com\", \"pw-change.com\", \"rnaii.com\", \"rnailm.com\", \"sec-live.com\", \"secrityprocessing.com\", \"securitedmode.com\", \"securytingmail.com\", \"set-login.com\", \"usrchecking.com\", \"com-serviceround.info\", \"mai1.info\", \"reviewer.mobi\", \"files-download.net\", \"fixcool.net\", \"hanrnaii.net\", \"office356-us.org\", \"smtper.org\"]);\n(union isfuzzy=true\n(CommonSecurityLog \n| parse Message with * '(' DNSName ')' * \n| where isnotempty(FileHash)\n| where DNSName in~ (DomainNames)\n| extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP\n),\n(_Im_Dns (domain_has_any=DomainNames)\n| extend DNSName = DnsQuery\n| extend IPAddress = SrcIpAddr\n),\n(VMConnection \n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| where isnotempty(DNSName)\n| where DNSName  in~ (DomainNames)\n| extend IPAddress = RemoteIp\n),\n(AzureDiagnostics \n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (DomainNames)  \n| extend DNSName = DestinationHost \n| extend IPCustomEntity = SourceHost \n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallNetworkRule\"\n| where msg_s has_any (DomainNames)\n| parse msg_s with Protocol \" request from \" SourceIP \":\" SourcePortInt:int \" to \" TargetIP \":\" TargetPortInt:int *\n| parse kind=regex flags=U msg_s with * \". Action\\\\: \" Action1a \"\\\\.\"\n| parse msg_s with * \". Policy: \" Policy \". Rule Collection Group: \" RuleCollectionGroup \".\" *\n| parse msg_s with * \" Rule Collection: \"  RuleCollection \". Rule: \" Rule\n| extend IPCustomEntity = SourceIP\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallDnsProxy\"\n| where msg_s has_any (DomainNames)\n| parse msg_s with \"DNS Request: \" SourceIP \":\" SourcePortInt:int \" - \" QueryID:int \" \" RequestType \" \" RequestClass \" \" hostname \". \" protocol \" \" details\n| extend\n    ResponseDuration = extract(\"[0-9]*.?[0-9]+s$\", 0, msg_s),\n    SourcePort = tostring(SourcePortInt),\n    QueryID =  tostring(QueryID)\n| extend IPCustomEntity = SourceIP\n| project TimeGenerated,SourceIP,hostname,RequestType,ResponseDuration,details,msg_s\n| order by TimeGenerated\n),\n(AZFWApplicationRule\n| where Fqdn has_any (DomainNames)\n| extend IPCustomEntity = SourceIp\n),\n(AZFWDnsQuery\n| where isnotempty(QueryName)\n| where QueryName has_any (DomainNames)\n| extend DNSName = QueryName\n| extend IPCustomEntity = SourceIp\n)\n)\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress \n"
+        "tactics": [
+          "CommandAndControl",
+          "CredentialAccess"
+        ],
+        "description": "'THALLIUM spearphishing and command and control domains included in December 2019 DCU/MSTIC takedown. \n Matches domain name IOCs related to the THALLIUM activity group with CommonSecurityLog, DnsEvents, VMConnection and SecurityEvents dataTypes.\n References: https://blogs.microsoft.com/on-the-issues/2019/12/30/microsoft-court-action-against-nation-state-cybercrime/ '\n",
+        "triggerThreshold": 0
       }
     }
   ]
