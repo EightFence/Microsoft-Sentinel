@@ -14,19 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "3h",
-        "status": "Available",
         "query": "let starttime = 14d;\nlet endtime = 3h;\n// Add full UPN (user@domain.com) to Authorized Bypassers to ignore policy bypasses by certain authorized users\nlet AuthorizedBypassers = dynamic(['foo@baz.com', 'test@foo.com']);\nlet historicBypassers = AzureDevOpsAuditing\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationName == 'Git.RefUpdatePoliciesBypassed'\n| distinct ActorUPN;\nAzureDevOpsAuditing\n| where TimeGenerated >= ago(endtime)\n| where OperationName == 'Git.RefUpdatePoliciesBypassed'\n| where ActorUPN !in (historicBypassers) and ActorUPN !in (AuthorizedBypassers)\n| parse ScopeDisplayName with OrganizationName '(Organization)'\n| project TimeGenerated, ActorUPN, IpAddress, UserAgent, OrganizationName, ProjectName, RepoName = Data.RepoName, AlertDetails = Details, Branch = Data.Name,\n  BypassReason = Data.BypassReason, PRLink = strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_git/', Data.RepoName, '/pullrequest/', Data.PullRequestId)\n| extend timestamp = TimeGenerated, AccountCustomEntity = ActorUPN, IPCustomEntity = IpAddress, PullRequestLink = PRLink\n",
+        "queryFrequency": "3h",
         "severity": "Medium",
-        "triggerOperator": "gt",
         "queryPeriod": "14d",
+        "name": "Azure DevOps Pull Request Policy Bypassing - Historic allow list",
+        "status": "Available",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ]
           },
@@ -34,8 +35,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ]
           },
@@ -43,18 +44,17 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "PullRequestLink"
+                "columnName": "PullRequestLink",
+                "identifier": "Url"
               }
             ]
           }
         ],
-        "name": "Azure DevOps Pull Request Policy Bypassing - Historic allow list",
+        "triggerOperator": "gt",
+        "description": "'This detection builds an allow list of historic PR policy bypasses and compares to recent history, flagging pull request bypasses that are not manually in the allow list and not historically included in the allow list.'\n",
         "tactics": [
           "Persistence"
-        ],
-        "description": "'This detection builds an allow list of historic PR policy bypasses and compares to recent history, flagging pull request bypasses that are not manually in the allow list and not historically included in the allow list.'\n",
-        "triggerThreshold": 0
+        ]
       }
     }
   ]

@@ -14,14 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "tactics": [
+          "Exfiltration",
+          "CommandAndControl"
+        ],
         "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "name": "Windows host username encoded in base64 web request",
-        "queryPeriod": "1d",
         "query": "let accountLookback = 3d;\nlet requestLookback = 3d;\nlet extraction_regex = @\"(?:\\?|&)[a-zA-Z0-9\\%]*=([a-zA-Z0-9\\/\\+\\=]*)\";\n// Collect account names and base64 encode them\nDeviceEvents\n| where TimeGenerated > ago(accountLookback)\n| summarize make_set(DeviceId), make_set(DeviceName) by InitiatingProcessAccountName\n| where isnotempty(InitiatingProcessAccountName)\n| extend base64_user = base64_encode_tostring(InitiatingProcessAccountName)\n| join (\n    // Collect requests and extract base64 parameters\n    CommonSecurityLog\n    | where TimeGenerated > ago(requestLookback)\n    | where isnotempty(RequestURL)\n    // Summarize early on the RequestURL\n    | summarize FirstRequest=min(TimeGenerated), LastRequest=max(TimeGenerated), NumberOfRequests=count() by RequestURL\n    | extend base64_candidate = extract_all(extraction_regex, RequestURL)\n    | mv-expand base64_candidate  to typeof(string)\n) on $left.base64_user == $right.base64_candidate\n| project FirstRequest, LastRequest, NumberOfRequests, RequestURL, DeviceIds=set_DeviceId, DeviceNames=set_DeviceName, UserName=InitiatingProcessAccountName\n",
-        "triggerThreshold": 0,
-        "description": "'This detection will identify network requests in HTTP proxy data that contains Base64 encoded usernames from machines in the DeviceEvents table.\nThis technique was seen usee by POLONIUM in their RunningRAT tool.'\n",
         "entityMappings": [
           {
             "entityType": "Host",
@@ -51,15 +49,11 @@
             ]
           }
         ],
-        "tactics": [
-          "Exfiltration",
-          "CommandAndControl"
-        ],
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
         "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
+          "author": {
+            "name": "Thomas McElroy"
           },
           "source": {
             "kind": "Community"
@@ -67,10 +61,16 @@
           "support": {
             "tier": "Community"
           },
-          "author": {
-            "name": "Thomas McElroy"
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
           }
-        }
+        },
+        "name": "Windows host username encoded in base64 web request",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "description": "'This detection will identify network requests in HTTP proxy data that contains Base64 encoded usernames from machines in the DeviceEvents table.\nThis technique was seen usee by POLONIUM in their RunningRAT tool.'\n"
       }
     }
   ]
