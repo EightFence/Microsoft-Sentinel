@@ -14,39 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "InitialAccess"
-        ],
-        "triggerOperator": "gt",
         "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
+        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect\nand could indicate credential compromise for the user account.'\n",
         "metadata": {
-          "author": {
-            "name": "timbMSFT"
-          },
           "source": {
             "kind": "Community"
+          },
+          "author": {
+            "name": "timbMSFT"
           },
           "support": {
             "tier": "Community"
@@ -57,10 +32,35 @@
             ]
           }
         },
-        "name": "Cisco - firewall block but success logon to Azure AD",
-        "severity": "Medium",
         "triggerThreshold": 0,
-        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect\nand could indicate credential compromise for the user account.'\n"
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "name": "Cisco - firewall block but success logon to Azure AD",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "queryPeriod": "1d"
       }
     }
   ]

@@ -14,15 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True);\n//Create a list of TLDs in our threat feed for later validation\nlet list_tlds = ThreatIntelligenceIndicator\n| where TimeGenerated > ago(ioc_lookBack)\n| where isnotempty(DomainName)\n| extend parts = split(DomainName, '.')\n| extend tld = parts[(array_length(parts)-1)]\n| summarize count() by tostring(tld)\n| summarize make_list(tld);\nlet Domain_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName)\n| extend TI_DomainEntity = DomainName\n),\n(IoCList\n| where IoC_Type =~ 'domainname'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_DomainEntity = IoC\n| project-away  IoC_Type\n)\n);\nDomain_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\nSyslog\n| where TimeGenerated > ago(dt_lookBack)\n//Extract domain patterns from syslog message\n| extend domain = extract(\"(([a-z0-9]+(-[a-z0-9]+)*\\\\.)+[a-z]{2,})\",1, tolower(SyslogMessage))\n| where isnotempty(domain)\n| extend parts = split(domain, '.')\n//Split out the TLD\n| extend tld = parts[(array_length(parts)-1)]\n//Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed\n| where tld in~ (list_tlds)\n| extend Syslog_TimeGenerated = TimeGenerated\n) on $left.TI_DomainEntity==$right.domain\n| where Syslog_TimeGenerated < ExpirationDateTime\n| summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by IndicatorId, domain, IoC\n| project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, IoC, TI_DomainEntity\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n| extend timestamp = Syslog_TimeGenerated\n",
-        "queryFrequency": "1h",
+        "tactics": [
+          "Impact"
+        ],
         "severity": "Medium",
-        "queryPeriod": "14d",
-        "name": "TI map Domain entity to Syslog",
         "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True);\n//Create a list of TLDs in our threat feed for later validation\nlet list_tlds = ThreatIntelligenceIndicator\n| where TimeGenerated > ago(ioc_lookBack)\n| where isnotempty(DomainName)\n| extend parts = split(DomainName, '.')\n| extend tld = parts[(array_length(parts)-1)]\n| summarize count() by tostring(tld)\n| summarize make_list(tld);\nlet Domain_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName)\n| extend TI_DomainEntity = DomainName\n),\n(IoCList\n| where IoC_Type =~ 'domainname'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_DomainEntity = IoC\n| project-away  IoC_Type\n)\n);\nDomain_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\nSyslog\n| where TimeGenerated > ago(dt_lookBack)\n//Extract domain patterns from syslog message\n| extend domain = extract(\"(([a-z0-9]+(-[a-z0-9]+)*\\\\.)+[a-z]{2,})\",1, tolower(SyslogMessage))\n| where isnotempty(domain)\n| extend parts = split(domain, '.')\n//Split out the TLD\n| extend tld = parts[(array_length(parts)-1)]\n//Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed\n| where tld in~ (list_tlds)\n| extend Syslog_TimeGenerated = TimeGenerated\n) on $left.TI_DomainEntity==$right.domain\n| where Syslog_TimeGenerated < ExpirationDateTime\n| summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by IndicatorId, domain, IoC\n| project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, IoC, TI_DomainEntity\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n| extend timestamp = Syslog_TimeGenerated\n",
+        "name": "TI map Domain entity to Syslog",
+        "description": "'Identifies a match in Syslog table from any Domain IOC from TI'\n",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "entityMappings": [
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "HostName",
@@ -32,31 +36,27 @@
                 "columnName": "DnsDomain",
                 "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "HostIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
-        ],
-        "triggerOperator": "gt",
-        "description": "'Identifies a match in Syslog table from any Domain IOC from TI'\n",
-        "tactics": [
-          "Impact"
         ]
       }
     }
