@@ -14,32 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "description": "'Detects when there is a log in attempt from a country that has not seen a successful login in the previous 14 days.\n  Threat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.\n  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
         "metadata": {
-          "source": {
-            "kind": "Community"
+          "support": {
+            "tier": "Community"
           },
           "author": {
             "name": "Pete Bryan"
-          },
-          "support": {
-            "tier": "Community"
           },
           "categories": {
             "domains": [
               "Security - Others"
             ]
+          },
+          "source": {
+            "kind": "Community"
           }
         },
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryFrequency": "1d",
+        "queryPeriod": "14d",
         "query": "let known_locations =\n  union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where ResultType == 0\n  | summarize by Location;\n  union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs\n  | where TimeGenerated > ago(1d)\n  | where ResultType != 50126\n  | where Location !in (known_locations)\n  | extend LocationDetails_dynamic = column_ifexists(\"LocationDetails_dynamic\", \"\")\n  | extend DeviceDetail_dynamic = column_ifexists(\"DeviceDetail_dynamic\", \"\")\n  | extend LocationDetails = iif(isnotempty(LocationDetails_dynamic), LocationDetails_dynamic, parse_json(LocationDetails_string))\n  | extend DeviceDetail = iif(isnotempty(DeviceDetail_dynamic), DeviceDetail_dynamic, parse_json(DeviceDetail_string))\n  | extend City = tostring(LocationDetails.city)\n  | extend State = tostring(LocationDetails.state)\n  | extend Place = strcat(City, \" - \", State)\n  | extend DeviceId = tostring(DeviceDetail.deviceId)\n  | extend Result = strcat(tostring(ResultType), \" - \", ResultDescription)\n  | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated), make_set(Result), make_set(IPAddress), make_set(UserAgent), make_set(Place), make_set(DeviceId) by UserPrincipalName, Location, Category\n",
-        "name": "Authentication Attempt from New Country",
-        "tactics": [
-          "InitialAccess"
-        ],
         "entityMappings": [
           {
             "fieldMappings": [
@@ -51,7 +43,15 @@
             "entityType": "Account"
           }
         ],
-        "queryPeriod": "14d"
+        "triggerThreshold": 0,
+        "name": "Authentication Attempt from New Country",
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "queryFrequency": "1d",
+        "severity": "Medium",
+        "description": "'Detects when there is a log in attempt from a country that has not seen a successful login in the previous 14 days.\n  Threat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.\n  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n"
       }
     }
   ]
