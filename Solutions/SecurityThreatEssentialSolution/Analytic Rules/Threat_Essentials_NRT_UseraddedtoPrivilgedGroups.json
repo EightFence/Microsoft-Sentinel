@@ -15,49 +15,49 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'This will alert when a user is added to any of the Privileged Groups.\nFor further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.\nFor Administrator role permissions in Azure Active Directory please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'\n",
+        "name": "Threat Essentials - NRT User added to Azure Active Directory Privileged Groups",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatorName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatorUPNSuffix",
+                "identifier": "UPNSuffix"
+              },
+              {
+                "columnName": "InitiatorAadUserId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "TargetName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "TargetUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "status": "Available",
         "query": "let OperationList = dynamic([\"Add member to role\",\"Add member to role in PIM requested (permanent)\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\"]);\nAuditLogs\n//| where LoggedByService =~ \"Core Directory\"\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-expand TargetResources\n| extend modProps = parse_json(TargetResources).modifiedProperties\n| mv-expand bagexpansion=array modProps\n| evaluate bag_unpack(modProps)\n| extend displayName = column_ifexists(\"displayName\", \"NotAvailable\"), newValue = column_ifexists(\"newValue\", \"NotAvailable\")\n| where displayName =~ \"Role.WellKnownObjectName\"\n| extend DisplayName = displayName, GroupName = replace('\"','',newValue)\n| extend initByApp = parse_json(InitiatedBy).app, initByUser = parse_json(InitiatedBy).user\n| extend AppId = initByApp.appId,\nInitiatedByDisplayName = case(isnotempty(initByApp.displayName), initByApp.displayName, isnotempty(initByUser.displayName), initByUser.displayName, \"not available\"),\nServicePrincipalId = tostring(initByApp.servicePrincipalId),\nServicePrincipalName = tostring(initByApp.servicePrincipalName),\nUserId = initByUser.id,\nUserIPAddress = initByUser.ipAddress,\nUserRoles = initByUser.roles,\nUserPrincipalName = tostring(initByUser.userPrincipalName),\nTargetUserPrincipalName = tostring(TargetResources.userPrincipalName)\n| where GroupName in~ (PrivilegedGroups)\n// If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.\n//| where InitiatedByDisplayName != \"MS-PIM\"\n| project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName\n| extend InitiatorAccount = case(isnotempty(ServicePrincipalName), ServicePrincipalName, isnotempty(ServicePrincipalId), ServicePrincipalId, isnotempty(UserPrincipalName), UserPrincipalName, \"not available\")\n| extend InitiatorName = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',0)[0]),\"\")\n| extend InitiatorUPNSuffix = iif(InitiatorAccount has '@',tostring(split(InitiatorAccount,'@',1)[0]),\"\")\n| extend InitiatorAadUserId = iif(InitiatorAccount !has '@',InitiatorAccount,\"\")\n| extend TargetName = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',0)[0]),\"\")\n| extend TargetUPNSuffix = iif(TargetUserPrincipalName has '@',tostring(split(TargetUserPrincipalName,'@',1)[0]),\"\")\n",
+        "queryPeriod": "14d",
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
-        ],
-        "status": "Available",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "queryPeriod": "14d",
-        "name": "Threat Essentials - NRT User added to Azure Active Directory Privileged Groups",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "InitiatorName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatorUPNSuffix"
-              },
-              {
-                "identifier": "AadUserId",
-                "columnName": "InitiatorAadUserId"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "TargetName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "TargetUPNSuffix"
-              }
-            ]
-          }
         ]
       }
     }
