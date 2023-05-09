@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d82e1987-4356-4a7b-bc5e-064f29b143c0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d82e1987-4356-4a7b-bc5e-064f29b143c0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "(union isfuzzy=true \n(SecurityEvent\n| where EventID == 4688\n| where Process =~ 'rundll32.exe' \n| where CommandLine has_all ('Execute','RegRead','window.close')\n| project TimeGenerated, Computer, Account, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account\n),\n(WindowsEvent\n| where EventID == 4688 and EventData has 'rundll32.exe' and EventData has_any ('Execute','RegRead','window.close')\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| where Process =~ 'rundll32.exe' \n| extend CommandLine = tostring(EventData.CommandLine)\n| where CommandLine has_all ('Execute','RegRead','window.close')\n| extend Account =  strcat(EventData.SubjectDomainName,\"\\\\\", EventData.SubjectUserName)\n| extend ParentProcessName = tostring(EventData.ParentProcessName)  \n| project TimeGenerated, Computer, Account, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account\n) )\n",
+        "name": "Midnight Blizzard - suspicious rundll32.exe execution of vbscript",
+        "description": "'This query idenifies when rundll32.exe executes a specific set of inline VBScript commands\n References: https://www.microsoft.com/security/blog/2021/03/04/goldmax-goldfinder-sibot-analyzing-nobelium-malware/'\n",
+        "queryFrequency": "1d",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Intelligence"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Shain"
+          }
+        },
+        "tactics": [
+          "Persistence"
+        ],
+        "severity": "Medium"
+      }
+    }
+  ]
+}
