@@ -14,16 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
+        "name": "ADFS Database Named Pipe Connection",
+        "status": "Available",
+        "description": "'This detection uses Sysmon telemetry to detect suspicious local connections via a named pipe to the AD FS configuration database (Windows Internal Database).\nIn order to use this query you need to be collecting Sysmon EventIdD 18 (Pipe Connected).\nIf you do not have Sysmon data in your workspace this query will raise an error stating:\nFailed to resolve scalar expression named \"[@Name]\"'\n",
+        "tactics": [
+          "Collection"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ]
           },
@@ -31,21 +34,18 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
               }
             ]
           }
         ],
-        "name": "ADFS Database Named Pipe Connection",
         "query": "// Adjust this to use a longer timeframe to identify ADFS servers\n//let lookback = 6d;\n// Adjust this to adjust the key export detection  timeframe\n//let timeframe = 1d;\n// Start be identifying ADFS servers to reduce FP chance\nlet ADFS_Servers = (\nEvent\n//| where TimeGenerated > ago(timeframe+lookback)\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 18\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, MG, ManagementGroupName, _ResourceId)\n| extend Image = column_ifexists(\"Image\", \"\")\n| extend process = split(Image, '\\\\', -1)[-1]\n| where process =~ \"Microsoft.IdentityServer.ServiceHost.exe\"\n| summarize by Computer);\n// Look for ADFS servers where Named Pipes event are present\nEvent\n//| where TimeGenerated > ago(timeframe)\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 18\n| where Computer in~ (ADFS_Servers)\n| extend RenderedDescription = tostring(split(RenderedDescription, \":\")[0])\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend RuleName = column_ifexists(\"RuleName\", \"\"),\n    TechniqueId = column_ifexists(\"TechniqueId\", \"\"),\n    TechniqueName = column_ifexists(\"TechniqueName\", \"\"),\n    Image = column_ifexists(\"Image\", \"\"),\n    PipeName = column_ifexists(\"PipeName\", \"\"),\n    EventType = column_ifexists(\"EventType\", \"\")\n| parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName\n// Look for Pipe related to querying the WID\n| where PipeName == \"\\\\MICROSOFT##WID\\\\tsql\\\\query\"\n| extend process = split(Image, '\\\\', -1)[-1]\n// Exclude expected processes\n| where process !in (\"Microsoft.IdentityServer.ServiceHost.exe\", \"Microsoft.Identity.Health.Adfs.PshSurrogate.exe\", \"AzureADConnect.exe\", \"Microsoft.Tri.Sensor.exe\", \"wsmprovhost.exe\",\"mmc.exe\", \"sqlservr.exe\")\n| extend Operation = RenderedDescription\n| project-reorder TimeGenerated, EventType, Operation, process, Image, Computer, UserName\n| extend HostCustomEntity = Computer, AccountCustomEntity = UserName\n",
-        "description": "'This detection uses Sysmon telemetry to detect suspicious local connections via a named pipe to the AD FS configuration database (Windows Internal Database).\nIn order to use this query you need to be collecting Sysmon EventIdD 18 (Pipe Connected).\nIf you do not have Sysmon data in your workspace this query will raise an error stating:\nFailed to resolve scalar expression named \"[@Name]\"'\n",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryPeriod": "1d",
         "triggerThreshold": 0,
-        "status": "Available",
-        "tactics": [
-          "Collection"
-        ],
-        "severity": "Medium"
+        "queryFrequency": "1d"
       }
     }
   ]
