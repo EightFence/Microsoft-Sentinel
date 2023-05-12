@@ -14,23 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Pete Bryan, Wojciech Lesicki"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          }
-        },
         "entityMappings": [
           {
             "fieldMappings": [
@@ -51,16 +34,33 @@
             "entityType": "Account"
           }
         ],
-        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "query": "AuditLogs\n  | where OperationName in (\"Add eligible member (permanent)\", \"Add eligible member (eligible)\", \"Add member to role\")\n  | mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n  | mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n  | where RoleName contains \"admin\"\n  | extend InitiatingApp = tostring(InitiatedBy.app.displayName)\n  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))\n  | extend AddedUser = iff(OperationName==\"Add member to role\",tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))\n  | project-reorder TimeGenerated, AddedUser, RoleName, Initiator\n",
+        "name": "User Added to Admin Role",
         "tactics": [
           "PrivilegeEscalation"
         ],
         "severity": "Low",
-        "query": "AuditLogs\n  | where OperationName in (\"Add eligible member (permanent)\", \"Add eligible member (eligible)\", \"Add member to role\")\n  | mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n  | mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n  | where RoleName contains \"admin\"\n  | extend InitiatingApp = tostring(InitiatedBy.app.displayName)\n  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))\n  | extend AddedUser = iff(OperationName==\"Add member to role\",tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))\n  | project-reorder TimeGenerated, AddedUser, RoleName, Initiator\n",
         "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan, Wojciech Lesicki"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          }
+        },
         "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "name": "User Added to Admin Role",
         "description": "'Detects a user being added to a new privileged role. Monitor these additions to ensure the users are made eligible for these roles are intended to have these levels of access.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n"
       }
     }
