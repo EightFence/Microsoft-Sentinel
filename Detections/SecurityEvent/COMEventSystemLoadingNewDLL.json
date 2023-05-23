@@ -14,31 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "description": "'This query uses Sysmon Image Load (Event ID 7) and Process Create (Event ID 1) data to look for COM Event System being used to load a newly seen DLL.'\n",
-        "name": "COM Event System Loading New DLL",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "Shain"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
-          }
-        },
-        "severity": "Medium",
-        "query": "let lookback_start = 7d;\nlet lookback_end = 1d;\nlet timedelta = 5s;\n// Get a list of previously seen DLLs being loaded\nlet known_dlls = (Event\n| where TimeGenerated between(ago(lookback_start)..ago(lookback_end))\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| summarize by DLL);\n// Get Image Load events related to svchost.exe\nEvent\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Image Load Event in Sysmon\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Images = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand Images\n// Parse out executing process\n| where tostring(Images.[\"@Name\"]) =~ \"Image\"\n| extend Image = tostring(Images.[\"#text\"])\n| where Image endswith \"\\\\svchost.exe\"\n// Parse out loaded DLLs\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| extend Image = tostring(Image)\n| extend ImageLoadTime = TimeGenerated\n// Join with processes with a command line related to COM Event System\n| join kind = inner(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Sysmon process execution events\n| where EventID == 1\n| extend RenderedDescription = tostring(split(RenderedDescription, \":\")[0])\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend ParentImage = tostring(column_ifexists(\"ParentImage\", \"NotAvailable\"))\n// Command line related to COM Event System\n| where ParentImage endswith \"\\\\svchost.exe\"\n//| where ParentCommandLine has_all (\" -k LocalService\",\" -p\",\" -s EventSystem\")\n| extend ProcessExecutionTime = TimeGenerated) on $left.Image == $right.ParentImage\n// Check timespan between DLL load and process creation\n| extend delta =  ProcessExecutionTime - ImageLoadTime\n| where ImageLoadTime <= ProcessExecutionTime and delta <= timedelta\n// Filter to only newly seen DLLs\n| where DLL !in (known_dlls)\n| extend ParentCommandLine = tostring(column_ifexists(\"ParentCommandLine\", \"NotAvailable\"))\n| project-reorder ImageLoadTime, ProcessExecutionTime , Image, ParentCommandLine, DLL\n| extend Hashes = tostring(column_ifexists(\"Hashes\", \"NotAvailable, NotAvailable\"))\n| extend Hashes = split(Hashes, \",\")\n| mv-apply Hashes on (summarize FileHashes = make_bag(pack(tostring(split(Hashes, \"=\")[0]), tostring(split(Hashes, \"=\")[1]))))\n| extend SHA1 = tostring(FileHashes.SHA1)\n| extend HashAlgo = \"SHA1\"\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -72,8 +47,33 @@
             "entityType": "FileHash"
           }
         ],
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "metadata": {
+          "author": {
+            "name": "Shain"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          }
+        },
+        "name": "COM Event System Loading New DLL",
         "queryFrequency": "1d",
-        "queryPeriod": "1d"
+        "description": "'This query uses Sysmon Image Load (Event ID 7) and Process Create (Event ID 1) data to look for COM Event System being used to load a newly seen DLL.'\n",
+        "query": "let lookback_start = 7d;\nlet lookback_end = 1d;\nlet timedelta = 5s;\n// Get a list of previously seen DLLs being loaded\nlet known_dlls = (Event\n| where TimeGenerated between(ago(lookback_start)..ago(lookback_end))\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| summarize by DLL);\n// Get Image Load events related to svchost.exe\nEvent\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Image Load Event in Sysmon\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Images = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand Images\n// Parse out executing process\n| where tostring(Images.[\"@Name\"]) =~ \"Image\"\n| extend Image = tostring(Images.[\"#text\"])\n| where Image endswith \"\\\\svchost.exe\"\n// Parse out loaded DLLs\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| extend Image = tostring(Image)\n| extend ImageLoadTime = TimeGenerated\n// Join with processes with a command line related to COM Event System\n| join kind = inner(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Sysmon process execution events\n| where EventID == 1\n| extend RenderedDescription = tostring(split(RenderedDescription, \":\")[0])\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend ParentImage = tostring(column_ifexists(\"ParentImage\", \"NotAvailable\"))\n// Command line related to COM Event System\n| where ParentImage endswith \"\\\\svchost.exe\"\n//| where ParentCommandLine has_all (\" -k LocalService\",\" -p\",\" -s EventSystem\")\n| extend ProcessExecutionTime = TimeGenerated) on $left.Image == $right.ParentImage\n// Check timespan between DLL load and process creation\n| extend delta =  ProcessExecutionTime - ImageLoadTime\n| where ImageLoadTime <= ProcessExecutionTime and delta <= timedelta\n// Filter to only newly seen DLLs\n| where DLL !in (known_dlls)\n| extend ParentCommandLine = tostring(column_ifexists(\"ParentCommandLine\", \"NotAvailable\"))\n| project-reorder ImageLoadTime, ProcessExecutionTime , Image, ParentCommandLine, DLL\n| extend Hashes = tostring(column_ifexists(\"Hashes\", \"NotAvailable, NotAvailable\"))\n| extend Hashes = split(Hashes, \",\")\n| mv-apply Hashes on (summarize FileHashes = make_bag(pack(tostring(split(Hashes, \"=\")[0]), tostring(split(Hashes, \"=\")[1]))))\n| extend SHA1 = tostring(FileHashes.SHA1)\n| extend HashAlgo = \"SHA1\"\n"
       }
     }
   ]
