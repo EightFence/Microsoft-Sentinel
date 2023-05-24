@@ -14,41 +14,41 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "DstIpAddr"
-              }
-            ]
-          }
-        ],
-        "customDetails": {
-          "IndicatorId": "IndicatorId",
-          "EventTime": "imNWS_TimeGenerated",
-          "IoCConfidenceScore": "ConfidenceScore",
-          "IoCExpirationTime": "ExpirationDateTime",
-          "ThreatType": "ThreatType",
-          "ActivityGroupNames": "ActivityGroupNames",
-          "IoCDescription": "Description"
-        },
-        "name": "(Preview) TI map IP entity to Web Session Events (ASIM Web Session schema)",
-        "severity": "Medium",
-        "description": "'This rule identifies Web Sessions for which the source IP address is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'\n",
-        "queryFrequency": "1h",
         "tactics": [
           "Impact"
         ],
-        "queryPeriod": "14d",
+        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True));\nlet IP_TI= (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n// Picking up only IOC's that contain the entities we want\n| where TI_ipEntity != \"NO_IP\"\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n),\n(IoCList\n| where IoC_Type =~ 'IP'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_ipEntity = IoC\n| project-away  IoC_Type\n)\n);\nlet IP_TI_list=toscalar(IP_TI | summarize NIoCs= dcount(TI_ipEntity), IoCs=make_set(TI_ipEntity) \n  | project IoCs=iff(NIoCs > HAS_ANY_MAX, dynamic([]), IoCs )  );\nIP_TI\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    _Im_WebSession (starttime=ago(dt_lookBack), srcipaddr_has_any_prefix=IP_TI_list)\n    | where isnotempty(SrcIpAddr)\n    // renaming time column so it is clear the log this came from\n    | extend imNWS_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.SrcIpAddr\n| where imNWS_TimeGenerated < ExpirationDateTime\n| summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated , *) by IndicatorId, DstIpAddr, IoC\n| project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Type\n",
+        "triggerOperator": "gt",
+        "name": "(Preview) TI map IP entity to Web Session Events (ASIM Web Session schema)",
+        "description": "'This rule identifies Web Sessions for which the source IP address is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'\n",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "The source address {{SrcIpAddr}} of a web request for URL {{Url}} matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator.",
           "alertDisplayNameFormat": "The IP {{SrcIpAddr}} of a web request to hostname  {{domain}} matched an IoC"
         },
-        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True));\nlet IP_TI= (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n// Picking up only IOC's that contain the entities we want\n| where TI_ipEntity != \"NO_IP\"\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n),\n(IoCList\n| where IoC_Type =~ 'IP'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_ipEntity = IoC\n| project-away  IoC_Type\n)\n);\nlet IP_TI_list=toscalar(IP_TI | summarize NIoCs= dcount(TI_ipEntity), IoCs=make_set(TI_ipEntity) \n  | project IoCs=iff(NIoCs > HAS_ANY_MAX, dynamic([]), IoCs )  );\nIP_TI\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    _Im_WebSession (starttime=ago(dt_lookBack), srcipaddr_has_any_prefix=IP_TI_list)\n    | where isnotempty(SrcIpAddr)\n    // renaming time column so it is clear the log this came from\n    | extend imNWS_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.SrcIpAddr\n| where imNWS_TimeGenerated < ExpirationDateTime\n| summarize imNWS_TimeGenerated = arg_max(imNWS_TimeGenerated , *) by IndicatorId, DstIpAddr, IoC\n| project imNWS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, Dvc, SrcIpAddr, DstIpAddr, Type\n"
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "IoCConfidenceScore": "ConfidenceScore",
+          "IoCExpirationTime": "ExpirationDateTime",
+          "IoCDescription": "Description",
+          "IndicatorId": "IndicatorId",
+          "ThreatType": "ThreatType",
+          "EventTime": "imNWS_TimeGenerated",
+          "ActivityGroupNames": "ActivityGroupNames"
+        },
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DstIpAddr",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium"
       }
     }
   ]
