@@ -14,10 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "High",
+        "status": "Available",
+        "description": "'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.\nThis permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.\nAn adversary could use this permission to add an Azure AD object to an Admin directory role and escalate privileges.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions\nRef : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n",
         "name": "Azure AD Role Management Permission Grant",
+        "triggerThreshold": 0,
+        "severity": "High",
         "triggerOperator": "gt",
+        "queryPeriod": "2h",
         "queryFrequency": "2h",
+        "tactics": [
+          "Persistence",
+          "Impact"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
@@ -42,15 +50,7 @@
             ]
           }
         ],
-        "status": "Available",
-        "tactics": [
-          "Persistence",
-          "Impact"
-        ],
-        "description": "'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.\nThis permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.\nAn adversary could use this permission to add an Azure AD object to an Admin directory role and escalate privileges.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions\nRef : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n",
-        "queryPeriod": "2h",
-        "query": "AuditLogs\n| where Category =~ \"ApplicationManagement\" and LoggedByService =~ \"Core Directory\" and OperationName in~ (\"Add delegated permission grant\", \"Add app role assignment to service principal\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)\n      | extend props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName in~ (\"AppRole.Value\",\"DelegatedPermissionGrant.Scope\")\n      | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('\"',tostring(Property.newValue))\n  )\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"ServicePrincipal.DisplayName\"\n      | extend AppDisplayName = trim('\"',tostring(Property.newValue))\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"ServicePrincipal.ObjectID\"\n      | extend AppServicePrincipalId = trim('\"',tostring(Property.newValue))\n  )\n| extend \n    Initiator = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.displayName), tostring(InitiatedBy.user.userPrincipalName)),\n    InitiatorId = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.user.id))\n| project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId\n| extend Name = tostring(split(Initiator,'@',0)[0]), UPNSuffix = tostring(split(Initiator,'@',1)[0])\n",
-        "triggerThreshold": 0
+        "query": "AuditLogs\n| where Category =~ \"ApplicationManagement\" and LoggedByService =~ \"Core Directory\" and OperationName in~ (\"Add delegated permission grant\", \"Add app role assignment to service principal\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)\n      | extend props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName in~ (\"AppRole.Value\",\"DelegatedPermissionGrant.Scope\")\n      | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('\"',tostring(Property.newValue))\n  )\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"ServicePrincipal.DisplayName\"\n      | extend AppDisplayName = trim('\"',tostring(Property.newValue))\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"ServicePrincipal.ObjectID\"\n      | extend AppServicePrincipalId = trim('\"',tostring(Property.newValue))\n  )\n| extend \n    Initiator = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.displayName), tostring(InitiatedBy.user.userPrincipalName)),\n    InitiatorId = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.user.id))\n| project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId\n| extend Name = tostring(split(Initiator,'@',0)[0]), UPNSuffix = tostring(split(Initiator,'@',1)[0])\n"
       }
     }
   ]
