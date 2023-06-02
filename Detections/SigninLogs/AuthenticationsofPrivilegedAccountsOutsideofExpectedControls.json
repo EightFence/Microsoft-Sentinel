@@ -14,6 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Detects when a privileged user account successfully authenticates from a location, device or ASN that another admin has not logged in from in the last 7 days.\n  Privileged accounts are a key target for threat actors, monitoring for logins from these accounts that deviate from normal activity can help identify compromised accounts.\n  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins'\n",
+        "triggerOperator": "gt",
+        "metadata": {
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "queryPeriod": "7d",
+        "name": "Authentications of Privileged Accounts Outside of Expected Controls",
+        "query": "let admin_users = (IdentityInfo\n  | summarize arg_max(TimeGenerated, *) by AccountUPN\n  | where AssignedRoles contains \"admin\"\n  | summarize by tolower(AccountUPN));\n  let admin_asn = (SigninLogs\n  | where TimeGenerated between (ago(7d)..ago(1d))\n  | where tolower(UserPrincipalName) in (admin_users)\n  | summarize by AutonomousSystemNumber);\n  let admin_locations = (SigninLogs\n  | where TimeGenerated between (ago(7d)..ago(1d))\n  | where tolower(UserPrincipalName) in (admin_users)\n  | summarize by Location);\n  let admin_devices = (SigninLogs\n  | where TimeGenerated between (ago(7d)..ago(1d))\n  | where tolower(UserPrincipalName) in (admin_users)\n  | extend deviceId = tostring(DeviceDetail.deviceId)\n  | where isnotempty(deviceId)\n  | summarize by deviceId);\n  SigninLogs\n  | where TimeGenerated > ago(1d)\n  | where ResultType == 0\n  | where tolower(UserPrincipalName) in (admin_users)\n  | extend deviceId = tostring(DeviceDetail.deviceId)\n  | where AutonomousSystemNumber !in (admin_asn) and deviceId !in (admin_devices) and Location !in (admin_locations)\n",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -25,34 +47,12 @@
             ]
           }
         ],
-        "queryFrequency": "1d",
-        "name": "Authentications of Privileged Accounts Outside of Expected Controls",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "severity": "Medium",
-        "metadata": {
-          "author": {
-            "name": "Pete Bryan"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "source": {
-            "kind": "Community"
-          }
-        },
-        "description": "'Detects when a privileged user account successfully authenticates from a location, device or ASN that another admin has not logged in from in the last 7 days.\n  Privileged accounts are a key target for threat actors, monitoring for logins from these accounts that deviate from normal activity can help identify compromised accounts.\n  Authentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins'\n",
-        "query": "let admin_users = (IdentityInfo\n  | summarize arg_max(TimeGenerated, *) by AccountUPN\n  | where AssignedRoles contains \"admin\"\n  | summarize by tolower(AccountUPN));\n  let admin_asn = (SigninLogs\n  | where TimeGenerated between (ago(7d)..ago(1d))\n  | where tolower(UserPrincipalName) in (admin_users)\n  | summarize by AutonomousSystemNumber);\n  let admin_locations = (SigninLogs\n  | where TimeGenerated between (ago(7d)..ago(1d))\n  | where tolower(UserPrincipalName) in (admin_users)\n  | summarize by Location);\n  let admin_devices = (SigninLogs\n  | where TimeGenerated between (ago(7d)..ago(1d))\n  | where tolower(UserPrincipalName) in (admin_users)\n  | extend deviceId = tostring(DeviceDetail.deviceId)\n  | where isnotempty(deviceId)\n  | summarize by deviceId);\n  SigninLogs\n  | where TimeGenerated > ago(1d)\n  | where ResultType == 0\n  | where tolower(UserPrincipalName) in (admin_users)\n  | extend deviceId = tostring(DeviceDetail.deviceId)\n  | where AutonomousSystemNumber !in (admin_asn) and deviceId !in (admin_devices) and Location !in (admin_locations)\n",
+        "queryFrequency": "1d",
         "tactics": [
           "InitialAccess"
-        ],
-        "queryPeriod": "7d",
-        "triggerThreshold": 0
+        ]
       }
     }
   ]
