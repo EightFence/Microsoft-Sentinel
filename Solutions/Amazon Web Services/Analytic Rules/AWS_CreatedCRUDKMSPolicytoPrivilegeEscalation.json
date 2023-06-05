@@ -14,38 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "query": "let EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\nlet createPolicy = \"CreatePolicy\";\nlet timeframe = 1d;\nlet lookback = 14d;\n// Creating Master table with all the events to use with materialize for better performance\nlet EventInfo = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName in (EventNameList) or EventName == createPolicy;\n//Checking for Policy creation event with Full Admin Privileges since lookback period.\nlet FullAdminPolicyEvents =  materialize(  EventInfo\n| where TimeGenerated >= ago(lookback)\n| where EventName == createPolicy\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"kms:Create\" and (Action contains \"kms:Get\" or Action contains \"kms:Describe\")  and (Action contains \"kms:Disable\" or Action contains \"kms:Enable\") and Action contains \"kms:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| project-rename StartTime = TimeGenerated  );\nlet PolicyAttach = materialize(  EventInfo\n| where TimeGenerated >= ago(timeframe)\n| where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),\"/\")[1])\n| summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName\n| extend AttachEvent = pack(\"StartTime\", StartTime, \"EndTime\", EndTime, \"EventName\", EventName, \"UserIdentityType\",   UserIdentityType, \"UserIdentityArn\", UserIdentityArn, \"SourceIpAddress\", SourceIpAddress, \"UserIdentityUserName\", UserIdentityUserName)\n| project EventSource, PolicyName, AttachEvent, AttachEventCount\n);\n// Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.\n// These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.\nFullAdminPolicyEvents\n| join kind=leftouter\n(\n    PolicyAttach\n)\non PolicyName\n| project-away PolicyName1\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "description": "'Detected creation of new CRUD KMS policy and usage of one of the attach policy operations (AttachUserPolicy/AttachRolePolicy/AttachGroupPolicy). This might indicate a privilege escalation technique that attackers could use.'\n",
+        "triggerThreshold": 0,
+        "name": "Creation of CRUD KMS policy and then privilege escalation",
+        "status": "Available",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "AccountCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPCustomEntity"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "status": "Available",
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "description": "'Detected creation of new CRUD KMS policy and usage of one of the attach policy operations (AttachUserPolicy/AttachRolePolicy/AttachGroupPolicy). This might indicate a privilege escalation technique that attackers could use.'\n",
-        "triggerOperator": "gt",
-        "name": "Creation of CRUD KMS policy and then privilege escalation",
-        "triggerThreshold": 0,
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "query": "let EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\nlet createPolicy = \"CreatePolicy\";\nlet timeframe = 1d;\nlet lookback = 14d;\n// Creating Master table with all the events to use with materialize for better performance\nlet EventInfo = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName in (EventNameList) or EventName == createPolicy;\n//Checking for Policy creation event with Full Admin Privileges since lookback period.\nlet FullAdminPolicyEvents =  materialize(  EventInfo\n| where TimeGenerated >= ago(lookback)\n| where EventName == createPolicy\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"kms:Create\" and (Action contains \"kms:Get\" or Action contains \"kms:Describe\")  and (Action contains \"kms:Disable\" or Action contains \"kms:Enable\") and Action contains \"kms:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| project-rename StartTime = TimeGenerated  );\nlet PolicyAttach = materialize(  EventInfo\n| where TimeGenerated >= ago(timeframe)\n| where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),\"/\")[1])\n| summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName\n| extend AttachEvent = pack(\"StartTime\", StartTime, \"EndTime\", EndTime, \"EventName\", EventName, \"UserIdentityType\",   UserIdentityType, \"UserIdentityArn\", UserIdentityArn, \"SourceIpAddress\", SourceIpAddress, \"UserIdentityUserName\", UserIdentityUserName)\n| project EventSource, PolicyName, AttachEvent, AttachEventCount\n);\n// Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.\n// These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.\nFullAdminPolicyEvents\n| join kind=leftouter\n(\n    PolicyAttach\n)\non PolicyName\n| project-away PolicyName1\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "queryFrequency": "1d"
+        "queryFrequency": "1d",
+        "queryPeriod": "1d"
       }
     }
   ]
