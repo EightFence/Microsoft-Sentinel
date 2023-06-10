@@ -14,53 +14,53 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "tactics": [
-          "Persistence"
-        ],
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
+        "query": "let threshold = 10;\nlet default_ad_attributes = dynamic([\"LastDirSyncTime\", \"StsRefreshTokensValidFrom\", \"Included Updated Properties\", \"AccountEnabled\", \"Action Client Name\", \"SourceAnchor\"]);\nAuditLogs\n| where OperationName =~ \"Add user\"\n| where Result =~ \"success\"\n| extend properties = TargetResources[0].modifiedProperties\n| mv-expand properties\n| evaluate bag_unpack(properties) : (displayName:string, oldValue: string, newValue: string , TenantId : string, SourceSystem : string, TimeGenerated : datetime, ResourceId : string, OperationName : string, OperationVersion : string, Category : string, ResultType : string, ResultSignature : string, ResultDescription : string, DurationMs : long, CorrelationId : string, Resource : string, ResourceGroup : string, ResourceProvider : string, Identity : string, Level : string, Location : string, AdditionalDetails : dynamic, Id : string, InitiatedBy : dynamic, LoggedByService : string, Result : string, ResultReason : string, TargetResources : dynamic, AADTenantId : string, ActivityDisplayName : string, ActivityDateTime : datetime, AADOperationType : string, Type : string)\n| extend displayName = column_ifexists(\"displayName\", \"Unknown Value\")\n| summarize count() by displayName, TenantId\n| where displayName !in (default_ad_attributes)\n| top threshold by count_ desc\n| summarize make_set(displayName) by TenantId\n| join kind=inner (AuditLogs\n| where Result =~ \"success\"\n| where OperationName =~ \"Add user\"\n| extend CreatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n| extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n| extend AccountProperties = TargetResources[0].modifiedProperties\n| mv-expand AccountProperties\n| extend PropName = tostring(AccountProperties.displayName)) on TenantId\n| summarize makeset(PropName) by TimeGenerated, CorrelationId, CreatedUserPrincipalName, CreatingUserPrincipalName, tostring(set_displayName)\n| extend missing_props = set_difference(todynamic(set_displayName), set_PropName)\n| where array_length(missing_props) > 0\n| join kind=innerunique (AuditLogs\n| where Result =~ \"success\"\n| where OperationName =~ \"Add user\"\n| extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)) on CorrelationId, CreatedUserPrincipalName\n| extend ExpectedProperties = set_displayName\n| project-away set_displayName, set_PropName\n",
         "severity": "Low",
+        "queryPeriod": "1d",
         "description": "'This query looks for accounts being created that do not have attributes populated that are commonly populated in the tenant.\n  Attackers may attempt to add accounts as a means of establishing persistant access to an environment, looking for anomalies in created accounts may help identify illegitimately created accounts.\n  Created accounts should be investigated to ensure they were legitimated created.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#accounts-not-following-naming-policies'\n",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
+          "author": {
+            "name": "Pete Bryan"
           },
           "categories": {
             "domains": [
               "Security - Others"
             ]
           },
-          "author": {
-            "name": "Pete Bryan"
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           }
         },
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "CreatingUserPrincipalName",
                 "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "CreatedUserPrincipalName",
                 "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "query": "let threshold = 10;\nlet default_ad_attributes = dynamic([\"LastDirSyncTime\", \"StsRefreshTokensValidFrom\", \"Included Updated Properties\", \"AccountEnabled\", \"Action Client Name\", \"SourceAnchor\"]);\nAuditLogs\n| where OperationName =~ \"Add user\"\n| where Result =~ \"success\"\n| extend properties = TargetResources[0].modifiedProperties\n| mv-expand properties\n| evaluate bag_unpack(properties) : (displayName:string, oldValue: string, newValue: string , TenantId : string, SourceSystem : string, TimeGenerated : datetime, ResourceId : string, OperationName : string, OperationVersion : string, Category : string, ResultType : string, ResultSignature : string, ResultDescription : string, DurationMs : long, CorrelationId : string, Resource : string, ResourceGroup : string, ResourceProvider : string, Identity : string, Level : string, Location : string, AdditionalDetails : dynamic, Id : string, InitiatedBy : dynamic, LoggedByService : string, Result : string, ResultReason : string, TargetResources : dynamic, AADTenantId : string, ActivityDisplayName : string, ActivityDateTime : datetime, AADOperationType : string, Type : string)\n| extend displayName = column_ifexists(\"displayName\", \"Unknown Value\")\n| summarize count() by displayName, TenantId\n| where displayName !in (default_ad_attributes)\n| top threshold by count_ desc\n| summarize make_set(displayName) by TenantId\n| join kind=inner (AuditLogs\n| where Result =~ \"success\"\n| where OperationName =~ \"Add user\"\n| extend CreatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n| extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n| extend AccountProperties = TargetResources[0].modifiedProperties\n| mv-expand AccountProperties\n| extend PropName = tostring(AccountProperties.displayName)) on TenantId\n| summarize makeset(PropName) by TimeGenerated, CorrelationId, CreatedUserPrincipalName, CreatingUserPrincipalName, tostring(set_displayName)\n| extend missing_props = set_difference(todynamic(set_displayName), set_PropName)\n| where array_length(missing_props) > 0\n| join kind=innerunique (AuditLogs\n| where Result =~ \"success\"\n| where OperationName =~ \"Add user\"\n| extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)) on CorrelationId, CreatedUserPrincipalName\n| extend ExpectedProperties = set_displayName\n| project-away set_displayName, set_PropName\n",
-        "name": "User account created without expected attributes defined"
+        "queryFrequency": "1d",
+        "tactics": [
+          "Persistence"
+        ],
+        "name": "User account created without expected attributes defined",
+        "triggerOperator": "gt"
       }
     }
   ]
