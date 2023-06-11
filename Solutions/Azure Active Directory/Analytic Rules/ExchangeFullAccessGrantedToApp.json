@@ -14,38 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'This detection looks for the full_access_as_app permission being granted to an OAuth application with Admin Consent.\nThis permission provide access to all Exchange mailboxes via the EWS API can could be exploited to access sensitive data \nby being added to a compromised application. The application granted this permission should be reviewed to ensure that it \nis absolutely necessary for the applications function.\nRef: https://learn.microsoft.com/graph/auth-limit-mailbox-access'\n",
-        "triggerThreshold": 0,
-        "status": "Available",
         "tactics": [
           "DefenseEvasion"
         ],
-        "severity": "Medium",
-        "queryPeriod": "1h",
-        "name": "full_access_as_app Granted To Application",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "This detection looks for the full_access_as_app permission being granted to an OAuth application with Admin Consent.\nThis permission provide access to all Exchange mailboxes via the EWS API can could be exploited to access sensitive data \nby being added to a compromised application. The application granted this permission should be reviewed to ensure that it \nis absolutely necessary for the applications function.\nIn this case {{GrantInitiatedBy}} granted full_access_as_app to {{OAuthAppName}} from {{GrantIpAddress}}\nRef: https://learn.microsoft.com/graph/auth-limit-mailbox-access\n",
           "alertDisplayNameFormat": "User {{GrantInitiatedBy}} granted full_access_as_app to {{OAuthAppName}}"
         },
+        "name": "full_access_as_app Granted To Application",
+        "queryFrequency": "1h",
         "triggerOperator": "gt",
         "customDetails": {
-          "OAuthApplication": "OAuthAppName",
           "UserAgent": "GrantUserAgent",
-          "OAuthAppId": "AppId"
+          "OAuthAppId": "AppId",
+          "OAuthApplication": "OAuthAppName"
         },
+        "triggerThreshold": 0,
+        "description": "'This detection looks for the full_access_as_app permission being granted to an OAuth application with Admin Consent.\nThis permission provide access to all Exchange mailboxes via the EWS API can could be exploited to access sensitive data \nby being added to a compromised application. The application granted this permission should be reviewed to ensure that it \nis absolutely necessary for the applications function.\nRef: https://learn.microsoft.com/graph/auth-limit-mailbox-access'\n",
+        "status": "Available",
         "query": "AuditLogs\n| where LoggedByService =~ \"Core Directory\"\n| where Category =~ \"ApplicationManagement\"\n| where OperationName =~ \"Consent to application\"\n| where TargetResources has \"full_access_as_app\"\n| mv-expand TargetResources\n| extend OAuthAppName = TargetResources.displayName\n| extend ModifiedProperties = TargetResources.modifiedProperties \n| mv-apply Property = ModifiedProperties on \n  (\n      where Property.displayName =~ \"ConsentContext.isAdminConsent\"\n      | extend AdminConsent = tostring(Property.newValue)\n  )\n| mv-apply Property = ModifiedProperties on \n  (\n      where Property.displayName =~ \"ConsentAction.Permissions\"\n      | extend Permissions = tostring(Property.newValue)\n  )\n| mv-apply Property = ModifiedProperties on \n  (\n      where Property.displayName =~ \"TargetId.ServicePrincipalNames\"\n      | extend AppId = tostring(Property.newValue)\n  )\n| mv-expand AdditionalDetails\n| extend GrantUserAgent = tostring(iff(AdditionalDetails.key =~ \"User-Agent\", AdditionalDetails.value, \"\"))\n| parse Permissions with * \"ConsentType: \" GrantConsentType \", Scope: \" GrantScope1 \",\" *\n| where GrantScope1 =~ \"full_access_as_app\"\n| extend GrantIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend GrantInitiatedBy = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))\n| project-reorder TimeGenerated, OAuthAppName, AppId, AdminConsent, Permissions, GrantIpAddress, GrantInitiatedBy, GrantUserAgent, GrantScope1, GrantConsentType\n| extend Name = split(GrantInitiatedBy, \"@\")[0], UPNSuffix = split(GrantInitiatedBy, \"@\")[1]\n",
-        "queryFrequency": "1h",
+        "severity": "Medium",
+        "queryPeriod": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -53,8 +53,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "GrantIpAddress"
+                "columnName": "GrantIpAddress",
+                "identifier": "Address"
               }
             ]
           }
