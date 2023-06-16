@@ -14,12 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "TI map Domain entity to CommonSecurityLog",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True);\n//Create a list of TLDs in our threat feed for later validation of extracted domains\nlet list_tlds = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(DomainName)\n| extend DomainName = tolower(DomainName)\n| extend parts = split(DomainName, '.')\n| extend tld = parts[(array_length(parts)-1)]\n| summarize count() by tostring(tld)\n| summarize make_list(tld);\nlet Domain_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName)\n| extend TI_DomainEntity = DomainName\n),\n(IoCList\n  | where IoC_Type =~ 'domainname'\n  | where ExpirationDateTime > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n  | where Active =~ 'True'\n  | extend TI_DomainEntity = IoC\n  | project-away  IoC_Type\n)\n);\nDomain_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n   CommonSecurityLog\n   | extend IngestionTime = ingestion_time()\n   | where IngestionTime > ago(dt_lookBack)\n   | where DeviceEventClassID =~ 'url'\n   //Uncomment the line below to only alert on allowed connections\n   //| where DeviceAction !~ \"block-url\"\n   //Extract domain from RequestURL, if not present extarct it from AdditionalExtentions\n   | extend PA_Url = column_ifexists(\"RequestURL\", \"None\")\n   | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith \"PanOS\", extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)), trim('\"', PA_Url))\n   | extend PA_Url = iif(PA_Url !startswith \"http://\" and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), iif(PA_Url !startswith \"https://\" and ApplicationProtocol =~ \"ssl\", strcat('https://', PA_Url), PA_Url))\n   | extend Domain = trim(@\"\"\"\",tostring(parse_url(PA_Url).Host))\n   | where isnotempty(Domain)\n   | extend Domain = tolower(Domain)\n   | extend parts = split(Domain, '.')\n   //Split out the TLD for the purpose of checking if we have any TI indicators with this TLD to match on\n   | extend tld = parts[(array_length(parts)-1)]\n   //Validate parsed domain by checking TLD against TLDs from threat feed and drop domains where there is no chance of a match\n   | where tld in~ (list_tlds)\n   | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n   ) on $left.TI_DomainEntity==$right.Domain\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, IoC\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, IoC, TI_DomainEntity\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "description": "'Identifies a match in CommonSecurityLog table from any Domain IOC from TI'\n",
+        "name": "TI map Domain entity to CommonSecurityLog",
+        "queryFrequency": "1h",
         "severity": "Medium",
+        "tactics": [
+          "Impact"
+        ],
         "queryPeriod": "14d",
+        "description": "'Identifies a match in CommonSecurityLog table from any Domain IOC from TI'\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -48,11 +53,6 @@
             ],
             "entityType": "URL"
           }
-        ],
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "tactics": [
-          "Impact"
         ]
       }
     }
