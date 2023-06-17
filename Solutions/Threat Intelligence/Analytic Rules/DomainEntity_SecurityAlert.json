@@ -14,46 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True);\n//Create a list of TLDs in our threat feed for later validation\nlet list_tlds = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(DomainName)\n| extend parts = split(DomainName, '.')\n| extend tld = parts[(array_length(parts)-1)]\n| summarize count() by tostring(tld)\n| summarize make_list(tld);\nlet Domain_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName)\n| extend TI_DomainEntity = DomainName\n),\n(IoCList\n| where IoC_Type =~ 'domainname'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_DomainEntity = IoC\n| project-away  IoC_Type\n)\n);\nDomain_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\nSecurityAlert\n| where TimeGenerated > ago(dt_lookBack)\n| extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\" and ProductName == 'Azure Sentinel', true, false)\n| where MSTI == false\n//Extract domain patterns from message\n| extend domain = todynamic(dynamic_to_json(extract_all(@\"(((xn--)?[a-z0-9\\-]+\\.)+([a-z]+|(xn--[a-z0-9]+)))\", dynamic([1]), tolower(Entities))))\n| mv-expand domain\n| extend domain = tostring(domain[0])\n| extend parts = split(domain, '.')\n//Split out the TLD\n| extend tld = parts[(array_length(parts)-1)]\n//Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed\n| where tld in~ (list_tlds)\n// Converting Entities into dynamic data type and use mv-expand to unpack the array\n| extend EntitiesDynamicArray = parse_json(Entities)\n| mv-apply EntitiesDynamicArray on\n(summarize\nHostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == \"host\"),\nIP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == \"ip\")\n)\n| extend Alert_TimeGenerated = TimeGenerated\n| extend Alert_Description = Description\n) on $left.TI_DomainEntity==$right.domain\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName, IoC\n| project Alert_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type, IoC, TI_DomainEntity\n| extend timestamp = Alert_TimeGenerated\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "name": "TI map Domain entity to SecurityAlert",
-        "queryFrequency": "1h",
-        "severity": "Medium",
+        "description": "'Identifies a match in SecurityAlert table from any Domain IOC from TI'\n",
         "tactics": [
           "Impact"
         ],
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in SecurityAlert table from any Domain IOC from TI'\n",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IP_addr"
+                "columnName": "IP_addr",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
-        ]
+        ],
+        "triggerThreshold": 0,
+        "name": "TI map Domain entity to SecurityAlert",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True);\n//Create a list of TLDs in our threat feed for later validation\nlet list_tlds = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(DomainName)\n| extend parts = split(DomainName, '.')\n| extend tld = parts[(array_length(parts)-1)]\n| summarize count() by tostring(tld)\n| summarize make_list(tld);\nlet Domain_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName)\n| extend TI_DomainEntity = DomainName\n),\n(IoCList\n| where IoC_Type =~ 'domainname'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_DomainEntity = IoC\n| project-away  IoC_Type\n)\n);\nDomain_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\nSecurityAlert\n| where TimeGenerated > ago(dt_lookBack)\n| extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\" and ProductName == 'Azure Sentinel', true, false)\n| where MSTI == false\n//Extract domain patterns from message\n| extend domain = todynamic(dynamic_to_json(extract_all(@\"(((xn--)?[a-z0-9\\-]+\\.)+([a-z]+|(xn--[a-z0-9]+)))\", dynamic([1]), tolower(Entities))))\n| mv-expand domain\n| extend domain = tostring(domain[0])\n| extend parts = split(domain, '.')\n//Split out the TLD\n| extend tld = parts[(array_length(parts)-1)]\n//Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed\n| where tld in~ (list_tlds)\n// Converting Entities into dynamic data type and use mv-expand to unpack the array\n| extend EntitiesDynamicArray = parse_json(Entities)\n| mv-apply EntitiesDynamicArray on\n(summarize\nHostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == \"host\"),\nIP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == \"ip\")\n)\n| extend Alert_TimeGenerated = TimeGenerated\n| extend Alert_Description = Description\n) on $left.TI_DomainEntity==$right.domain\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName, IoC\n| project Alert_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type, IoC, TI_DomainEntity\n| extend timestamp = Alert_TimeGenerated\n",
+        "queryPeriod": "14d"
       }
     }
   ]
