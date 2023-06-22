@@ -14,20 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "LateralMovement"
-        ],
-        "queryPeriod": "7d",
-        "status": "Available",
+        "queryFrequency": "1d",
+        "query": "let timeframe = 1d;\n// Adjust for a longer timeframe for identifying ADFS Servers\nlet lookback = 6d;\n// Identify ADFS Servers\nlet ADFS_Servers = (\nSecurityEvent\n| where TimeGenerated > ago(timeframe+lookback)\n| where EventID == 4688 and SubjectLogonId != \"0x3e4\"\n| where NewProcessName has \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n);\nSecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where Computer in~ (ADFS_Servers)\n| where Account !endswith \"$\"\n// Check for scheduled task events\n| where EventID in (4697, 4698, 4699, 4700, 4701, 4702)\n| extend EventDataParsed = parse_xml(EventData)\n| extend SubjectLogonId = tostring(EventDataParsed.EventData.Data[3][\"#text\"])\n// Check specifically for access to IPC$ share and PIPE\\svcctl and PIPE\\atsvc for Service Control Services and Schedule Control Services\n| union (\n    SecurityEvent\n    | where TimeGenerated > ago(timeframe)\n    | where Computer in~ (ADFS_Servers)\n    | where Account !endswith \"$\"\n    | where EventID == 5145\n    | where RelativeTargetName =~ \"svcctl\" or RelativeTargetName  =~ \"atsvc\"\n)\n// Check for lateral movement\n| join kind=inner\n(SecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where Account !endswith \"$\"\n| where EventID == 4624 and LogonType == 3\n) on $left.SubjectLogonId == $right.TargetLogonId\n| project TimeGenerated, Account, Computer, EventID, RelativeTargetName\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account\n",
+        "description": "'This query detects instances where an attacker has gained the ability to execute code on an ADFS Server through SMB and Remote Service or Scheduled Task.'\n",
+        "name": "Gain Code Execution on ADFS Server via SMB + Remote Service or Scheduled Task",
         "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryPeriod": "7d",
         "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
             ]
           },
@@ -35,17 +36,16 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "HostCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
               }
             ]
           }
         ],
-        "severity": "Medium",
-        "name": "Gain Code Execution on ADFS Server via SMB + Remote Service or Scheduled Task",
-        "queryFrequency": "1d",
-        "query": "let timeframe = 1d;\n// Adjust for a longer timeframe for identifying ADFS Servers\nlet lookback = 6d;\n// Identify ADFS Servers\nlet ADFS_Servers = (\nSecurityEvent\n| where TimeGenerated > ago(timeframe+lookback)\n| where EventID == 4688 and SubjectLogonId != \"0x3e4\"\n| where NewProcessName has \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n);\nSecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where Computer in~ (ADFS_Servers)\n| where Account !endswith \"$\"\n// Check for scheduled task events\n| where EventID in (4697, 4698, 4699, 4700, 4701, 4702)\n| extend EventDataParsed = parse_xml(EventData)\n| extend SubjectLogonId = tostring(EventDataParsed.EventData.Data[3][\"#text\"])\n// Check specifically for access to IPC$ share and PIPE\\svcctl and PIPE\\atsvc for Service Control Services and Schedule Control Services\n| union (\n    SecurityEvent\n    | where TimeGenerated > ago(timeframe)\n    | where Computer in~ (ADFS_Servers)\n    | where Account !endswith \"$\"\n    | where EventID == 5145\n    | where RelativeTargetName =~ \"svcctl\" or RelativeTargetName  =~ \"atsvc\"\n)\n// Check for lateral movement\n| join kind=inner\n(SecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where Account !endswith \"$\"\n| where EventID == 4624 and LogonType == 3\n) on $left.SubjectLogonId == $right.TargetLogonId\n| project TimeGenerated, Account, Computer, EventID, RelativeTargetName\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account\n",
-        "description": "'This query detects instances where an attacker has gained the ability to execute code on an ADFS Server through SMB and Remote Service or Scheduled Task.'\n"
+        "tactics": [
+          "LateralMovement"
+        ],
+        "status": "Available"
       }
     }
   ]
