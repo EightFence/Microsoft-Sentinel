@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "severity": "Medium",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "clientIp_s"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "'Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the \nratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric). A high ratio value for \na given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number \nof blocked requests and a few unobstructed logs that may be malicious but have passed undetected through the WAF. The successCode \nvariable defines what the detection thinks is a successful status code and should be altered to fit the environment.'\n",
+        "status": "Available",
         "tactics": [
           "InitialAccess"
         ],
-        "description": "'Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the \nratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric). A high ratio value for \na given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number \nof blocked requests and a few unobstructed logs that may be malicious but have passed undetected through the WAF. The successCode \nvariable defines what the detection thinks is a successful status code and should be altered to fit the environment.'\n",
-        "status": "Available",
         "name": "A potentially malicious web request was executed against a web server",
-        "query": "let queryperiod = 1d;\nlet mode = 'Blocked';\nlet successCode = dynamic(['200', '101','204', '400','504','304','401','500']);\nlet sessionBin = 30m;\nAzureDiagnostics\n| where TimeGenerated > ago(queryperiod)\n| where Category =~ 'ApplicationGatewayFirewallLog' and action_s == mode\n| sort by hostname_s asc, clientIp_s asc, TimeGenerated asc\n| extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((clientIp_s != prev(clientIp_s)) or (hostname_s != prev(hostname_s))))\n| summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by hostname_s, clientIp_s, SessionBlockedStarted\n| extend TimeKey = range(bin(SessionBlockedStarted, sessionBin), bin(SessionBlockedEnded, sessionBin), sessionBin)\n| mv-expand TimeKey to typeof(datetime)\n| join kind = inner(\n    AzureDiagnostics\n    | where TimeGenerated > ago(queryperiod)\n    | where Category =~ 'ApplicationGatewayAccessLog' and (isempty(httpStatus_d) or httpStatus_d in (successCode))\n    | extend TimeKey = bin(TimeGenerated, sessionBin)\n    | extend hostname_s = coalesce(hostname_s,host_s), clientIp_s = coalesce(clientIp_s,clientIP_s)\n) on TimeKey, hostname_s , clientIp_s\n| where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)\n| extend\n    originalRequestUriWithArgs_s = column_ifexists(\"originalRequestUriWithArgs_s\", \"\"),\n    serverStatus_s = column_ifexists(\"serverStatus_s\", \"\")\n| summarize\n    SuccessfulAccessCount = count(),\n    UserAgents = make_set(userAgent_s, 250),\n    RequestURIs = make_set(requestUri_s, 250),\n    OriginalRequestURIs = make_set(originalRequestUriWithArgs_s, 250),\n    SuccessCodes = make_set(httpStatus_d, 250),\n    SuccessCodes_BackendServer = make_set(serverStatus_s, 250),\n    take_any(SessionBlockedEnded, SessionBlockedCount)\n    by hostname_s, clientIp_s, SessionBlockedStarted\n| where SessionBlockedCount > SuccessfulAccessCount\n| extend timestamp = SessionBlockedStarted, IPCustomEntity = clientIp_s\n| extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)\n| sort by BlockvsSuccessRatio desc, timestamp asc\n| project-reorder SessionBlockedStarted, SessionBlockedEnded, hostname_s, clientIp_s, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents\n"
+        "queryFrequency": "1d",
+        "query": "let queryperiod = 1d;\nlet mode = 'Blocked';\nlet successCode = dynamic(['200', '101','204', '400','504','304','401','500']);\nlet sessionBin = 30m;\nAzureDiagnostics\n| where TimeGenerated > ago(queryperiod)\n| where Category =~ 'ApplicationGatewayFirewallLog' and action_s == mode\n| sort by hostname_s asc, clientIp_s asc, TimeGenerated asc\n| extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((clientIp_s != prev(clientIp_s)) or (hostname_s != prev(hostname_s))))\n| summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by hostname_s, clientIp_s, SessionBlockedStarted\n| extend TimeKey = range(bin(SessionBlockedStarted, sessionBin), bin(SessionBlockedEnded, sessionBin), sessionBin)\n| mv-expand TimeKey to typeof(datetime)\n| join kind = inner(\n    AzureDiagnostics\n    | where TimeGenerated > ago(queryperiod)\n    | where Category =~ 'ApplicationGatewayAccessLog' and (isempty(httpStatus_d) or httpStatus_d in (successCode))\n    | extend TimeKey = bin(TimeGenerated, sessionBin)\n    | extend hostname_s = coalesce(hostname_s,host_s), clientIp_s = coalesce(clientIp_s,clientIP_s)\n) on TimeKey, hostname_s , clientIp_s\n| where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)\n| extend\n    originalRequestUriWithArgs_s = column_ifexists(\"originalRequestUriWithArgs_s\", \"\"),\n    serverStatus_s = column_ifexists(\"serverStatus_s\", \"\")\n| summarize\n    SuccessfulAccessCount = count(),\n    UserAgents = make_set(userAgent_s, 250),\n    RequestURIs = make_set(requestUri_s, 250),\n    OriginalRequestURIs = make_set(originalRequestUriWithArgs_s, 250),\n    SuccessCodes = make_set(httpStatus_d, 250),\n    SuccessCodes_BackendServer = make_set(serverStatus_s, 250),\n    take_any(SessionBlockedEnded, SessionBlockedCount)\n    by hostname_s, clientIp_s, SessionBlockedStarted\n| where SessionBlockedCount > SuccessfulAccessCount\n| extend timestamp = SessionBlockedStarted, IPCustomEntity = clientIp_s\n| extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)\n| sort by BlockvsSuccessRatio desc, timestamp asc\n| project-reorder SessionBlockedStarted, SessionBlockedEnded, hostname_s, clientIp_s, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents\n",
+        "severity": "Medium",
+        "queryPeriod": "1d"
       }
     }
   ]
