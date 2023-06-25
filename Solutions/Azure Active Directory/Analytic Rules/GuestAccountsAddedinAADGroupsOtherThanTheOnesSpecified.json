@@ -14,7 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "Discovery"
+        ],
+        "status": "Available",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -48,19 +55,12 @@
             ]
           }
         ],
-        "triggerOperator": "gt",
-        "description": "'Guest Accounts are added in the Organization Tenants to perform various tasks i.e projects execution, support etc.. This detection notifies when guest users are added to Azure AD Groups other than the ones specified and poses a risk to gain access to sensitive apps or data.'\n",
-        "status": "Available",
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "Discovery"
-        ],
-        "name": "Guest accounts added in AAD Groups other than the ones specified",
-        "queryFrequency": "1d",
-        "query": "// OBJECT ID of AAD Groups can be found by navigating to Azure Active Directory then from menu on the left, select Groups and from the list shown of AAD Groups, the Second Column shows the ObjectID of each\nlet GroupIDs = dynamic([\"List with Custom AAD GROUP OBJECT ID 1\",\"Custom AAD GROUP OBJECT ID 2\"]);\nAuditLogs\n| where OperationName in ('Add member to group', 'Add owner to group')\n| extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)\n| extend InitiatedByIPAdress = InitiatedBy.user.ipAddress \n// Uncomment the following line to filter events where the inviting user was a guest user\n//| where InitiatedBy has_any (\"CUSTOM DOMAIN NAME#\", \"#EXT#\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend InvitedUser = trim(@'\"',tostring(TargetResource.userPrincipalName)),\n               Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on \n  (\n      where Property.displayName =~ \"Group.DisplayName\"\n      | extend AADGroup = trim('\"',tostring(Property.newValue))\n  )\n| where InvitedUser has_any (\"CUSTOM DOMAIN NAME#\", \"#EXT#\")\n| mv-apply Property = Properties on\n   (\n     where Property.displayName =~ \"Group.ObjectID\"\n     | extend AADGroupId = trim('\"',tostring(Property.newValue))\n   )\n| where AADGroupId !in (GroupIDs)\n| extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])\n",
+        "triggerThreshold": 0,
         "severity": "High",
-        "queryPeriod": "1d"
+        "queryPeriod": "1d",
+        "name": "Guest accounts added in AAD Groups other than the ones specified",
+        "description": "'Guest Accounts are added in the Organization Tenants to perform various tasks i.e projects execution, support etc.. This detection notifies when guest users are added to Azure AD Groups other than the ones specified and poses a risk to gain access to sensitive apps or data.'\n",
+        "query": "// OBJECT ID of AAD Groups can be found by navigating to Azure Active Directory then from menu on the left, select Groups and from the list shown of AAD Groups, the Second Column shows the ObjectID of each\nlet GroupIDs = dynamic([\"List with Custom AAD GROUP OBJECT ID 1\",\"Custom AAD GROUP OBJECT ID 2\"]);\nAuditLogs\n| where OperationName in ('Add member to group', 'Add owner to group')\n| extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)\n| extend InitiatedByIPAdress = InitiatedBy.user.ipAddress \n// Uncomment the following line to filter events where the inviting user was a guest user\n//| where InitiatedBy has_any (\"CUSTOM DOMAIN NAME#\", \"#EXT#\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend InvitedUser = trim(@'\"',tostring(TargetResource.userPrincipalName)),\n               Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on \n  (\n      where Property.displayName =~ \"Group.DisplayName\"\n      | extend AADGroup = trim('\"',tostring(Property.newValue))\n  )\n| where InvitedUser has_any (\"CUSTOM DOMAIN NAME#\", \"#EXT#\")\n| mv-apply Property = Properties on\n   (\n     where Property.displayName =~ \"Group.ObjectID\"\n     | extend AADGroupId = trim('\"',tostring(Property.newValue))\n   )\n| where AADGroupId !in (GroupIDs)\n| extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])\n"
       }
     }
   ]
