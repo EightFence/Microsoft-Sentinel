@@ -14,37 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let command_executed = AWSCloudTrail\n| where EventName in (\"SendCommand\",\"CreateAssociation\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend params = tostring(parse_json(RequestParameters).parameters)\n| extend s3bucketCommand = tostring(parse_json(RequestParameters).outputS3BucketName)\n| extend s3bucketAssociation = tostring(parse_json(RequestParameters).outputLocation.s3Location.outputS3BucketName)\n| where isnotempty(params)\n| extend commandId = tostring(parse_json(ResponseElements).command.commandId)\n| extend associationId = tostring(parse_json(ResponseElements).associationDescription.associationId)\n| extend executionId = iff(isnotempty(commandId), commandId, associationId)\n| extend s3bucket = iff(isnotempty(s3bucketCommand), s3bucketCommand, s3bucketAssociation)\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName;\nAWSCloudTrail\n| where EventName == \"PutObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend s3bucket = tostring(parse_json(RequestParameters).bucketName)\n| mv-expand todynamic(Resources)\n| extend accountId=tostring(todynamic(Resources.['accountId']))\n| where Resources contains \"accountId\" and accountId <> RecipientAccountId\n| join command_executed on s3bucket\n",
+        "description": "'An attacker with the necessary permissions could be executing code remotely on a machine and saving the output to his own S3 bucket. Verify this action with the user identity.'\n",
+        "queryFrequency": "1d",
         "tactics": [
           "Execution"
         ],
-        "query": "let command_executed = AWSCloudTrail\n| where EventName in (\"SendCommand\",\"CreateAssociation\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend params = tostring(parse_json(RequestParameters).parameters)\n| extend s3bucketCommand = tostring(parse_json(RequestParameters).outputS3BucketName)\n| extend s3bucketAssociation = tostring(parse_json(RequestParameters).outputLocation.s3Location.outputS3BucketName)\n| where isnotempty(params)\n| extend commandId = tostring(parse_json(ResponseElements).command.commandId)\n| extend associationId = tostring(parse_json(ResponseElements).associationDescription.associationId)\n| extend executionId = iff(isnotempty(commandId), commandId, associationId)\n| extend s3bucket = iff(isnotempty(s3bucketCommand), s3bucketCommand, s3bucketAssociation)\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName;\nAWSCloudTrail\n| where EventName == \"PutObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend s3bucket = tostring(parse_json(RequestParameters).bucketName)\n| mv-expand todynamic(Resources)\n| extend accountId=tostring(todynamic(Resources.['accountId']))\n| where Resources contains \"accountId\" and accountId <> RecipientAccountId\n| join command_executed on s3bucket\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
+        "severity": "High",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountCustomEntity",
                 "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IPCustomEntity",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
+        "triggerThreshold": 0,
         "status": "Available",
-        "description": "'An attacker with the necessary permissions could be executing code remotely on a machine and saving the output to his own S3 bucket. Verify this action with the user identity.'\n",
-        "queryPeriod": "1d",
-        "severity": "High",
+        "triggerOperator": "gt",
         "name": "Suspicious command sent to EC2"
       }
     }
