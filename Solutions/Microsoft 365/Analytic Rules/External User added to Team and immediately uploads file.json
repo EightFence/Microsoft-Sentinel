@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let fileAccessThrehold = 10;\nOfficeActivity\n | where OfficeWorkload =~ \"MicrosoftTeams\"\n | where Operation =~ \"MemberAdded\"\n | extend UPN = tostring(parse_json(Members)[0].UPN)\n | where UPN contains (\"#EXT#\")\n | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName\n | join kind = inner(\n                       OfficeActivity\n                       | where OfficeWorkload =~ \"MicrosoftTeams\"\n                       | where Operation =~ \"MemberRemoved\"\n                       | extend UPN = tostring(parse_json(Members)[0].UPN)\n                       | where UPN contains (\"#EXT#\")\n                       | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName\n                     ) on UPN\n | where TimeDeleted > TimeAdded\n | join kind=inner \n                   (\n                   OfficeActivity\n                   | where RecordType == \"SharePointFileOperation\"\n                   | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n                   | where Operation == \"FileUploaded\"\n                   | join kind = inner \n                                       (\n                                       OfficeActivity\n                                       | where RecordType == \"SharePointFileOperation\"\n                                       | where Operation  == \"FileAccessed\"\n                                       | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n                                       | summarize FileAccessCount = count() by OfficeObjectId\n                                       | where FileAccessCount > fileAccessThrehold\n                                       ) on $left.OfficeObjectId == $right.OfficeObjectId\n                   )on $left.UPN == $right.UserId\n | extend timestamp=TimeGenerated, AccountCustomEntity = UserWhoAdded \n",
-        "description": "'This detection identifies an external user is added to a Team or Teams chat\nand shares a files which is accessed by many users (>10) and the users is removed within short period of time. This might be\nan indicator of suspicious activity.'\n",
-        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "severity": "Low",
         "tactics": [
           "InitialAccess"
         ],
-        "severity": "Low",
-        "queryPeriod": "1h",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountCustomEntity",
                 "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "triggerThreshold": 0,
+        "query": "let fileAccessThrehold = 10;\nOfficeActivity\n | where OfficeWorkload =~ \"MicrosoftTeams\"\n | where Operation =~ \"MemberAdded\"\n | extend UPN = tostring(parse_json(Members)[0].UPN)\n | where UPN contains (\"#EXT#\")\n | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName\n | join kind = inner(\n                       OfficeActivity\n                       | where OfficeWorkload =~ \"MicrosoftTeams\"\n                       | where Operation =~ \"MemberRemoved\"\n                       | extend UPN = tostring(parse_json(Members)[0].UPN)\n                       | where UPN contains (\"#EXT#\")\n                       | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName\n                     ) on UPN\n | where TimeDeleted > TimeAdded\n | join kind=inner \n                   (\n                   OfficeActivity\n                   | where RecordType == \"SharePointFileOperation\"\n                   | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n                   | where Operation == \"FileUploaded\"\n                   | join kind = inner \n                                       (\n                                       OfficeActivity\n                                       | where RecordType == \"SharePointFileOperation\"\n                                       | where Operation  == \"FileAccessed\"\n                                       | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n                                       | summarize FileAccessCount = count() by OfficeObjectId\n                                       | where FileAccessCount > fileAccessThrehold\n                                       ) on $left.OfficeObjectId == $right.OfficeObjectId\n                   )on $left.UPN == $right.UserId\n | extend timestamp=TimeGenerated, AccountCustomEntity = UserWhoAdded \n",
+        "description": "'This detection identifies an external user is added to a Team or Teams chat\nand shares a files which is accessed by many users (>10) and the users is removed within short period of time. This might be\nan indicator of suspicious activity.'\n",
+        "name": "Accessed files shared by temporary external user",
         "status": "Available",
+        "queryPeriod": "1h",
         "triggerOperator": "gt",
-        "name": "Accessed files shared by temporary external user"
+        "queryFrequency": "1h"
       }
     }
   ]
