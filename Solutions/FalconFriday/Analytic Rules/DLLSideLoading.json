@@ -14,21 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "status": "Available",
-        "name": "Hijack Execution Flow - DLL Side-Loading",
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation",
-          "DefenseEvasion"
-        ],
-        "query": "let imls = materialize(\n    DeviceImageLoadEvents\n    | where InitiatingProcessIntegrityLevel in (\"High\", \"System\") and FileName !endswith \".exe\"\n    | project FolderPath=tolower(FolderPath), InitiatingProcessFileName, InitiatingProcessIntegrityLevel, DeviceId, DeviceName\n    | distinct FolderPath, InitiatingProcessFileName, InitiatingProcessIntegrityLevel, DeviceId, DeviceName\n);\nimls\n| join (\n    DeviceFileEvents\n    | where FolderPath in~ ((imls | project FolderPath)) and ActionType in (\"FileCreated\", \"FileModified\") and\n    InitiatingProcessIntegrityLevel !in (\"High\", \"System\", \"\") and InitiatingProcessAccountSid != \"S-1-5-18\" and\n    InitiatingProcessTokenElevation in (\"TokenElevationTypeDefault\", \"TokenElevationTypeLimited\") and InitiatingProcessAccountSid !endswith \"-500\"\n    | extend FolderPath=tolower(FolderPath)\n) on FolderPath, DeviceId, DeviceName\n| project-away FolderPath1\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "DeviceName"
+                "columnName": "DeviceName",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Host"
@@ -36,16 +27,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Sid",
-                "columnName": "InitiatingProcessAccountSid"
+                "columnName": "InitiatingProcessAccountSid",
+                "identifier": "Sid"
               },
               {
-                "identifier": "Name",
-                "columnName": "InitiatingProcessAccountName"
+                "columnName": "InitiatingProcessAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "InitiatingProcessAccountDomain"
+                "columnName": "InitiatingProcessAccountDomain",
+                "identifier": "NTDomain"
               }
             ],
             "entityType": "Account"
@@ -53,18 +44,27 @@
           {
             "fieldMappings": [
               {
-                "identifier": "CommandLine",
-                "columnName": "InitiatingProcessCommandLine"
+                "columnName": "InitiatingProcessCommandLine",
+                "identifier": "CommandLine"
               }
             ],
             "entityType": "Process"
           }
         ],
-        "queryPeriod": "1h",
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation",
+          "DefenseEvasion"
+        ],
+        "query": "let imls = materialize(\n    DeviceImageLoadEvents\n    | where InitiatingProcessIntegrityLevel in (\"High\", \"System\") and FileName !endswith \".exe\"\n    | project FolderPath=tolower(FolderPath), InitiatingProcessFileName, InitiatingProcessIntegrityLevel, DeviceId, DeviceName\n    | distinct FolderPath, InitiatingProcessFileName, InitiatingProcessIntegrityLevel, DeviceId, DeviceName\n);\nimls\n| join (\n    DeviceFileEvents\n    | where FolderPath in~ ((imls | project FolderPath)) and ActionType in (\"FileCreated\", \"FileModified\") and\n    InitiatingProcessIntegrityLevel !in (\"High\", \"System\", \"\") and InitiatingProcessAccountSid != \"S-1-5-18\" and\n    InitiatingProcessTokenElevation in (\"TokenElevationTypeDefault\", \"TokenElevationTypeLimited\") and InitiatingProcessAccountSid !endswith \"-500\"\n    | extend FolderPath=tolower(FolderPath)\n) on FolderPath, DeviceId, DeviceName\n| project-away FolderPath1\n",
         "severity": "Medium",
-        "queryFrequency": "1h",
+        "name": "Hijack Execution Flow - DLL Side-Loading",
         "description": "This detection tries to identify all DLLs loaded by \"high integrity\" processes and cross-checks the DLL paths against FileCreate/FileModify events of the same DLL by a medium integrity process.\nOf course, we need to do some magic to filter out false positives as much as possible. So any FileCreate/FileModify done by \"NT Authoriy\\System\" and the \"RID 500\" users aren't interesting.\nAlso, we only want to see the FileCreate/FileModify actions which are performed with a default or limited token elevation. If done with a full elevated token, the user is apparently admin already.\n",
-        "triggerThreshold": 0
+        "status": "Available",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h"
       }
     }
   ]

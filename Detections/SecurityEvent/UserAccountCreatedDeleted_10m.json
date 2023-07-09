@@ -14,35 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "User account created and deleted within 10 mins",
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "author": {
-            "name": "Shain"
-          },
-          "support": {
-            "tier": "Community"
-          }
-        },
         "triggerOperator": "gt",
+        "description": "'Identifies when a user account is created and then deleted within 10 minutes. This can be an indication of compromise and\nan adversary attempting to hide in the noise.'\n",
+        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Sid",
-                "columnName": "SIDofAccountUsedToCreate"
+                "columnName": "SIDofAccountUsedToCreate",
+                "identifier": "Sid"
               }
             ],
             "entityType": "Account"
@@ -50,23 +34,39 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Host"
           }
         ],
-        "severity": "Medium",
-        "queryPeriod": "25h",
-        "description": "'Identifies when a user account is created and then deleted within 10 minutes. This can be an indication of compromise and\nan adversary attempting to hide in the noise.'\n",
+        "name": "User account created and deleted within 10 mins",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Shain"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
         "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\n (union isfuzzy=true\n (SecurityEvent\n| where TimeGenerated > ago(timeframe+spanoftime)\n// A user account was created\n| where EventID == 4720\n| where AccountType =~ \"User\"\n| project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer, TargetUserName, UserPrincipalName, \nAccountUsedToCreate = SubjectAccount, SIDofAccountUsedToCreate = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid\n),\n(\nWindowsEvent\n| where TimeGenerated > ago(timeframe+spanoftime)\n// A user account was created\n| where EventID == 4720\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend AccountType=case(EventData.SubjectUserName endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n| where AccountType =~ \"User\"\n| extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend TargetSid = tostring(EventData.TargetSid)\n| extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n| extend Activity = \"4720 - A user account was created.\"\n| extend TargetUserName = tostring(EventData.TargetUserName) \n| project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer, TargetUserName, UserPrincipalName, \nAccountUsedToCreate = SubjectAccount, SIDofAccountUsedToCreate = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid  \n))\n| join kind= inner (\n  (union isfuzzy=true\n  (SecurityEvent\n  | where TimeGenerated > ago(timeframe)\n  // A user account was deleted\n  | where EventID == 4726\n| where AccountType == \"User\"\n| project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer, TargetUserName, UserPrincipalName, \nAccountUsedToDelete = SubjectAccount, SIDofAccountUsedToDelete = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid\n),\n(WindowsEvent\n| where TimeGenerated > ago(timeframe)\n  // A user account was deleted\n| where EventID == 4726\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(SubjectAccount endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n| where AccountType == \"User\"\n| extend TargetSid = tostring(EventData.TargetSid)\n| extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n| extend Activity = \"4726 - A user account was deleted.\"\n| extend TargetUserName = tostring(EventData.TargetUserName) \n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer, TargetUserName, UserPrincipalName, AccountUsedToDelete = SubjectAccount, SIDofAccountUsedToDelete = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid))\n) on Computer, TargetAccount\n| where deletionTime - creationTime < spanoftime\n| extend TimeDelta = deletionTime - creationTime\n| where tolong(TimeDelta) >= threshold\n| project TimeDelta, creationTime, CreateEventID, CreateActivity, Computer, TargetAccount, TargetSid, UserPrincipalName, AccountUsedToCreate, SIDofAccountUsedToCreate,\ndeletionTime, DeleteEventID, DeleteActivity, AccountUsedToDelete, SIDofAccountUsedToDelete\n| extend timestamp = creationTime, AccountCustomEntity = AccountUsedToCreate, HostCustomEntity = Computer\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "25h",
+        "triggerThreshold": 0,
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
-        ],
-        "triggerThreshold": 0,
-        "queryFrequency": "1d"
+        ]
       }
     }
   ]
