@@ -14,6 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and ((Action contains \"dynamodb:Create\" or Action contains \"dynamodb:Put\") and (Action contains \"dynamodb:Describe\" or Action contains \"dynamodb:Get\" or Action contains \"dynamodb:Scan\")  and Action contains \"dynamodb:Update\" and Action contains \"dynamodb:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "name": "Privilege escalation via CRUD DynamoDB policy",
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD DynamoDB Policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -34,18 +37,15 @@
             "entityType": "IP"
           }
         ],
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and ((Action contains \"dynamodb:Create\" or Action contains \"dynamodb:Put\") and (Action contains \"dynamodb:Describe\" or Action contains \"dynamodb:Get\" or Action contains \"dynamodb:Scan\")  and Action contains \"dynamodb:Update\" and Action contains \"dynamodb:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "severity": "Medium",
-        "name": "Privilege escalation via CRUD DynamoDB policy",
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD DynamoDB Policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
         "status": "Available",
-        "triggerThreshold": 0,
         "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "queryFrequency": "1d"
+        "triggerThreshold": 0
       }
     }
   ]
