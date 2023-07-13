@@ -14,12 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "query": "//Adjust this threshold to fit your environment\nlet signin_threshold = 5;\n//Make a list of IPs with AAD signin failures above our threshold\nlet aadFunc = (tableName:string){\nlet Suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in (\"127.0.0.1\", \"::1\")\n| summarize count() by IPAddress\n| where count_ >  signin_threshold\n| summarize make_set(IPAddress);\nSuspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet Suspicious_signins =\nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into the AWS console\nAWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult =~ \"Success\"\n| where SourceIpAddress in (Suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)\n| extend User = iif(isempty(UserIdentityUserName), UserIdentityType, UserIdentityUserName)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, User, AWSRegion, SourceIpAddress, UserAgent, MFAUsed\n| extend timestamp = StartTimeUtc, AccountCustomEntity = User, IPCustomEntity = SourceIpAddress\n",
         "queryPeriod": "1d",
-        "name": "Failed AzureAD logons but success logon to AWS Console",
-        "description": "'Identifies a list of IP addresses with a minimum number(defualt of 5) of failed logon attempts to Azure Active Directory.\nUses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
         "metadata": {
           "categories": {
             "domains": [
@@ -37,32 +54,15 @@
             "kind": "Community"
           }
         },
-        "severity": "Medium",
+        "description": "'Identifies a list of IP addresses with a minimum number(defualt of 5) of failed logon attempts to Azure Active Directory.\nUses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'\n",
         "tactics": [
           "InitialAccess",
           "CredentialAccess"
         ],
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
-              }
-            ]
-          }
-        ],
-        "triggerThreshold": 0
+        "name": "Failed AzureAD logons but success logon to AWS Console",
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d"
       }
     }
   ]
