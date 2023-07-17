@@ -14,7 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1h",
+        "severity": "Medium",
+        "name": "GitLab - Brute-force Attempts",
+        "query": "let LearningPeriod = 7d; \nlet EndLearningTime = now();\nlet BinTime = 1h; \nlet RunTime = 1h; \nlet MinThreshold = 3.0; \nlet GitLabFailedLogins = (GitLabApp\n| where FailedLogin == 1\n| parse kind=regex Message with \"Failed Login: username=\" User \"ip=\" IpAddress \n| project TimeGenerated, EventTime, Computer, User, HostName, HostIP, IpAddress);\nGitLabFailedLogins \n| where EventTime between (ago(LearningPeriod) .. EndLearningTime) \n| summarize FailedLoginsCountInBinTime = count() by User, bin(EventTime, BinTime) \n| summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User \n| extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning, MinThreshold) \n| join kind=innerunique ( GitLabFailedLogins \n| summarize FailedLoginsCountInRunTime = count() by User, IpAddress, EventTime = bin(EventTime, BinTime) ) on User \n| where FailedLoginsCountInRunTime >= LearningThreshold\n| project User, IpAddress, EventTime, FailedLoginsCountInRunTime, LearningThreshold\n",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "queryPeriod": "1d",
+        "status": "Available",
+        "description": "'This query relies on GitLab Application Logs to get failed logins to highlight brute-force attempts from different IP addresses in a short space of time.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -34,18 +45,7 @@
             ],
             "entityType": "Account"
           }
-        ],
-        "query": "let LearningPeriod = 7d; \nlet EndLearningTime = now();\nlet BinTime = 1h; \nlet RunTime = 1h; \nlet MinThreshold = 3.0; \nlet GitLabFailedLogins = (GitLabApp\n| where FailedLogin == 1\n| parse kind=regex Message with \"Failed Login: username=\" User \"ip=\" IpAddress \n| project TimeGenerated, EventTime, Computer, User, HostName, HostIP, IpAddress);\nGitLabFailedLogins \n| where EventTime between (ago(LearningPeriod) .. EndLearningTime) \n| summarize FailedLoginsCountInBinTime = count() by User, bin(EventTime, BinTime) \n| summarize AvgOfFailedLoginsInLearning = avg(FailedLoginsCountInBinTime), StdOfFailedLoginsInLearning = stdev(FailedLoginsCountInBinTime) by User \n| extend LearningThreshold = max_of(AvgOfFailedLoginsInLearning, MinThreshold) \n| join kind=innerunique ( GitLabFailedLogins \n| summarize FailedLoginsCountInRunTime = count() by User, IpAddress, EventTime = bin(EventTime, BinTime) ) on User \n| where FailedLoginsCountInRunTime >= LearningThreshold\n| project User, IpAddress, EventTime, FailedLoginsCountInRunTime, LearningThreshold\n",
-        "queryPeriod": "1d",
-        "severity": "Medium",
-        "status": "Available",
-        "name": "GitLab - Brute-force Attempts",
-        "queryFrequency": "1h",
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "description": "'This query relies on GitLab Application Logs to get failed logins to highlight brute-force attempts from different IP addresses in a short space of time.'\n",
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]
