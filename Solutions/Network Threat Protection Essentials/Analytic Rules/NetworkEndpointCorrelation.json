@@ -14,13 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "Network endpoint to host executable correlation",
+        "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "TargetUserName"
+                "columnName": "TargetUserName",
+                "identifier": "Name"
               }
             ]
           },
@@ -28,12 +30,12 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "DnsDomain"
+                "columnName": "DnsDomain",
+                "identifier": "DnsDomain"
               }
             ]
           },
@@ -41,8 +43,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "DestinationIP"
+                "columnName": "DestinationIP",
+                "identifier": "Address"
               }
             ]
           },
@@ -50,24 +52,22 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "RequestURL"
+                "columnName": "RequestURL",
+                "identifier": "Url"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "query": "let endpointData = \n(union isfuzzy=true\n(SecurityEvent\n  | where EventID == 4688\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  ),\n  (WindowsEvent\n  | where EventID == 4688\n  | extend  NewProcessName = tostring(EventData.NewProcessName)\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  | extend TargetUserName = tostring(EventData.TargetUserName)\n  ));\n// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints\nCommonSecurityLog\n| where DeviceVendor =~ \"Trend Micro\"\n| where Activity =~ \"Deny List updated\" \n| where RequestURL endswith \".exe\"\n| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP\n| extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))\n| join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName \n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "status": "Available",
+        "severity": "Medium",
         "queryFrequency": "1d",
-        "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n",
-        "name": "Network endpoint to host executable correlation",
-        "queryPeriod": "1d",
         "tactics": [
           "Execution"
         ],
         "triggerOperator": "gt",
-        "status": "Available",
-        "severity": "Medium"
+        "triggerThreshold": 0,
+        "query": "let endpointData = \n(union isfuzzy=true\n(SecurityEvent\n  | where EventID == 4688\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  ),\n  (WindowsEvent\n  | where EventID == 4688\n  | extend  NewProcessName = tostring(EventData.NewProcessName)\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  | extend TargetUserName = tostring(EventData.TargetUserName)\n  ));\n// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints\nCommonSecurityLog\n| where DeviceVendor =~ \"Trend Micro\"\n| where Activity =~ \"Deny List updated\" \n| where RequestURL endswith \".exe\"\n| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP\n| extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))\n| join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName \n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "queryPeriod": "1d"
       }
     }
   ]
