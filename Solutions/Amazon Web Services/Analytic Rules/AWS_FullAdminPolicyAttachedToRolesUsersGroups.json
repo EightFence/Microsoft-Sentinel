@@ -15,37 +15,37 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "severity": "Medium",
-        "triggerOperator": "gt",
+        "status": "Available",
+        "query": "let EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\nlet createPolicy = dynamic([\"CreatePolicy\", \"CreatePolicyVersion\"]);\nlet timeframe = 1d;\nlet lookback = 14d;\n// Creating Master table with all the events to use with materialize for better performance\nlet EventInfo = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName in (EventNameList) or EventName in (createPolicy);\n//Checking for Policy creation event with Full Admin Privileges since lookback period.\nlet FullAdminPolicyEvents =  materialize(  EventInfo\n| where TimeGenerated >= ago(lookback)\n| where EventName in (createPolicy)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource)\n| mvexpand Action\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and Action == \"*\" and Resource == \"*\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| project-rename StartTime = TimeGenerated  );\nlet PolicyAttach = materialize(  EventInfo\n| where TimeGenerated >= ago(timeframe)\n| where EventName in (EventNameList)\n| extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),\"/\")[1])\n| summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName\n| extend AttachEvent = pack(\"StartTime\", StartTime, \"EndTime\", EndTime, \"EventName\", EventName, \"UserIdentityType\",   UserIdentityType, \"UserIdentityArn\", UserIdentityArn, \"SourceIpAddress\", SourceIpAddress, \"UserIdentityUserName\", UserIdentityUserName)\n| project EventSource, PolicyName, AttachEvent, AttachEventCount\n);\n// Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.\n// These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.\nFullAdminPolicyEvents\n| join kind=leftouter\n(\n    PolicyAttach\n)\non PolicyName\n| project-away PolicyName1\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "queryFrequency": "1d",
+        "description": "'Identity and Access Management (IAM) securely manages access to AWS services and resources. \nIdentifies when a policy is created with Full Administrators Access (Allow-Action:*,Resource:*). \nThis policy can be attached to role,user or group and may be used by an adversary to escalate a normal user privileges to an adminsitrative level.\nAWS IAM Policy Grammar: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_grammar.html\nand AWS IAM API at https://docs.aws.amazon.com/IAM/latest/APIReference/API_Operations.html'\n",
+        "name": "Full Admin policy created and then attached to Roles, Users or Groups",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "AccountCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPCustomEntity"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "queryFrequency": "1d",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "name": "Full Admin policy created and then attached to Roles, Users or Groups",
         "queryPeriod": "14d",
-        "query": "let EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\nlet createPolicy = dynamic([\"CreatePolicy\", \"CreatePolicyVersion\"]);\nlet timeframe = 1d;\nlet lookback = 14d;\n// Creating Master table with all the events to use with materialize for better performance\nlet EventInfo = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName in (EventNameList) or EventName in (createPolicy);\n//Checking for Policy creation event with Full Admin Privileges since lookback period.\nlet FullAdminPolicyEvents =  materialize(  EventInfo\n| where TimeGenerated >= ago(lookback)\n| where EventName in (createPolicy)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource)\n| mvexpand Action\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and Action == \"*\" and Resource == \"*\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| project-rename StartTime = TimeGenerated  );\nlet PolicyAttach = materialize(  EventInfo\n| where TimeGenerated >= ago(timeframe)\n| where EventName in (EventNameList)\n| extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),\"/\")[1])\n| summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName\n| extend AttachEvent = pack(\"StartTime\", StartTime, \"EndTime\", EndTime, \"EventName\", EventName, \"UserIdentityType\",   UserIdentityType, \"UserIdentityArn\", UserIdentityArn, \"SourceIpAddress\", SourceIpAddress, \"UserIdentityUserName\", UserIdentityUserName)\n| project EventSource, PolicyName, AttachEvent, AttachEventCount\n);\n// Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.\n// These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.\nFullAdminPolicyEvents\n| join kind=leftouter\n(\n    PolicyAttach\n)\non PolicyName\n| project-away PolicyName1\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "description": "'Identity and Access Management (IAM) securely manages access to AWS services and resources. \nIdentifies when a policy is created with Full Administrators Access (Allow-Action:*,Resource:*). \nThis policy can be attached to role,user or group and may be used by an adversary to escalate a normal user privileges to an adminsitrative level.\nAWS IAM Policy Grammar: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_grammar.html\nand AWS IAM API at https://docs.aws.amazon.com/IAM/latest/APIReference/API_Operations.html'\n"
+        "triggerOperator": "gt"
       }
     }
   ]
