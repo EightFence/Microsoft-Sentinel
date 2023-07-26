@@ -14,18 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "' This query will detect if user properties of Global Administrator are updated by an existing user. Usually only user administrator or other global administrator can update such properties.\nInvestigate if such user change is an attempt to elevate an existing low privileged identity or rogue administrator activity'\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "query": "let query_frequency = 1h;\nlet query_period = 14d;\nIdentityInfo\n| where TimeGenerated > ago(query_period)\n| where set_has_element(AssignedRoles, \"Global Administrator\")\n| distinct AccountUPN, AccountObjectId\n| join kind=inner (\n    AuditLogs\n    | where TimeGenerated > ago(query_frequency)\n    | where OperationName=~ \"Update user\" and Result =~ \"success\"\n    // | where isnotempty(InitiatedBy[\"user\"])\n    | mv-expand TargetResource = TargetResources\n    | where TargetResource[\"type\"] == \"User\"\n    | extend AccountObjectId = tostring(TargetResource[\"id\"])\n    | where tostring(TargetResource[\"modifiedProperties\"]) != \"[]\"\n    | mv-apply modifiedProperty = TargetResource[\"modifiedProperties\"] on (\n        summarize modifiedProperties = make_bag(\n            bag_pack(tostring(modifiedProperty[\"displayName\"]),\n                bag_pack(\"oldValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"oldValue\"])),\n                    \"newValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"newValue\"])))))\n    )\n    | where not(tostring(modifiedProperties[\"Included Updated Properties\"][\"newValue\"]) in (\"LastDirSyncTime\", \"\"))\n    | where not(tostring(modifiedProperties[\"Included Updated Properties\"][\"newValue\"]) == \"StrongAuthenticationPhoneAppDetail\" and isnotempty(modifiedProperties[\"StrongAuthenticationPhoneAppDetail\"]) and tostring(array_sort_asc(extract_all(@'\\\"Id\\\"\\:\\\"([^\\\"]+)\\\"', tostring(modifiedProperties[\"StrongAuthenticationPhoneAppDetail\"][\"newValue\"])))) == tostring(array_sort_asc(extract_all(@'\\\"Id\\\"\\:\\\"([^\\\"]+)\\\"', tostring(modifiedProperties[\"StrongAuthenticationPhoneAppDetail\"][\"oldValue\"])))))\n    | extend\n        Initiator = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"displayName\"]), tostring(InitiatedBy[\"user\"][\"userPrincipalName\"])),\n        InitiatorId = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"]), tostring(InitiatedBy[\"user\"][\"id\"])),\n        IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])][\"ipAddress\"])\n) on AccountObjectId\n| project TimeGenerated, Category, Identity, Initiator, IPAddress, OperationName, Result, AccountUPN, InitiatedBy, AdditionalDetails, TargetResources, AccountObjectId, InitiatorId, CorrelationId\n| extend\n    InitiatorName = tostring(split(Initiator, \"@\")[0]),\n    InitiatorUPNSuffix = tostring(split(Initiator, \"@\")[1]),\n    AccountName = tostring(split(AccountUPN, \"@\")[0]),\n    AccountUPNSuffix = tostring(split(AccountUPN, \"@\")[1])\n",
-        "queryPeriod": "14d",
         "tactics": [
           "PrivilegeEscalation"
         ],
+        "triggerOperator": "gt",
         "queryFrequency": "1h",
         "metadata": {
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -35,22 +34,22 @@
           },
           "author": {
             "name": "Ashwin Patil"
-          },
-          "support": {
-            "tier": "Community"
           }
         },
+        "queryPeriod": "14d",
         "name": "Suspicious modification of Global Administrator user properties",
+        "severity": "Medium",
+        "description": "' This query will detect if user properties of Global Administrator are updated by an existing user. Usually only user administrator or other global administrator can update such properties.\nInvestigate if such user change is an attempt to elevate an existing low privileged identity or rogue administrator activity'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "InitiatorName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "InitiatorName"
               },
               {
-                "columnName": "InitiatorUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatorUPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -58,12 +57,12 @@
           {
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -71,14 +70,15 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "severity": "Medium"
+        "query": "let query_frequency = 1h;\nlet query_period = 14d;\nIdentityInfo\n| where TimeGenerated > ago(query_period)\n| where set_has_element(AssignedRoles, \"Global Administrator\")\n| distinct AccountUPN, AccountObjectId\n| join kind=inner (\n    AuditLogs\n    | where TimeGenerated > ago(query_frequency)\n    | where OperationName=~ \"Update user\" and Result =~ \"success\"\n    // | where isnotempty(InitiatedBy[\"user\"])\n    | mv-expand TargetResource = TargetResources\n    | where TargetResource[\"type\"] == \"User\"\n    | extend AccountObjectId = tostring(TargetResource[\"id\"])\n    | where tostring(TargetResource[\"modifiedProperties\"]) != \"[]\"\n    | mv-apply modifiedProperty = TargetResource[\"modifiedProperties\"] on (\n        summarize modifiedProperties = make_bag(\n            bag_pack(tostring(modifiedProperty[\"displayName\"]),\n                bag_pack(\"oldValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"oldValue\"])),\n                    \"newValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"newValue\"])))))\n    )\n    | where not(tostring(modifiedProperties[\"Included Updated Properties\"][\"newValue\"]) in (\"LastDirSyncTime\", \"\"))\n    | where not(tostring(modifiedProperties[\"Included Updated Properties\"][\"newValue\"]) == \"StrongAuthenticationPhoneAppDetail\" and isnotempty(modifiedProperties[\"StrongAuthenticationPhoneAppDetail\"]) and tostring(array_sort_asc(extract_all(@'\\\"Id\\\"\\:\\\"([^\\\"]+)\\\"', tostring(modifiedProperties[\"StrongAuthenticationPhoneAppDetail\"][\"newValue\"])))) == tostring(array_sort_asc(extract_all(@'\\\"Id\\\"\\:\\\"([^\\\"]+)\\\"', tostring(modifiedProperties[\"StrongAuthenticationPhoneAppDetail\"][\"oldValue\"])))))\n    | extend\n        Initiator = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"displayName\"]), tostring(InitiatedBy[\"user\"][\"userPrincipalName\"])),\n        InitiatorId = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"]), tostring(InitiatedBy[\"user\"][\"id\"])),\n        IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])][\"ipAddress\"])\n) on AccountObjectId\n| project TimeGenerated, Category, Identity, Initiator, IPAddress, OperationName, Result, AccountUPN, InitiatedBy, AdditionalDetails, TargetResources, AccountObjectId, InitiatorId, CorrelationId\n| extend\n    InitiatorName = tostring(split(Initiator, \"@\")[0]),\n    InitiatorUPNSuffix = tostring(split(Initiator, \"@\")[1]),\n    AccountName = tostring(split(AccountUPN, \"@\")[0]),\n    AccountUPNSuffix = tostring(split(AccountUPN, \"@\")[1])\n",
+        "triggerThreshold": 0
       }
     }
   ]
