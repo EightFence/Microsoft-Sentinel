@@ -14,17 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n",
+        "queryFrequency": "1h",
         "tactics": [
           "Impact"
         ],
+        "queryPeriod": "14d",
         "name": "TI map File Hash to CommonSecurityLog Event",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | where isnotempty(FileHash)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
-        "severity": "Medium",
         "triggerOperator": "gt",
         "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | where isnotempty(FileHash)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -34,10 +35,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
@@ -47,28 +48,28 @@
                 "identifier": "DnsDomain",
                 "columnName": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           },
           {
+            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "identifier": "Value",
@@ -78,12 +79,11 @@
                 "identifier": "Algorithm",
                 "columnName": "FileHashType"
               }
-            ],
-            "entityType": "FileHash"
+            ]
           }
         ],
-        "queryPeriod": "14d",
-        "queryFrequency": "1h"
+        "severity": "Medium",
+        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n"
       }
     }
   ]
