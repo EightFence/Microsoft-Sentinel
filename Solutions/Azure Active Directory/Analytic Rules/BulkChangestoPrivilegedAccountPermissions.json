@@ -14,18 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(Target) by bin(TimeGenerated, 1h)\n| where dcount_Target > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]),\n         InitiatedByUserName = tostring(split(InitiatedByUser,'@',0)[0]), InitiatedByUserUPNSuffix = tostring(split(InitiatedByUser,'@',1)[0])\n",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "queryPeriod": "2h",
         "triggerThreshold": 0,
+        "description": "'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
         "customDetails": {
           "TargetUser": "Target",
           "InitiatedByUser": "InitiatedByUser"
         },
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "description": "'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
+        "severity": "High",
         "name": "Bulk Changes to Privileged Account Permissions",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "TargetName",
@@ -35,10 +39,10 @@
                 "columnName": "TargetUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatedByUserName",
@@ -48,16 +52,12 @@
                 "columnName": "InitiatedByUserUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(Target) by bin(TimeGenerated, 1h)\n| where dcount_Target > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]),\n         InitiatedByUserName = tostring(split(InitiatedByUser,'@',0)[0]), InitiatedByUserUPNSuffix = tostring(split(InitiatedByUser,'@',1)[0])\n",
-        "queryFrequency": "2h",
-        "triggerOperator": "gt",
-        "queryPeriod": "2h",
         "status": "Available",
-        "severity": "High"
+        "triggerOperator": "gt",
+        "queryFrequency": "2h"
       }
     }
   ]
