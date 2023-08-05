@@ -14,38 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "S3 bucket access point publicly exposed",
-        "triggerOperator": "gt",
-        "tactics": [
-          "Exfiltration"
-        ],
+        "query": "AWSCloudTrail\n| where EventName == \"PutAccessPointPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).PutAccessPointPolicyRequest.Policy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "queryFrequency": "1h",
+        "severity": "Medium",
         "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "name": "S3 bucket access point publicly exposed",
         "queryPeriod": "1h",
         "description": "'Detected S3 bucket publicly exposed via access point, which could lead to sensitive information leakage to the public. Verify the S3 object configurations.'\n",
         "status": "Available",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "query": "AWSCloudTrail\n| where EventName == \"PutAccessPointPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).PutAccessPointPolicyRequest.Policy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n"
+        "triggerOperator": "gt",
+        "tactics": [
+          "Exfiltration"
+        ]
       }
     }
   ]
