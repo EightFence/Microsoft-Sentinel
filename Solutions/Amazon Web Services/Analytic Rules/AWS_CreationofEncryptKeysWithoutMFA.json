@@ -14,16 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let check_actions = AWSCloudTrail\n| where (EventName == \"CreateKey\" or EventName == \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\\\\"','\"')).['Statement'])\n| mv-expand state\n| extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),\n         Principal=tostring(parse_json(state.['Principal']))\n| where (Action == \"kms:Encrypt\" or Action == \"kms:*\") and (Effect == 'Allow') and (Principal has \"*\")\n| distinct AwsEventId;\nAWSCloudTrail\n| where (EventName == \"CreateKey\" or EventName == \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| join kind=inner (check_actions) on AwsEventId\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n| project-away AwsEventId1\n",
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -31,21 +27,25 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "name": "Creating keys with encrypt policy without MFA",
-        "queryPeriod": "1d",
-        "description": "'Detection of KMS keys where action kms:Encrypt is accessible for everyone (also outside of your organization). This is an idicator that your account is compromised and the attacker uses the encryption key to compromise another company.'\n",
-        "status": "Available",
-        "triggerOperator": "gt",
+        "severity": "Medium",
         "tactics": [
           "Impact"
-        ]
+        ],
+        "queryPeriod": "1d",
+        "name": "Creating keys with encrypt policy without MFA",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "description": "'Detection of KMS keys where action kms:Encrypt is accessible for everyone (also outside of your organization). This is an idicator that your account is compromised and the attacker uses the encryption key to compromise another company.'\n",
+        "query": "let check_actions = AWSCloudTrail\n| where (EventName == \"CreateKey\" or EventName == \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\\\\"','\"')).['Statement'])\n| mv-expand state\n| extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),\n         Principal=tostring(parse_json(state.['Principal']))\n| where (Action == \"kms:Encrypt\" or Action == \"kms:*\") and (Effect == 'Allow') and (Principal has \"*\")\n| distinct AwsEventId;\nAWSCloudTrail\n| where (EventName == \"CreateKey\" or EventName == \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| join kind=inner (check_actions) on AwsEventId\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n| project-away AwsEventId1\n",
+        "status": "Available"
       }
     }
   ]
