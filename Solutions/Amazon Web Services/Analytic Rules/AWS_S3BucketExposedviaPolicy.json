@@ -14,7 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -35,17 +34,18 @@
             "entityType": "IP"
           }
         ],
+        "triggerOperator": "gt",
+        "status": "Available",
+        "queryFrequency": "1h",
+        "name": "S3 bucket exposed via policy",
         "query": "AWSCloudTrail\n| where EventName == \"PutBucketPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).bucketPolicy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "queryPeriod": "1h",
+        "description": "'Detected S3 bucket publicly exposed via policy, this could lead for sensitive information leakage to the public. Verify the S3 object configurations.'\n",
         "tactics": [
           "Exfiltration"
         ],
-        "queryPeriod": "1h",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "description": "'Detected S3 bucket publicly exposed via policy, this could lead for sensitive information leakage to the public. Verify the S3 object configurations.'\n",
-        "status": "Available",
-        "name": "S3 bucket exposed via policy",
-        "severity": "Medium"
+        "severity": "Medium",
+        "triggerThreshold": 0
       }
     }
   ]
