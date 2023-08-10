@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c1c66f0b-5531-4a3e-a619-9d2f770ef730')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c1c66f0b-5531-4a3e-a619-9d2f770ef730')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Persistence"
+        ],
+        "query": "AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName =~ \"Add member to role completed (PIM activation)\"\n  | where Result =~ \"success\"\n  | extend ElevatedUser = tostring(TargetResources[2].userPrincipalName)\n  | extend displayName = tostring(TargetResources[0].displayName)\n  | extend displayName2 = tostring(TargetResources[3].displayName)\n  | extend ElevatedRole = iif(displayName =~ \"Member\", displayName2, displayName)\n  | join kind = rightanti (AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add member to role completed (PIM activation)\"\n  | where Result =~ \"success\"\n  | extend ElevatedUser = tostring(TargetResources[2].userPrincipalName)\n  | extend displayName = tostring(TargetResources[0].displayName)\n  | extend displayName2 = tostring(TargetResources[3].displayName)\n  | extend ElevatedRole = iif(displayName =~ \"Member\", displayName2, displayName)\n  | extend ElevatedBy = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) on ElevatedRole, ElevatedUser\n  | project-reorder ElevatedUser, ElevatedRole, ResultReason,ElevatedBy\n",
+        "queryPeriod": "14d",
+        "name": "Account Elevated to New Role",
+        "severity": "Medium",
+        "description": "'Detects an account that is elevated to a new role where that account has not had that role in the last 14 days.\n  Role elevations are a key mechanism for gaining permissions, monitoring which users have which roles, and for anomalies in those roles is useful for finding suspicious activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ElevatedUser",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ElevatedBy",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ]
+      }
+    }
+  ]
+}
