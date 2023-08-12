@@ -14,28 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect\nand could indicate credential compromise for the user account.'\n",
+        "queryFrequency": "1d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountCustomEntity",
                 "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IPCustomEntity",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
+        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "queryPeriod": "1d",
         "severity": "Medium",
+        "name": "Cisco - firewall block but success logon to Azure AD",
+        "triggerThreshold": 0,
         "metadata": {
+          "author": {
+            "name": "timbMSFT"
+          },
           "support": {
             "tier": "Community"
           },
@@ -46,21 +55,12 @@
             "domains": [
               "Security - Network"
             ]
-          },
-          "author": {
-            "name": "timbMSFT"
           }
         },
         "triggerOperator": "gt",
-        "name": "Cisco - firewall block but success logon to Azure AD",
-        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
         "tactics": [
           "InitialAccess"
-        ],
-        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect\nand could indicate credential compromise for the user account.'\n"
+        ]
       }
     }
   ]

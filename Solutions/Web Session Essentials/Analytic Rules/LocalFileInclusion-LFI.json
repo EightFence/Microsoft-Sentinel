@@ -14,11 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "5m",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "query": "let lookback = 5m;\nlet LFI_Indicators = materialize(externaldata(Indicators: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/LocalFileInclusionIndicators.csv\"] \n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomLocalFileInclusionIndicators = (_ASIM_GetWatchlistRaw(\"Web_LocalFileInclusionIndicators\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Indicators = tostring(WatchlistItem[\"Indicators\"])\n    | project Indicators\n    | where isnotempty(Indicators));\nlet CombinedLFIList = union LFI_Indicators, CustomLocalFileInclusionIndicators;\nlet knownLFIIndicators=toscalar(CombinedLFIList\n    | where isnotempty(Indicators)\n    | summarize make_set(Indicators, 1000));\n_Im_WebSession(starttime=ago(lookback), url_has_any=knownLFIIndicators, eventresult='Success')\n| where isnotempty(Url)\n| project Url, SrcIpAddr, SrcUsername, SrcHostname, TimeGenerated\n| extend Decoded_url = url_decode(Url)\n| where Decoded_url has_any (knownLFIIndicators)\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n| order by EventCount desc\n",
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "IP",
@@ -61,27 +60,28 @@
             ]
           }
         ],
-        "name": "Detect Local File Inclusion(LFI) in web requests (ASIM Web Session)",
-        "queryPeriod": "5m",
-        "triggerThreshold": 0,
-        "description": "'LFI vulnerabilities allow an attacker to read (and sometimes execute) files on the victim machine. This can be very dangerous because if the web server is misconfigured and running with high privileges, the attacker may gain access to sensitive information'\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Potential Local File Inlcusion(LFI) performed by user '{{SrcUsername}}' from IP '{{SrcIpAddr}}'",
-          "alertDescriptionFormat": "User requested for URL '{{Url}}' which contains LFI related keywords or indicators. It suggests an attempt to traverse directories and access files outside the intended directory structure"
-        },
+        "query": "let lookback = 5m;\nlet LFI_Indicators = materialize(externaldata(Indicators: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/LocalFileInclusionIndicators.csv\"] \n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomLocalFileInclusionIndicators = (_ASIM_GetWatchlistRaw(\"Web_LocalFileInclusionIndicators\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Indicators = tostring(WatchlistItem[\"Indicators\"])\n    | project Indicators\n    | where isnotempty(Indicators));\nlet CombinedLFIList = union LFI_Indicators, CustomLocalFileInclusionIndicators;\nlet knownLFIIndicators=toscalar(CombinedLFIList\n    | where isnotempty(Indicators)\n    | summarize make_set(Indicators, 1000));\n_Im_WebSession(starttime=ago(lookback), url_has_any=knownLFIIndicators, eventresult='Success')\n| where isnotempty(Url)\n| project Url, SrcIpAddr, SrcUsername, SrcHostname, TimeGenerated\n| extend Decoded_url = url_decode(Url)\n| where Decoded_url has_any (knownLFIIndicators)\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n| order by EventCount desc\n",
+        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess",
           "Execution"
         ],
+        "description": "'LFI vulnerabilities allow an attacker to read (and sometimes execute) files on the victim machine. This can be very dangerous because if the web server is misconfigured and running with high privileges, the attacker may gain access to sensitive information'\n",
+        "severity": "High",
+        "triggerThreshold": 0,
         "queryFrequency": "5m",
         "customDetails": {
-          "EventEndTime": "EventEndTime",
           "Decoded_url": "Decoded_url",
+          "EventCount": "EventCount",
           "EventStartTime": "EventStartTime",
-          "EventCount": "EventCount"
+          "EventEndTime": "EventEndTime"
         },
-        "status": "Available",
-        "severity": "High"
+        "name": "Detect Local File Inclusion(LFI) in web requests (ASIM Web Session)",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Potential Local File Inlcusion(LFI) performed by user '{{SrcUsername}}' from IP '{{SrcIpAddr}}'",
+          "alertDescriptionFormat": "User requested for URL '{{Url}}' which contains LFI related keywords or indicators. It suggests an attempt to traverse directories and access files outside the intended directory structure"
+        },
+        "status": "Available"
       }
     }
   ]
