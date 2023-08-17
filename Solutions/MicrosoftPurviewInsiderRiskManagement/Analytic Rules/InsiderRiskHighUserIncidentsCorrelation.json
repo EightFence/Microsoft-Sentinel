@@ -14,43 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "7d",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "3d",
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "enabled": true,
-            "reopenClosedIncident": true
-          }
-        },
-        "queryFrequency": "7d",
-        "severity": "High",
+        "triggerOperator": "gt",
+        "name": "Insider Risk_High User Security Incidents Correlation",
+        "query": "let PreviousIncidents =\nSecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize PreviousIncidents = make_set(IncidentNumber) by UPN;\nlet LastTimeObserved =\nSecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize arg_max(TimeGenerated, IncidentName) by UPN;\n  SecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize count() by UPN, IncidentName, IncidentNumber, IncidentUrl, Severity, ProductName\n| extend SecurityIncidents = count_\n| where SecurityIncidents > 5 //Adjust & Tune within Organzational Requirements\n| join (LastTimeObserved) on UPN\n| project-rename LastObserved = TimeGenerated, LastIncident = IncidentNumber\n| project-away IncidentName, count_, UPN1, IncidentName1, Severity, IncidentUrl\n| join kind=inner (PreviousIncidents) on UPN\n// | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UPN == $right.SearchKey\n| project UPN, SecurityIncidents, LastIncident, ProductName, LastObserved, PreviousIncidents\n| sort by SecurityIncidents desc\n| extend AccountCustomEntity = UPN\n",
         "description": "'This alert joins SecurityAlerts to SecurityIncidents to associate Security Alerts and Incidents with user accounts. This aligns all Microsoft Alerting Products with Microsoft Incident Generating Products (Microsoft Sentinel, M365 Defender) for a count of user security incidents over time. The default threshold is 5 security incidents, and this is customizable per the organization's requirements. Results include UserPrincipalName (UPN), SecurityIncident, LastIncident, ProductName, LastObservedTime, and Previous Incidents. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Investigate incidents with Microsoft Sentinel]( https://docs.microsoft.com/azure/sentinel/investigate-cases).'\n",
-        "tactics": [
-          "Execution"
-        ],
+        "triggerThreshold": 0,
+        "severity": "High",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "queryPeriod": "7d",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "AadUserId"
+                "identifier": "AadUserId",
+                "columnName": "AccountCustomEntity"
               }
             ],
             "entityType": "Account"
           }
         ],
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "query": "let PreviousIncidents =\nSecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize PreviousIncidents = make_set(IncidentNumber) by UPN;\nlet LastTimeObserved =\nSecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize arg_max(TimeGenerated, IncidentName) by UPN;\n  SecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize count() by UPN, IncidentName, IncidentNumber, IncidentUrl, Severity, ProductName\n| extend SecurityIncidents = count_\n| where SecurityIncidents > 5 //Adjust & Tune within Organzational Requirements\n| join (LastTimeObserved) on UPN\n| project-rename LastObserved = TimeGenerated, LastIncident = IncidentNumber\n| project-away IncidentName, count_, UPN1, IncidentName1, Severity, IncidentUrl\n| join kind=inner (PreviousIncidents) on UPN\n// | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UPN == $right.SearchKey\n| project UPN, SecurityIncidents, LastIncident, ProductName, LastObserved, PreviousIncidents\n| sort by SecurityIncidents desc\n| extend AccountCustomEntity = UPN\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "name": "Insider Risk_High User Security Incidents Correlation"
+        "tactics": [
+          "Execution"
+        ],
+        "queryFrequency": "7d",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": true,
+            "lookbackDuration": "3d",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ],
+            "enabled": true
+          }
+        }
       }
     }
   ]
