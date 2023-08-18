@@ -14,14 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "description": "'This content is employed to correlate with Microsoft 365 Defender phishing-related alerts. It focuses on instances where a user successfully connects to a phishing URL from a non-Microsoft network device and subsequently makes successful sign-in attempts from the phishing IP address.'\n",
-        "severity": "Medium",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "query": "let Alert_List= dynamic([\n\"Phishing link click observed in Network Traffic\",\n\"Phish delivered due to an IP allow policy\",\n\"A potentially malicious URL click was detected\",\n\"High Risk Sign-in Observed in Network Traffic\",\n\"A user clicked through to a potentially malicious URL\",\n\"Suspicious network connection to AitM phishing site\",\n\"Messages containing malicious entity not removed after delivery\",\n\"Email messages containing malicious URL removed after delivery\",\n\"Email reported by user as malware or phish\",\n\"Phish delivered due to an ETR override\",\n\"Phish not zapped because ZAP is disabled\"]);\nSecurityAlert\n| where AlertName in~ (Alert_List)\n//Findling Alerts which has the URL\n| where Entities has \"url\"\n//extracting Entities\n| extend Entities = parse_json(Entities)\n| mv-apply Entity = Entities on\n    (\n    where Entity.Type == 'url'\n    | extend EntityUrl = tostring(Entity.Url)\n    )\n| summarize\n    Url=tostring(tolower(take_any(EntityUrl))),\n    AlertTime= min(TimeGenerated),\n    make_set(SystemAlertId, 100)\n    by ProductName, AlertName\n// matching with 3rd party network logs and 3p Alerts\n| join kind= inner (CommonSecurityLog\n    | where DeviceVendor has_any  (\"Palo Alto Networks\", \"Fortinet\", \"Check Point\", \"Zscaler\")\n    | where DeviceProduct startswith \"FortiGate\" or DeviceProduct startswith  \"PAN\" or DeviceProduct startswith  \"VPN\" or DeviceProduct startswith \"FireWall\" or DeviceProduct startswith  \"NSSWeblog\" or DeviceProduct startswith \"URL\"\n    | where DeviceAction != \"Block\"\n    | where isnotempty(RequestURL)\n    | project\n        3plogTime=TimeGenerated,\n        DeviceVendor,\n        DeviceProduct,\n        Activity,\n        DestinationHostName,\n        DestinationIP,\n        RequestURL=tostring(tolower(RequestURL)),\n        MaliciousIP,\n        SourceUserName=tostring(tolower(SourceUserName)),\n        IndicatorThreatType,\n        ThreatSeverity,\n        ThreatConfidence,\n        SourceUserID,\n        SourceHostName)\n    on $left.Url == $right.RequestURL\n// matching successful Login from suspicious IP\n| join kind=inner (SigninLogs\n    //filtering the Successful Login\n    | where ResultType == 0\n    | project\n        IPAddress,\n        SourceSystem,\n        SigniningTime= TimeGenerated,\n        OperationName,\n        ResultType,\n        ResultDescription,\n        AlternateSignInName,\n        AppDisplayName,\n        AuthenticationRequirement,\n        ClientAppUsed,\n        RiskState,\n        RiskLevelDuringSignIn,\n        UserPrincipalName=tostring(tolower(UserPrincipalName)),\n        Name = tostring(split(UserPrincipalName, \"@\")[0]),\n        UPNSuffix =tostring(split(UserPrincipalName, \"@\")[1]))\n    on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName\n| where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))\n",
+        "queryPeriod": "1d",
         "name": "M365D Alerts Correlation to non-Microsoft Network device network activity involved in successful sign-in Activity",
+        "triggerThreshold": 0,
+        "description": "'This content is employed to correlate with Microsoft 365 Defender phishing-related alerts. It focuses on instances where a user successfully connects to a phishing URL from a non-Microsoft network device and subsequently makes successful sign-in attempts from the phishing IP address.'\n",
+        "queryFrequency": "1d",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -31,50 +36,45 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "DestinationIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "DNS",
             "fieldMappings": [
               {
                 "identifier": "DomainName",
                 "columnName": "DestinationHostName"
               }
-            ]
+            ],
+            "entityType": "DNS"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "SourceSystem"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "RequestURL"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
-        ],
-        "queryPeriod": "1d",
-        "query": "let Alert_List= dynamic([\n\"Phishing link click observed in Network Traffic\",\n\"Phish delivered due to an IP allow policy\",\n\"A potentially malicious URL click was detected\",\n\"High Risk Sign-in Observed in Network Traffic\",\n\"A user clicked through to a potentially malicious URL\",\n\"Suspicious network connection to AitM phishing site\",\n\"Messages containing malicious entity not removed after delivery\",\n\"Email messages containing malicious URL removed after delivery\",\n\"Email reported by user as malware or phish\",\n\"Phish delivered due to an ETR override\",\n\"Phish not zapped because ZAP is disabled\"]);\nSecurityAlert\n| where AlertName in~ (Alert_List)\n//Findling Alerts which has the URL\n| where Entities has \"url\"\n//extracting Entities\n| extend Entities = parse_json(Entities)\n| mv-apply Entity = Entities on\n    (\n    where Entity.Type == 'url'\n    | extend EntityUrl = tostring(Entity.Url)\n    )\n| summarize\n    Url=tostring(tolower(take_any(EntityUrl))),\n    AlertTime= min(TimeGenerated),\n    make_set(SystemAlertId, 100)\n    by ProductName, AlertName\n// matching with 3rd party network logs and 3p Alerts\n| join kind= inner (CommonSecurityLog\n    | where DeviceVendor has_any  (\"Palo Alto Networks\", \"Fortinet\", \"Check Point\", \"Zscaler\")\n    | where DeviceProduct startswith \"FortiGate\" or DeviceProduct startswith  \"PAN\" or DeviceProduct startswith  \"VPN\" or DeviceProduct startswith \"FireWall\" or DeviceProduct startswith  \"NSSWeblog\" or DeviceProduct startswith \"URL\"\n    | where DeviceAction != \"Block\"\n    | where isnotempty(RequestURL)\n    | project\n        3plogTime=TimeGenerated,\n        DeviceVendor,\n        DeviceProduct,\n        Activity,\n        DestinationHostName,\n        DestinationIP,\n        RequestURL=tostring(tolower(RequestURL)),\n        MaliciousIP,\n        SourceUserName=tostring(tolower(SourceUserName)),\n        IndicatorThreatType,\n        ThreatSeverity,\n        ThreatConfidence,\n        SourceUserID,\n        SourceHostName)\n    on $left.Url == $right.RequestURL\n// matching successful Login from suspicious IP\n| join kind=inner (SigninLogs\n    //filtering the Successful Login\n    | where ResultType == 0\n    | project\n        IPAddress,\n        SourceSystem,\n        SigniningTime= TimeGenerated,\n        OperationName,\n        ResultType,\n        ResultDescription,\n        AlternateSignInName,\n        AppDisplayName,\n        AuthenticationRequirement,\n        ClientAppUsed,\n        RiskState,\n        RiskLevelDuringSignIn,\n        UserPrincipalName=tostring(tolower(UserPrincipalName)),\n        Name = tostring(split(UserPrincipalName, \"@\")[0]),\n        UPNSuffix =tostring(split(UserPrincipalName, \"@\")[1]))\n    on $left.DestinationIP == $right.IPAddress and $left.SourceUserName == $right.UserPrincipalName\n| where SigniningTime between ((AlertTime - 6h) .. (AlertTime + 6h)) and 3plogTime between ((AlertTime - 6h) .. (AlertTime + 6h))\n",
-        "triggerOperator": "gt",
-        "tactics": [
-          "PrivilegeEscalation"
         ]
       }
     }
