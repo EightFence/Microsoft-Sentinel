@@ -14,23 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "Persistence"
-        ],
-        "queryPeriod": "14d",
-        "name": "Guest Users Invited to Tenant by New Inviters",
-        "triggerThreshold": 0,
         "description": "'Detects when a Guest User is added by a user account that has not been seen adding a guest in the previous 14 days.\n  Monitoring guest accounts and the access they are provided is important to detect potential account abuse.\n  Accounts added should be investigated to ensure the activity was legitimate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
         "queryFrequency": "1d",
+        "query": "let inviting_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | where isnotempty(invitingUser)\n  | summarize by invitingUser);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | where isnotempty(invitingUser) and invitingUser !in (inviting_users)\n  | extend invitedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n  | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "source": {
             "kind": "Community"
           },
           "author": {
             "name": "Pete Bryan"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -39,38 +34,43 @@
             ]
           }
         },
-        "severity": "Medium",
+        "queryPeriod": "14d",
         "triggerOperator": "gt",
+        "tactics": [
+          "Persistence"
+        ],
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "invitingUser"
+                "columnName": "invitingUser",
+                "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "invitedUserPrincipalName"
+                "columnName": "invitedUserPrincipalName",
+                "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ipAddress"
+                "columnName": "ipAddress",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "query": "let inviting_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | where isnotempty(invitingUser)\n  | summarize by invitingUser);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | where isnotempty(invitingUser) and invitingUser !in (inviting_users)\n  | extend invitedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n  | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n"
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "name": "Guest Users Invited to Tenant by New Inviters"
       }
     }
   ]
