@@ -14,27 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "ScoreDecrease": "score_decreases"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Vectra AI Detect - Account {{saccount}} reaches {{level}} severity",
+          "alertDynamicProperties": [
+            {
+              "value": "vectra_URL",
+              "alertProperty": "AlertLink"
+            },
+            {
+              "value": "DeviceProduct",
+              "alertProperty": "ProductName"
+            },
+            {
+              "value": "DeviceVendor",
+              "alertProperty": "ProviderName"
+            },
+            {
+              "value": "certainty_score",
+              "alertProperty": "ConfidenceScore"
+            }
+          ],
+          "alertSeverityColumnName": "Severity",
+          "alertDescriptionFormat": "The account {{saccount}} has a threat score of {{threat_score}} and a\ncertainty of {{certainty_score}}\n"
         },
-        "severity": "Informational",
-        "queryPeriod": "5m",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "7d",
-            "enabled": true,
-            "reopenClosedIncident": true,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created.\n//Level of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\nlet configured_level = dynamic([\"High\", \"Critical\"]);\nlet upn_has_prefix = \":\";\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"asc\"\n| extend saccount = extract(\"saccount=(.+?);\", 1, AdditionalExtensions)\n| extend type = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,\":\")[0]) ,\"network\" ) \n| extend upn = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,\":\")[1]) , saccount )\n| extend name = tostring(split(upn,\"@\")[0])\n| extend upn_suffix = tostring(split(upn,\"@\")[1])\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                      threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                      threat_score >= 50 and certainty_score <= 50, \"High\", \n                      threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                      \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(threat_score, *) by saccount\n| sort by TimeGenerated\n",
-        "triggerOperator": "gt",
-        "name": "Vectra AI Detect - Suspected Compromised Account",
-        "triggerThreshold": 0,
+        "status": "Available",
         "tactics": [
           "CredentialAccess",
           "Discovery",
@@ -44,10 +47,26 @@
           "Exfiltration",
           "Impact"
         ],
+        "customDetails": {
+          "ScoreDecrease": "score_decreases"
+        },
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": true,
+            "enabled": true,
+            "lookbackDuration": "7d",
+            "matchingMethod": "AllEntities"
+          }
+        },
+        "triggerThreshold": 0,
         "queryFrequency": "5m",
+        "severity": "Informational",
+        "name": "Vectra AI Detect - Suspected Compromised Account",
+        "queryPeriod": "5m",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "name",
@@ -57,34 +76,15 @@
                 "columnName": "upn_suffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "alertProperty": "AlertLink",
-              "value": "vectra_URL"
-            },
-            {
-              "alertProperty": "ProductName",
-              "value": "DeviceProduct"
-            },
-            {
-              "alertProperty": "ProviderName",
-              "value": "DeviceVendor"
-            },
-            {
-              "alertProperty": "ConfidenceScore",
-              "value": "certainty_score"
-            }
-          ],
-          "alertSeverityColumnName": "Severity",
-          "alertDescriptionFormat": "The account {{saccount}} has a threat score of {{threat_score}} and a\ncertainty of {{certainty_score}}\n",
-          "alertDisplayNameFormat": "Vectra AI Detect - Account {{saccount}} reaches {{level}} severity"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
-        "description": "'Create an incident when an Account is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n"
+        "description": "'Create an incident when an Account is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n",
+        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created.\n//Level of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\nlet configured_level = dynamic([\"High\", \"Critical\"]);\nlet upn_has_prefix = \":\";\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"asc\"\n| extend saccount = extract(\"saccount=(.+?);\", 1, AdditionalExtensions)\n| extend type = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,\":\")[0]) ,\"network\" ) \n| extend upn = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,\":\")[1]) , saccount )\n| extend name = tostring(split(upn,\"@\")[0])\n| extend upn_suffix = tostring(split(upn,\"@\")[1])\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                      threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                      threat_score >= 50 and certainty_score <= 50, \"High\", \n                      threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                      \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(threat_score, *) by saccount\n| sort by TimeGenerated\n"
       }
     }
   ]
