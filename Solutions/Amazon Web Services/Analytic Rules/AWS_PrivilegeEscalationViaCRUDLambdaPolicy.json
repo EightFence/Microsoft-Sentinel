@@ -14,22 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "status": "Available",
         "triggerOperator": "gt",
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD Lambda policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
-        "queryPeriod": "1d",
+        "queryFrequency": "1d",
         "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"lambda:Create\" and Action contains \"lambda:Get\" and Action contains \"lambda:Update\" and Action contains \"kms:Delete\") and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "severity": "Medium",
+        "name": "Privilege escalation via CRUD Lambda policy",
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy by CRUD Lambda policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -37,15 +33,19 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "name": "Privilege escalation via CRUD Lambda policy"
+        "status": "Available",
+        "severity": "Medium",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "queryPeriod": "1d"
       }
     }
   ]
