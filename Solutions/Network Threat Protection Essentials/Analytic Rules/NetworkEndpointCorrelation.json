@@ -15,59 +15,59 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'Correlates blocked URLs hosting [malicious] executables with host endpoint data\nto identify potential instances of executables of the same name having been recently run.'\n",
-        "severity": "Medium",
+        "query": "let endpointData = \n(union isfuzzy=true\n(SecurityEvent\n  | where EventID == 4688\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  ),\n  (WindowsEvent\n  | where EventID == 4688\n  | extend  NewProcessName = tostring(EventData.NewProcessName)\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  | extend TargetUserName = tostring(EventData.TargetUserName)\n  ));\n// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints\nCommonSecurityLog\n| where DeviceVendor =~ \"Trend Micro\"\n| where Activity =~ \"Deny List updated\" \n| where RequestURL endswith \".exe\"\n| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP\n| extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))\n| join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName \n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
         "name": "Network endpoint to host executable correlation",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "TargetUserName",
+                "identifier": "Name"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "DnsDomain",
+                "identifier": "DnsDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "DestinationIP",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "RequestURL",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "status": "Available",
+        "severity": "Medium",
         "tactics": [
           "Execution"
         ],
-        "triggerThreshold": 0,
-        "status": "Available",
-        "query": "let endpointData = \n(union isfuzzy=true\n(SecurityEvent\n  | where EventID == 4688\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  ),\n  (WindowsEvent\n  | where EventID == 4688\n  | extend  NewProcessName = tostring(EventData.NewProcessName)\n  | extend shortFileName = tolower(tostring(split(NewProcessName, '\\\\')[-1]))\n  | extend TargetUserName = tostring(EventData.TargetUserName)\n  ));\n// Correlate suspect executables seen in TrendMicro rule updates with similar activity on endpoints\nCommonSecurityLog\n| where DeviceVendor =~ \"Trend Micro\"\n| where Activity =~ \"Deny List updated\" \n| where RequestURL endswith \".exe\"\n| project TimeGenerated, Activity , RequestURL , SourceIP, DestinationIP\n| extend suspectExeName = tolower(tostring(split(RequestURL, '/')[-1]))\n| join kind=innerunique (endpointData) on $left.suspectExeName == $right.shortFileName \n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "TargetUserName"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "DnsDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "DestinationIP"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "RequestURL"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ]
+        "triggerOperator": "gt"
       }
     }
   ]
