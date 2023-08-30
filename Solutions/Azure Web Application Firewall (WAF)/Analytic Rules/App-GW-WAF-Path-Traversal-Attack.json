@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b6c3a8a6-d22c-4882-9c57-abc01690938b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b6c3a8a6-d22c-4882-9c57-abc01690938b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "status": "Available",
+        "severity": "High",
+        "triggerThreshold": 0,
+        "description": "'Identifies a match for a Path Traversal based attack in the App Gateway WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.\nReferences: https://owasp.org/www-community/attacks/Path_Traversal'\n",
+        "tactics": [
+          "DefenseEvasion",
+          "Execution",
+          "InitialAccess",
+          "PrivilegeEscalation",
+          "Discovery"
+        ],
+        "queryPeriod": "6h",
+        "query": "let Threshold = 3;  \nAzureDiagnostics\n| where Category == \"ApplicationGatewayFirewallLog\"\n| where action_s == \"Matched\"\n| where Message has \"Path Traversal Attack\"\n| where ruleGroup_s == \"REQUEST-930-APPLICATION-ATTACK-LFI\"\n| project transactionId_g, hostname_s, requestUri_s, TimeGenerated, clientIp_s, Message, details_message_s, details_data_s\n| join kind = inner(\nAzureDiagnostics\n| where Category == \"ApplicationGatewayFirewallLog\"\n| where action_s == \"Blocked\") on transactionId_g\n| extend Uri = strcat(hostname_s,requestUri_s)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TransactionID = make_set(transactionId_g,100), Message = make_set(Message,100), Detail_Message = make_set(details_message_s,100), Detail_Data = make_set(details_data_s,100), Total_TransactionId = dcount(transactionId_g) by clientIp_s, Uri, action_s\n| where Total_TransactionId >= Threshold\n",
+        "name": "App GW WAF - Path Traversal Attack",
+        "queryFrequency": "6h",
+        "entityMappings": [
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "Uri",
+                "identifier": "Url"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "clientIp_s",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}
