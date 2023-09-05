@@ -14,16 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "description": "'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DuoSecurity.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -31,24 +34,21 @@
           {
             "fieldMappings": [
               {
-                "columnName": "access_device_ip_s",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "access_device_ip_s"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryFrequency": "1h",
+        "name": "TI Map IP Entity to Duo Security",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "queryPeriod": "14d",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| join (\n    DuoSecurityAuthentication_CL\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(access_device_ip_s)\n    // renaming time column so it is clear the log this came from\n    | extend Duo_TimeGenerated = isotimestamp_t\n)\non $left.TI_ipEntity == $right.access_device_ip_s\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, Duo_TimeGenerated,\nTI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s\n| extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])\n",
         "tactics": [
           "Impact"
-        ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| join (\n    DuoSecurityAuthentication_CL\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(access_device_ip_s)\n    // renaming time column so it is clear the log this came from\n    | extend Duo_TimeGenerated = isotimestamp_t\n)\non $left.TI_ipEntity == $right.access_device_ip_s\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, Duo_TimeGenerated,\nTI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s\n| extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])\n",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "name": "TI Map IP Entity to Duo Security",
-        "description": "'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DuoSecurity.'\n"
+        ]
       }
     }
   ]
