@@ -14,11 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nExchangeAdminAuditLogs \n  | where TimeGenerated > ago(2 * timeframe)\n  | where isempty(UserOriented)\n  | project serverExecutedTime = TimeGenerated,\n    ServerCmdlet = CmdletName,\n    ServerCmdletParams = CmdletParameters,\n    Computer,\n    Caller,\n    ServerCmdletTargetObject = TargetObject\n  | join kind= inner (\n      ExchangeAdminAuditLogs\n      | where TimeGenerated > ago(timeframe)\n      | where UserOriented =~ 'Yes'\n      | lookup kind=leftouter _GetWatchlist('ExchangeVIP') on $left.TargetObject == $right.canonicalName\n      | project userExecutedTime = TimeGenerated,\n        UserCmdlet = CmdletName,\n        UserCmdletParams = CmdletParameters,\n        Computer,\n        Caller,\n        UserCmdletTargetObject = TargetObject,\n        userPrincipalName,\n        objectGUID,\n        sAMAccountName,\n        IsVIP)\n    on Computer, Caller\n  | where userExecutedTime - serverExecutedTime < spanoftime\n  | extend TimeDelta = userExecutedTime - serverExecutedTime\n  | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime\n  | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold\n",
-        "status": "Available",
         "description": "'Detect if a server oriented Cmdlet and a user oriented cmdlet that are monitored are launched by a same user in a same server in a 10 minutes timeframe'\n",
+        "severity": "High",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Mailbox",
             "fieldMappings": [
               {
                 "identifier": "MailboxPrimaryAddress",
@@ -28,28 +32,28 @@
                 "identifier": "Upn",
                 "columnName": "userPrincipalName"
               }
-            ],
-            "entityType": "Mailbox"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "Computer"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "ServerCmdletTargetObject"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -59,21 +63,17 @@
                 "identifier": "ObjectGuid",
                 "columnName": "TargetObject"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
         "name": "Server Oriented Cmdlet And User Oriented Cmdlet used",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "severity": "High",
-        "queryFrequency": "1d",
+        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nExchangeAdminAuditLogs \n  | where TimeGenerated > ago(2 * timeframe)\n  | where isempty(UserOriented)\n  | project serverExecutedTime = TimeGenerated,\n    ServerCmdlet = CmdletName,\n    ServerCmdletParams = CmdletParameters,\n    Computer,\n    Caller,\n    ServerCmdletTargetObject = TargetObject\n  | join kind= inner (\n      ExchangeAdminAuditLogs\n      | where TimeGenerated > ago(timeframe)\n      | where UserOriented =~ 'Yes'\n      | lookup kind=leftouter _GetWatchlist('ExchangeVIP') on $left.TargetObject == $right.canonicalName\n      | project userExecutedTime = TimeGenerated,\n        UserCmdlet = CmdletName,\n        UserCmdletParams = CmdletParameters,\n        Computer,\n        Caller,\n        UserCmdletTargetObject = TargetObject,\n        userPrincipalName,\n        objectGUID,\n        sAMAccountName,\n        IsVIP)\n    on Computer, Caller\n  | where userExecutedTime - serverExecutedTime < spanoftime\n  | extend TimeDelta = userExecutedTime - serverExecutedTime\n  | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime\n  | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold\n",
         "tactics": [
           "Exfiltration",
           "Persistence",
           "Collection"
-        ]
+        ],
+        "queryFrequency": "1d"
       }
     }
   ]
