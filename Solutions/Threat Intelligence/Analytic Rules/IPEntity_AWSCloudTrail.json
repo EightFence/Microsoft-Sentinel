@@ -14,11 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies a match in AWSCloudTrail from any IP IOC from TI\n",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "queryPeriod": "14d",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -48,12 +43,17 @@
             ]
           }
         ],
-        "name": "TI map IP entity to AWSCloudTrail",
+        "queryPeriod": "14d",
+        "description": "Identifies a match in AWSCloudTrail from any IP IOC from TI\n",
         "query": "let dt_lookBack = 1h; // Look back 1 hour for AWSCloudTrail logs\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  // Filter out indicators without relevant IP address fields\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  // Select the IP entity based on availability of different IP fields\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  // Exclude local addresses using the ipv4_is_private operator and filtering out specific address prefixes\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\";\n// Perform a join between IP indicators and AWSCloudTrail logs to identify potential malicious activity\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      AWSCloudTrail\n      | where TimeGenerated >= ago(dt_lookBack)\n      | extend AWSCloudTrail_TimeGenerated = TimeGenerated // Rename time column for clarity\n    )\n    on $left.TI_ipEntity == $right.SourceIpAddress\n  // Filter out logs that occurred after the expiration of the corresponding indicator\n  | where AWSCloudTrail_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and SourceIpAddress, and keep the log entry with the latest timestamp\n  | summarize AWSCloudTrail_TimeGenerated = arg_max(AWSCloudTrail_TimeGenerated, *) by IndicatorId, SourceIpAddress\n  // Select the desired output fields\n  | project AWSCloudTrail_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserIdentityUserName, SourceIpAddress,\n    NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n  // Rename the timestamp field\n  | extend timestamp = AWSCloudTrail_TimeGenerated\n",
+        "name": "TI map IP entity to AWSCloudTrail",
+        "queryFrequency": "1h",
         "tactics": [
           "Impact"
         ],
-        "queryFrequency": "1h"
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "triggerOperator": "gt"
       }
     }
   ]
