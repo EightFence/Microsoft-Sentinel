@@ -14,41 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Threat Protection",
-              "Platform"
-            ]
-          },
-          "author": {
-            "name": "Jessen"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          }
-        },
-        "tactics": [
-          "InitialAccess",
-          "Impact"
-        ],
-        "severity": "Medium",
-        "description": "'This query will alert on any sign-ins from devices infected with malware in correlation with  workspace deletion activity. \nAttackers may attempt to delete  workspaces containing  compute instances  after successful compromise to cause service unavailability to regular business operation.'\n",
-        "triggerThreshold": 0,
-        "query": "SecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName == \"Azure Active Directory Identity Protection\"\n| where AlertName == \"Sign-in from an infected device\"\n| mv-apply EntityAccount=todynamic(Entities) on\n(\nwhere EntityAccount.Type == \"account\"\n| extend AadTenantId = tostring(EntityAccount.AadTenantId), AadUserId = tostring(EntityAccount.AadUserId)\n)\n| mv-apply EntityIp=todynamic(Entities) on\n(\nwhere EntityIp.Type == \"ip\"\n| extend IpAddress = tostring(EntityIp.Address)\n)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserAccount = AccountUPN\n| extend UserName = AccountDisplayName\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress, TimeGenerated, UserName\n| join kind=inner \n(\nAzureActivity\n| where OperationNameValue has_any (\"/workspaces/computes/delete\", \"workspaces/delete\") \n| where ActivityStatusValue has_any (\"Succeeded\", \"Success\")\n| project TimeGenerated, ResourceProviderValue, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId\n) on IpAddress, UserAccount\n| extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress\n",
-        "triggerOperator": "gt",
-        "name": "Workspace deletion activity from an infected device",
-        "queryFrequency": "1d",
-        "queryPeriod": "14d",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -56,8 +27,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -65,13 +36,42 @@
           {
             "fieldMappings": [
               {
-                "identifier": "ResourceId",
-                "columnName": "_ResourceId"
+                "columnName": "_ResourceId",
+                "identifier": "ResourceId"
               }
             ],
             "entityType": "AzureResource"
           }
-        ]
+        ],
+        "tactics": [
+          "InitialAccess",
+          "Impact"
+        ],
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "name": "Workspace deletion activity from an infected device",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Jessen"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection",
+              "Platform"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "description": "'This query will alert on any sign-ins from devices infected with malware in correlation with  workspace deletion activity. \nAttackers may attempt to delete  workspaces containing  compute instances  after successful compromise to cause service unavailability to regular business operation.'\n",
+        "query": "SecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName == \"Azure Active Directory Identity Protection\"\n| where AlertName == \"Sign-in from an infected device\"\n| mv-apply EntityAccount=todynamic(Entities) on\n(\nwhere EntityAccount.Type == \"account\"\n| extend AadTenantId = tostring(EntityAccount.AadTenantId), AadUserId = tostring(EntityAccount.AadUserId)\n)\n| mv-apply EntityIp=todynamic(Entities) on\n(\nwhere EntityIp.Type == \"ip\"\n| extend IpAddress = tostring(EntityIp.Address)\n)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserAccount = AccountUPN\n| extend UserName = AccountDisplayName\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress, TimeGenerated, UserName\n| join kind=inner \n(\nAzureActivity\n| where OperationNameValue has_any (\"/workspaces/computes/delete\", \"workspaces/delete\") \n| where ActivityStatusValue has_any (\"Succeeded\", \"Success\")\n| project TimeGenerated, ResourceProviderValue, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId\n) on IpAddress, UserAccount\n| extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress\n"
       }
     }
   ]
