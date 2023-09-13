@@ -14,31 +14,27 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Cisco - firewall block but success logon to Azure AD",
         "queryPeriod": "1d",
-        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect\nand could indicate credential compromise for the user account.'\n",
         "metadata": {
           "categories": {
             "domains": [
               "Security - Network"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
           "support": {
             "tier": "Community"
           },
           "author": {
             "name": "timbMSFT"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
+        "triggerOperator": "gt",
+        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Azure Active Directory signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to AAD is potentially suspect\nand could indicate credential compromise for the user account.'\n",
+        "name": "Cisco - firewall block but success logon to Azure AD",
         "queryFrequency": "1d",
-        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -59,8 +55,12 @@
             "entityType": "IP"
           }
         ],
-        "triggerOperator": "gt",
-        "triggerThreshold": 0
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]
