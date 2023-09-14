@@ -14,20 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = \nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| extend IoC = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n| where IoC != \"NO_IP\"\n;\nIP_TI\n| join kind=innerunique // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n(\n_Im_Dns(starttime=ago(dt_lookBack))\n| where isnotempty(DnsResponseName)\n| summarize imDns_mintime=min(TimeGenerated), imDns_maxtime=max(TimeGenerated) by SrcIpAddr, DnsQuery, DnsResponseName, Dvc, EventProduct, EventVendor\n| extend addresses = extract_all (@'(\\d+\\.\\d+\\.\\d+\\.\\d+)', DnsResponseName)\n| mv-expand IoC = addresses to typeof(string)\n)\non IoC\n| where imDns_mintime < ExpirationDateTime\n| project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, LatestIndicatorTime, ExpirationDateTime, ConfidenceScore, SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName\n",
+        "customDetails": {
+          "ThreatType": "ThreatType",
+          "ActivityGroupNames": "ActivityGroupNames",
+          "LatestIndicatorTime": "LatestIndicatorTime",
+          "ExpirationDateTime": "ExpirationDateTime",
+          "ConfidenceScore": "ConfidenceScore",
+          "Description": "Description",
+          "DnsQuery": "DnsQuery",
+          "DNSRequestTime": "imDns_mintime",
+          "IndicatorId": "IndicatorId",
+          "SourceIPAddress": "SrcIpAddr"
+        },
+        "name": "TI map IP entity to DNS Events (ASIM DNS schema)",
+        "triggerThreshold": 0,
         "tactics": [
           "Impact"
         ],
-        "description": "'This rule identifies DNS requests for which response IP address is a known IoC. <br><br>\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema.'\n",
-        "queryPeriod": "14d",
-        "queryFrequency": "1h",
+        "severity": "Medium",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = \nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| extend IoC = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n| where IoC != \"NO_IP\"\n;\nIP_TI\n| join kind=innerunique // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n(\n_Im_Dns(starttime=ago(dt_lookBack))\n| where isnotempty(DnsResponseName)\n| summarize imDns_mintime=min(TimeGenerated), imDns_maxtime=max(TimeGenerated) by SrcIpAddr, DnsQuery, DnsResponseName, Dvc, EventProduct, EventVendor\n| extend addresses = extract_all (@'(\\d+\\.\\d+\\.\\d+\\.\\d+)', DnsResponseName)\n| mv-expand IoC = addresses to typeof(string)\n)\non IoC\n| where imDns_mintime < ExpirationDateTime\n| project imDns_mintime, imDns_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, LatestIndicatorTime, ExpirationDateTime, ConfidenceScore, SrcIpAddr, IoC, Dvc, EventVendor, EventProduct, DnsQuery, DnsResponseName\n",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Dvc"
+                "columnName": "Dvc",
+                "identifier": "FullName"
               }
             ]
           },
@@ -35,8 +47,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IoC"
+                "columnName": "IoC",
+                "identifier": "Address"
               }
             ]
           },
@@ -44,32 +56,20 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "triggerOperator": "gt",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "The response address {{IoC}} to a DNS query matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.",
           "alertDisplayNameFormat": "The response {{IoC}} to DNS query matched an IoC"
         },
-        "severity": "Medium",
-        "name": "TI map IP entity to DNS Events (ASIM DNS schema)",
-        "triggerThreshold": 0,
-        "customDetails": {
-          "Description": "Description",
-          "IndicatorId": "IndicatorId",
-          "LatestIndicatorTime": "LatestIndicatorTime",
-          "DnsQuery": "DnsQuery",
-          "ExpirationDateTime": "ExpirationDateTime",
-          "ConfidenceScore": "ConfidenceScore",
-          "ActivityGroupNames": "ActivityGroupNames",
-          "DNSRequestTime": "imDns_mintime",
-          "SourceIPAddress": "SrcIpAddr",
-          "ThreatType": "ThreatType"
-        }
+        "description": "'This rule identifies DNS requests for which response IP address is a known IoC. <br><br>\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema.'\n",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h"
       }
     }
   ]
