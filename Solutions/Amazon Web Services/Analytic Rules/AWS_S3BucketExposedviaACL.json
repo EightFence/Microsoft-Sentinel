@@ -14,12 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "queryPeriod": "1h",
-        "description": "'Detected S3 bucket publicly exposed via ACL, which could lead for sensitive information leakage to the public. Verify the S3 object configurations.'\n",
-        "query": "AWSCloudTrail\n| where EventName == \"PutBucketAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n| mvexpand Grant\n| extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n| extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n| where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n  or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "severity": "Medium",
+        "query": "AWSCloudTrail\n| where EventName == \"PutBucketAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n| mvexpand Grant\n| extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n| extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n| where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n  or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
+        "description": "'Detected S3 bucket publicly exposed via ACL, which could lead for sensitive information leakage to the public. Verify the S3 object configurations.'\n",
+        "triggerOperator": "gt",
+        "name": "S3 bucket exposed via ACL",
+        "status": "Available",
+        "tactics": [
+          "Exfiltration"
+        ],
+        "queryPeriod": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -40,12 +45,7 @@
             ]
           }
         ],
-        "tactics": [
-          "Exfiltration"
-        ],
-        "name": "S3 bucket exposed via ACL",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt"
+        "queryFrequency": "1h"
       }
     }
   ]
