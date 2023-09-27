@@ -14,28 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "Pete Bryan"
-          }
-        },
-        "name": "Account created from non-approved sources",
-        "description": "'This query looks for account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to ensure they were legitimated created.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
         "queryFrequency": "1d",
-        "severity": "Medium",
-        "queryPeriod": "7d",
+        "name": "Account created from non-approved sources",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -56,11 +36,31 @@
             "entityType": "Account"
           }
         ],
-        "triggerOperator": "gt",
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          }
+        },
+        "queryPeriod": "7d",
+        "severity": "Medium",
         "query": "let core_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where ResultType == 0\n  | extend domain = tolower(split(UserPrincipalName, \"@\")[1])\n  | summarize by tostring(domain));\n  let alternative_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where isnotempty(AlternateSignInName)\n  | where ResultType == 0\n  | extend domain = tolower(split(AlternateSignInName, \"@\")[1])\n  | summarize by tostring(domain));\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add User\"\n  | extend AddingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddingSPN = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)\n  | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingSPN)\n  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)\n  | extend Domain = tolower(split(UserAdded, \"@\")[1])\n  | where Domain !in (core_domains) and Domain !in (alternative_domains)\n  | project-away AddingUser\n  | project-reorder TimeGenerated, UserAdded, Domain, AddedBy\n",
         "tactics": [
           "Persistence"
         ],
+        "triggerOperator": "gt",
+        "description": "'This query looks for account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to ensure they were legitimated created.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
         "triggerThreshold": 0
       }
     }
