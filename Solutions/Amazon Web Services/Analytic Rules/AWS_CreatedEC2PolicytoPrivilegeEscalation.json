@@ -14,38 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Creation of EC2 policy and then privilege escalation",
-        "query": "let EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\nlet createPolicy =  dynamic([\"CreatePolicy\", \"CreatePolicyVersion\"]);\nlet timeframe = 1d;\nlet lookback = 14d;\n// Creating Master table with all the events to use with materialize for better performance\nlet EventInfo = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName in (EventNameList) or EventName in (createPolicy);\n//Checking for Policy creation event with Full Admin Privileges since lookback period.\nlet FullAdminPolicyEvents =  materialize(  EventInfo\n| where TimeGenerated >= ago(lookback)\n| where EventName in (createPolicy)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:RunInstances\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:Run*\")) or (Action contains \"ec2:*\") or (Action contains \"ec2:ListInstances\" and Action contains \"ec2:StartInstance\" and Action contains \"ec2:ModifyInstanceAttribute\") or (Action contains \"ec2:List*\" and Action contains \"ec2:Start*\" and Action contains \"ec2:Modify*\")) and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| project-rename StartTime = TimeGenerated  );\nlet PolicyAttach = materialize(  EventInfo\n| where TimeGenerated >= ago(timeframe)\n| where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),\"/\")[1])\n| summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName\n| extend AttachEvent = pack(\"StartTime\", StartTime, \"EndTime\", EndTime, \"EventName\", EventName, \"UserIdentityType\",   UserIdentityType, \"UserIdentityArn\", UserIdentityArn, \"SourceIpAddress\", SourceIpAddress, \"UserIdentityUserName\", UserIdentityUserName)\n| project EventSource, PolicyName, AttachEvent, AttachEventCount\n);\n// Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.\n// These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.\nFullAdminPolicyEvents\n| join kind=leftouter\n(\n    PolicyAttach\n)\non PolicyName\n| project-away PolicyName1\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
-        "status": "Available",
-        "queryFrequency": "1d",
         "queryPeriod": "1d",
-        "severity": "High",
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
+        "triggerOperator": "gt",
         "tactics": [
           "PrivilegeEscalation"
         ],
+        "queryFrequency": "1d",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "triggerThreshold": 0,
+        "name": "Creation of EC2 policy and then privilege escalation",
+        "query": "let EventNameList = dynamic([\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\"]);\nlet createPolicy =  dynamic([\"CreatePolicy\", \"CreatePolicyVersion\"]);\nlet timeframe = 1d;\nlet lookback = 14d;\n// Creating Master table with all the events to use with materialize for better performance\nlet EventInfo = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName in (EventNameList) or EventName in (createPolicy);\n//Checking for Policy creation event with Full Admin Privileges since lookback period.\nlet FullAdminPolicyEvents =  materialize(  EventInfo\n| where TimeGenerated >= ago(lookback)\n| where EventName in (createPolicy)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:RunInstances\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:Run*\")) or (Action contains \"ec2:*\") or (Action contains \"ec2:ListInstances\" and Action contains \"ec2:StartInstance\" and Action contains \"ec2:ModifyInstanceAttribute\") or (Action contains \"ec2:List*\" and Action contains \"ec2:Start*\" and Action contains \"ec2:Modify*\")) and Resource == \"*\" and Condition == \"\"\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName\n| extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))\n| project-rename StartTime = TimeGenerated  );\nlet PolicyAttach = materialize(  EventInfo\n| where TimeGenerated >= ago(timeframe)\n| where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),\"/\")[1])\n| summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName\n| extend AttachEvent = pack(\"StartTime\", StartTime, \"EndTime\", EndTime, \"EventName\", EventName, \"UserIdentityType\",   UserIdentityType, \"UserIdentityArn\", UserIdentityArn, \"SourceIpAddress\", SourceIpAddress, \"UserIdentityUserName\", UserIdentityUserName)\n| project EventSource, PolicyName, AttachEvent, AttachEventCount\n);\n// Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.\n// These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.\nFullAdminPolicyEvents\n| join kind=leftouter\n(\n    PolicyAttach\n)\non PolicyName\n| project-away PolicyName1\n| extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName\n",
         "description": "'Detected creation of new EC2 policy and afterwards used one of the attach policy operations (AttachUserPolicy/AttachRolePolicy/AttachGroupPolicy). This might indicate a privilege escalation technique that attackers could use.'\n",
-        "triggerOperator": "gt"
+        "status": "Available"
       }
     }
   ]
