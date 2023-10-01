@@ -15,41 +15,41 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "triggerThreshold": 0,
-        "severity": "Medium",
-        "description": "'This rule makes use of the series decompose anomaly method to generate an alert when client requests excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'\n",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "This client is generating excessive amount of DNS queries for non-existent domains. This can be an indication of possible C2 communications.\n\nBaseline for 'NXDOMAIN' error count for this client: '{{baseline}}'\n\nCurrent 'NXDOMAIN' error count for this client: '{{Total}}'\n\nDNS queries requested by the client include:\n\n'{{DNSQueries}}'",
-          "alertDisplayNameFormat": "[Anomaly] Excessive NXDOMAIN DNS Queries has been detected from client IP: '{{SrcIpAddr}}'"
-        },
-        "customDetails": {
-          "AnomalyScore": "score",
-          "Total": "Total",
-          "baseline": "baseline",
-          "DNSQueries": "DNSQueries"
-        },
-        "queryFrequency": "1d",
-        "query": "let threshold = 2.5;\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet summarizationexist = (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, threshold, -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, EventCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(EventCount)\n| where EventTime >= ago(dt)\n| where score >= threshold * 2\n| join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)\n  | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1\n",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SrcIpAddr"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "This client is generating excessive amount of DNS queries for non-existent domains. This can be an indication of possible C2 communications.\n\nBaseline for 'NXDOMAIN' error count for this client: '{{baseline}}'\n\nCurrent 'NXDOMAIN' error count for this client: '{{Total}}'\n\nDNS queries requested by the client include:\n\n'{{DNSQueries}}'",
+          "alertDisplayNameFormat": "[Anomaly] Excessive NXDOMAIN DNS Queries has been detected from client IP: '{{SrcIpAddr}}'"
+        },
+        "severity": "Medium",
+        "name": "Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "name": "Detect excessive NXDOMAIN DNS queries - Anomaly based (ASIM DNS Solution)",
-        "queryPeriod": "14d"
+        "customDetails": {
+          "baseline": "baseline",
+          "AnomalyScore": "score",
+          "DNSQueries": "DNSQueries",
+          "Total": "Total"
+        },
+        "status": "Available",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "description": "'This rule makes use of the series decompose anomaly method to generate an alert when client requests excessive amount of DNS queries to non-existent domains. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'\n",
+        "queryPeriod": "14d",
+        "query": "let threshold = 2.5;\nlet min_t = ago(14d);\nlet max_t = now();\nlet dt = 1d;\nlet summarizationexist = (\n  union isfuzzy=true \n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > ago(1d) \n      | project v = int(2)\n      ),\n      (\n      print int(1) \n      | project v = print_0\n      )\n  | summarize maxv = max(v)\n  | extend sumexist = (maxv > 1)\n  );\nlet allData = union isfuzzy=true\n      (\n      (datatable(exists: int, sumexist: bool)[1, false]\n      | join (summarizationexist) on sumexist)\n      | join (\n          _Im_Dns(responsecodename='NXDOMAIN', starttime=todatetime(min_t), endtime=max_t)\n          | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)\n          | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)\n          )\n          on exists\n      | project-away exists, maxv, sum*\n      ),\n      (\n      DNS_Summarized_Logs_ip_CL\n      | where EventTime_t > min_t and EventResultDetails_s == 'NXDOMAIN'\n      | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)\n      );\nallData\n| make-series EventCount=sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr\n| extend (anomalies, score, baseline) = series_decompose_anomalies(EventCount, threshold, -1, 'linefit')\n| mv-expand anomalies, score, baseline, EventTime, EventCount\n| extend\n  anomalies = toint(anomalies),\n  score = toint(score),\n  baseline = toint(baseline),\n  EventTime = todatetime(EventTime),\n  Total = tolong(EventCount)\n| where EventTime >= ago(dt)\n| where score >= threshold * 2\n| join kind=inner(_Im_Dns(responsecodename='NXDOMAIN', starttime=ago(dt), endtime=max_t)\n  | summarize DNSQueries = make_set(DnsQuery) by SrcIpAddr)\n  on SrcIpAddr\n| project-away SrcIpAddr1\n"
       }
     }
   ]
