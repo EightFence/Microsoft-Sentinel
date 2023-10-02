@@ -14,12 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "metadata": {
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          }
+        },
+        "severity": "Medium",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "name": "Conditional Access Policy Modified by New User",
+        "queryFrequency": "1d",
+        "description": "'Detects a Conditional Access Policy being modified by a user who has not modified a policy in the last 14 days.\n  A threat actor may try to modify policies to weaken the security controls in place.\n  Investigate any change to ensure they are approved.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-infrastructure#conditional-access'\n",
+        "query": "let known_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName has \"conditional access policy\"\n  | where Result =~ \"success\"\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | summarize by userPrincipalName);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName has \"conditional access policy\"\n  | where Result =~ \"success\"\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend CAPolicyName = tostring(TargetResources[0].displayName)\n  | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | where userPrincipalName !in (known_users)\n  | extend NewPolicyValues = TargetResources[0].modifiedProperties[0].newValue\n  | extend OldPolicyValues = TargetResources[0].modifiedProperties[0].oldValue\n  | project-reorder TimeGenerated, OperationName, CAPolicyName, userPrincipalName, ipAddress, NewPolicyValues, OldPolicyValues\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "userPrincipalName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "userPrincipalName"
               }
             ],
             "entityType": "Account"
@@ -27,40 +52,15 @@
           {
             "fieldMappings": [
               {
-                "columnName": "ipAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ipAddress"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerOperator": "gt",
-        "metadata": {
-          "author": {
-            "name": "Pete Bryan"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
-          }
-        },
-        "description": "'Detects a Conditional Access Policy being modified by a user who has not modified a policy in the last 14 days.\n  A threat actor may try to modify policies to weaken the security controls in place.\n  Investigate any change to ensure they are approved.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-infrastructure#conditional-access'\n",
-        "name": "Conditional Access Policy Modified by New User",
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "query": "let known_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName has \"conditional access policy\"\n  | where Result =~ \"success\"\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | summarize by userPrincipalName);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName has \"conditional access policy\"\n  | where Result =~ \"success\"\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend CAPolicyName = tostring(TargetResources[0].displayName)\n  | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | where userPrincipalName !in (known_users)\n  | extend NewPolicyValues = TargetResources[0].modifiedProperties[0].newValue\n  | extend OldPolicyValues = TargetResources[0].modifiedProperties[0].oldValue\n  | project-reorder TimeGenerated, OperationName, CAPolicyName, userPrincipalName, ipAddress, NewPolicyValues, OldPolicyValues\n",
         "queryPeriod": "14d",
-        "triggerThreshold": 0
+        "triggerOperator": "gt"
       }
     }
   ]
