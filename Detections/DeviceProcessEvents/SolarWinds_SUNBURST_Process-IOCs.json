@@ -14,9 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
         "metadata": {
           "author": {
             "name": "pemontto"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -25,27 +29,28 @@
           },
           "source": {
             "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
           }
         },
-        "query": "let excludeProcs = dynamic([@\"\\SolarWinds\\Orion\\APM\\APMServiceControl.exe\", @\"\\SolarWinds\\Orion\\ExportToPDFCmd.Exe\", @\"\\SolarWinds.Credentials\\SolarWinds.Credentials.Orion.WebApi.exe\", @\"\\SolarWinds\\Orion\\Topology\\SolarWinds.Orion.Topology.Calculator.exe\", @\"\\SolarWinds\\Orion\\Database-Maint.exe\", @\"\\SolarWinds.Orion.ApiPoller.Service\\SolarWinds.Orion.ApiPoller.Service.exe\", @\"\\Windows\\SysWOW64\\WerFault.exe\"]);\nDeviceProcessEvents\n| where InitiatingProcessFileName =~ \"solarwinds.businesslayerhost.exe\"\n| where not(FolderPath has_any (excludeProcs))\n| extend\n    timestamp = TimeGenerated,\n    AccountCustomEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),\n    HostCustomEntity = DeviceName,\n    AlgorithmCustomEntity = \"MD5\",\n    FileHashCustomEntity = MD5\n",
-        "severity": "Medium",
+        "query": "let excludeProcs = dynamic([@\"\\SolarWinds\\Orion\\APM\\APMServiceControl.exe\", @\"\\SolarWinds\\Orion\\ExportToPDFCmd.Exe\", @\"\\SolarWinds.Credentials\\SolarWinds.Credentials.Orion.WebApi.exe\", @\"\\SolarWinds\\Orion\\Topology\\SolarWinds.Orion.Topology.Calculator.exe\", @\"\\SolarWinds\\Orion\\Database-Maint.exe\", @\"\\SolarWinds.Orion.ApiPoller.Service\\SolarWinds.Orion.ApiPoller.Service.exe\", @\"\\Windows\\SysWOW64\\WerFault.exe\"]);\nDeviceProcessEvents\n| where InitiatingProcessFileName =~ \"solarwinds.businesslayerhost.exe\"\n| where not(FolderPath has_any (excludeProcs))\n| extend\n    timestamp = TimeGenerated,\n    InitiatingProcessAccountUPNSuffix = tostring(split(InitiatingProcessAccountUpn, \"@\")[1]),\n    Algorithm = \"MD5\"\n",
         "tactics": [
           "Execution",
           "Persistence"
         ],
-        "name": "SUNBURST suspicious SolarWinds child processes",
-        "queryFrequency": "1d",
         "description": "Identifies suspicious child processes of SolarWinds.Orion.Core.BusinessLayer.dll that may be evidence of the SUNBURST backdoor\nReferences:\n- https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html\n- https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f\n",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "identifier": "Name",
+                "columnName": "InitiatingProcessAccountName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "InitiatingProcessAccountDomain"
+              },
+              {
+                "identifier": "Sid",
+                "columnName": "InitiatingProcessAccountSid"
               }
             ],
             "entityType": "Account"
@@ -53,8 +58,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "identifier": "HostName",
+                "columnName": "DeviceName"
               }
             ],
             "entityType": "Host"
@@ -63,18 +68,21 @@
             "fieldMappings": [
               {
                 "identifier": "Algorithm",
-                "columnName": "AlgorithmCustomEntity"
+                "columnName": "Algorithm"
               },
               {
                 "identifier": "Value",
-                "columnName": "FileHashCustomEntity"
+                "columnName": "MD5"
               }
             ],
             "entityType": "FileHash"
           }
         ],
         "queryPeriod": "1d",
-        "triggerOperator": "gt"
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "name": "SUNBURST suspicious SolarWinds child processes",
+        "triggerThreshold": 0
       }
     }
   ]

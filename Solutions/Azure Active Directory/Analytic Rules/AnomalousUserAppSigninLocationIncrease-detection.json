@@ -14,47 +14,47 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "query": "// Adjust this figure to adjust how sensitive this detection is\nlet sensitivity = 2.5;\nlet AuthEvents = materialize(\nunion isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs\n| where TimeGenerated > ago(7d)\n| where ResultType == 0\n| extend LocationDetails = LocationDetails_dynamic\n| extend Location = strcat(LocationDetails.countryOrRegion, \"-\", LocationDetails.state,\"-\", LocationDetails.city)\n| where Location != \"--\");\nAuthEvents\n| summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)\n| where dcount_Location > 2\n| summarize CountOfLocations = make_list(dcount_Location, 10000), TimeStamp = make_list(TimeGenerated, 10000) by AppId, UserId\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')\n| mv-expand CountOfLocations to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0\n| join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated)) on UserId, AppId\n| extend SignInDetails = bag_pack(\"TimeGenerated\", TimeGenerated, \"Location\", Location, \"Source\", IPAddress, \"Device\", DeviceDetail_dynamic)\n| summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeStamp, AppId, AppDisplayName\n| extend Name = split(UserPrincipalName, \"@\")[0], UPNSuffix = split(UserPrincipalName, \"@\")[1]\n",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active\nDirectory application and picks out the most anomalous change in location profile for a user within an\nindividual application. This has detected {{UserPrincipalName}} signing into {{AppDisplayName}} from {{CountOfLocations}} \ndifferent locations.\n",
-          "alertDisplayNameFormat": "Anomalous sign-in location by {{UserPrincipalName}} to {{AppDisplayName}}"
-        },
-        "queryPeriod": "7d",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "Name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              },
-              {
-                "identifier": "AadUserId",
-                "columnName": "UserId"
-              }
-            ],
-            "entityType": "Account"
-          }
-        ],
+        "status": "Available",
+        "description": "'This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active\nDirectory application and picks out the most anomalous change in location profile for a user within an\nindividual application.\n",
+        "queryFrequency": "1d",
+        "name": "Anomalous sign-in location by user account and authenticating application",
         "tactics": [
           "InitialAccess"
         ],
-        "description": "'This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active\nDirectory application and picks out the most anomalous change in location profile for a user within an\nindividual application.\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "name": "Anomalous sign-in location by user account and authenticating application",
+        "query": "// Adjust this figure to adjust how sensitive this detection is\nlet sensitivity = 2.5;\nlet AuthEvents = materialize(\nunion isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs\n| where TimeGenerated > ago(7d)\n| where ResultType == 0\n| extend LocationDetails = LocationDetails_dynamic\n| extend Location = strcat(LocationDetails.countryOrRegion, \"-\", LocationDetails.state,\"-\", LocationDetails.city)\n| where Location != \"--\");\nAuthEvents\n| summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)\n| where dcount_Location > 2\n| summarize CountOfLocations = make_list(dcount_Location, 10000), TimeStamp = make_list(TimeGenerated, 10000) by AppId, UserId\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')\n| mv-expand CountOfLocations to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0\n| join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated)) on UserId, AppId\n| extend SignInDetails = bag_pack(\"TimeGenerated\", TimeGenerated, \"Location\", Location, \"Source\", IPAddress, \"Device\", DeviceDetail_dynamic)\n| summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeStamp, AppId, AppDisplayName\n| extend Name = split(UserPrincipalName, \"@\")[0], UPNSuffix = split(UserPrincipalName, \"@\")[1]\n",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "customDetails": {
           "Application": "AppDisplayName"
         },
-        "status": "Available",
-        "queryFrequency": "1d"
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              },
+              {
+                "columnName": "UserId",
+                "identifier": "AadUserId"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "7d",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Anomalous sign-in location by {{UserPrincipalName}} to {{AppDisplayName}}",
+          "alertDescriptionFormat": "This query over Azure Active Directory sign-in considers all user sign-ins for each Azure Active\nDirectory application and picks out the most anomalous change in location profile for a user within an\nindividual application. This has detected {{UserPrincipalName}} signing into {{AppDisplayName}} from {{CountOfLocations}} \ndifferent locations.\n"
+        }
       }
     }
   ]
