@@ -14,55 +14,55 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in W3CIISLog.\n",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for W3CIISLog events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\";\n// Perform a join between IP indicators and W3CIISLog events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      W3CIISLog\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where isnotempty(cIP)\n      | where ipv4_is_private(cIP) == false and cIP !startswith \"fe80\" and cIP !startswith \"::\" and cIP !startswith \"127.\"\n      | extend W3CIISLog_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.cIP\n  // Filter out W3CIISLog events that occurred after the expiration of the corresponding indicator\n  | where W3CIISLog_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and keep the W3CIISLog event with the latest timestamp\n  | summarize W3CIISLog_TimeGenerated = arg_max(W3CIISLog_TimeGenerated, *) by IndicatorId, cIP\n  // Select the desired output fields\n  | project timestamp = W3CIISLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, Computer, sSiteName, cIP, sIP, sPort, csMethod, csUserName, scStatus, scSubStatus, scWin32Status,\n    NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n",
-        "triggerOperator": "gt",
-        "tactics": [
-          "Impact"
-        ],
         "queryFrequency": "1h",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "csUserName",
                 "identifier": "Name"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Computer",
                 "identifier": "HostName"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "cIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
-        "triggerThreshold": 0,
         "name": "TI Map IP Entity to W3CIISLog",
-        "severity": "Medium"
+        "triggerThreshold": 0,
+        "tactics": [
+          "Impact"
+        ],
+        "severity": "Medium",
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for W3CIISLog events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\";\n// Perform a join between IP indicators and W3CIISLog events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      W3CIISLog\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where isnotempty(cIP)\n      | where ipv4_is_private(cIP) == false and cIP !startswith \"fe80\" and cIP !startswith \"::\" and cIP !startswith \"127.\"\n      | extend W3CIISLog_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.cIP\n  // Filter out W3CIISLog events that occurred after the expiration of the corresponding indicator\n  | where W3CIISLog_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and keep the W3CIISLog event with the latest timestamp\n  | summarize W3CIISLog_TimeGenerated = arg_max(W3CIISLog_TimeGenerated, *) by IndicatorId, cIP\n  // Select the desired output fields\n  | project timestamp = W3CIISLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, Computer, sSiteName, cIP, sIP, sPort, csMethod, csUserName, scStatus, scSubStatus, scWin32Status,\n    NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n",
+        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in W3CIISLog.\n",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt"
       }
     }
   ]
