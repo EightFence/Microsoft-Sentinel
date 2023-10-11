@@ -14,30 +14,27 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "7d",
-        "description": "'This query looks for an account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to confirm expected creation.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
+        "queryFrequency": "1d",
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
           "author": {
             "name": "Microsoft Security Research"
           }
         },
-        "tactics": [
-          "Persistence"
-        ],
         "triggerOperator": "gt",
-        "severity": "Medium",
+        "query": "let core_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where ResultType == 0\n  | extend domain = tolower(split(UserPrincipalName, \"@\")[1])\n  | summarize by tostring(domain));\n  let alternative_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where isnotempty(AlternateSignInName)\n  | where ResultType == 0\n  | extend domain = tolower(split(AlternateSignInName, \"@\")[1])\n  | summarize by tostring(domain));\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add User\"\n  | extend AddingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddingSPN = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)\n  | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingSPN)\n  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)\n  | extend AddedByUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)\n  | extend AddedBySPNId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)\n  | extend AddedByAzureId = iif(isnotempty(AddedByUserId), AddedByUserId, AddedBySPNId)\n  | extend UserAddedDomain = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[1]),\n  UserAdded !has \"#EXT#\" and AddedBy has \"@\", tostring(split(UserAdded, \"@\")[1]),\n  UserAdded)\n  | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)\n  | project-away AddingUser\n  | extend AddedByName = case(\n  AddedBy has \"#EXT#\", tostring(split(tostring(split(AddedBy, \"#EXT#\")[0]), \"_\")[0]),\n  AddedBy !has \"#EXT#\" and AddedBy has \"@\", tostring(split(AddedBy, \"@\")[0]),\n  AddedBy)\n  | extend AddedByUPNSuffix = case(\n  AddedBy has \"#EXT#\", tostring(split(tostring(split(AddedBy, \"#EXT#\")[0]), \"_\")[1]),\n  AddedBy !has \"#EXT#\" and AddedBy has \"@\", tostring(split(AddedBy, \"@\")[1]),\n  AddedBy)\n  | extend UserAddedName = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[0]),\n  UserAdded !has \"#EXT#\" and AddedBy has \"@\", tostring(split(UserAdded, \"@\")[0]),\n  UserAdded)\n  | project-reorder TimeGenerated, UserAdded, UserAddedDomain, AddedBy\n",
+        "queryPeriod": "7d",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -71,9 +68,12 @@
           }
         ],
         "triggerThreshold": 0,
-        "query": "let core_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where ResultType == 0\n  | extend domain = tolower(split(UserPrincipalName, \"@\")[1])\n  | summarize by tostring(domain));\n  let alternative_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where isnotempty(AlternateSignInName)\n  | where ResultType == 0\n  | extend domain = tolower(split(AlternateSignInName, \"@\")[1])\n  | summarize by tostring(domain));\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add User\"\n  | extend AddingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddingSPN = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)\n  | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingSPN)\n  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)\n  | extend AddedByUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)\n  | extend AddedBySPNId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)\n  | extend AddedByAzureId = iif(isnotempty(AddedByUserId), AddedByUserId, AddedBySPNId)\n  | extend UserAddedDomain = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[1]),\n  UserAdded !has \"#EXT#\" and AddedBy has \"@\", tostring(split(UserAdded, \"@\")[1]),\n  UserAdded)\n  | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)\n  | project-away AddingUser\n  | extend AddedByName = case(\n  AddedBy has \"#EXT#\", tostring(split(tostring(split(AddedBy, \"#EXT#\")[0]), \"_\")[0]),\n  AddedBy !has \"#EXT#\" and AddedBy has \"@\", tostring(split(AddedBy, \"@\")[0]),\n  AddedBy)\n  | extend AddedByUPNSuffix = case(\n  AddedBy has \"#EXT#\", tostring(split(tostring(split(AddedBy, \"#EXT#\")[0]), \"_\")[1]),\n  AddedBy !has \"#EXT#\" and AddedBy has \"@\", tostring(split(AddedBy, \"@\")[1]),\n  AddedBy)\n  | extend UserAddedName = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[0]),\n  UserAdded !has \"#EXT#\" and AddedBy has \"@\", tostring(split(UserAdded, \"@\")[0]),\n  UserAdded)\n  | project-reorder TimeGenerated, UserAdded, UserAddedDomain, AddedBy\n",
-        "queryFrequency": "1d",
-        "name": "Account created from non-approved sources"
+        "description": "'This query looks for an account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to confirm expected creation.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
+        "severity": "Medium",
+        "name": "Account created from non-approved sources",
+        "tactics": [
+          "Persistence"
+        ]
       }
     }
   ]
