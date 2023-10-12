@@ -14,20 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "description": "'This query identifies Device Registration from IP addresses identified as malicious by Okta ThreatInsight'\n",
         "query": "let Events = dynamic([\"device.enrollment.create\"]);\nlet ThreatInsightOperations = dynamic([\"security.threat.detected\", \"security.attack.start\", \"security.attack.end\" ]);\nlet DeviceRegistrations =  Okta_CL\n| where eventType_s in (Events)\n| where outcome_result_s == \"SUCCESS\"\n| extend oktaDeviceId_ = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).oktaDeviceId), NewDevice_osPlatform = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osPlatform),  NewDevice_osVersion = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osVersion), displayName_ = tostring(parse_json(target_s)[0].displayName)\n| extend Location = strcat(client_geographicalContext_city_s,  \" | \", client_geographicalContext_state_s,\" | \", client_geographicalContext_country_s)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,\noutcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), column_ifexists('debugContext_debugData_threatSuspected_s',\"\"), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location ;\nlet ThreatInsightEvents = Okta_CL\n| where eventType_s in (ThreatInsightOperations)\n| extend SuspiciousIP = actor_displayName_s\n| project TimeGenerated, debugContext_debugData_threatDetections_s, client_userAgent_rawUserAgent_s, severity_s, outcome_result_s, eventType_s, displayMessage_s, SuspiciousIP, transaction_id_s;\nDeviceRegistrations \n| join kind=inner (ThreatInsightEvents) on $left.client_ipAddress_s == $right.SuspiciousIP\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
         "name": "Device Registration from Malicious IP",
-        "tactics": [
-          "Persistence"
-        ],
-        "severity": "High",
+        "queryPeriod": "1h",
         "status": "Available",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "actor_alternateId_s",
@@ -37,19 +29,27 @@
                 "columnName": "actor_displayName_s",
                 "identifier": "DisplayName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "client_ipAddress_s",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0
+        "triggerOperator": "gt",
+        "tactics": [
+          "Persistence"
+        ],
+        "triggerThreshold": 0,
+        "severity": "High",
+        "description": "'This query identifies Device Registration from IP addresses identified as malicious by Okta ThreatInsight'\n",
+        "queryFrequency": "1h"
       }
     }
   ]
