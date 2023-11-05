@@ -14,30 +14,34 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "Impact"
-        ],
-        "description": "'This rule identifies Web Sessions for which the target URL hostname is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "A web request from {{SrcIpAddr}} to hostname  {{domain}} matched an IoC",
-          "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{Url}}, whose hostname is a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator."
-        },
+        "severity": "Medium",
+        "queryPeriod": "14d",
         "customDetails": {
           "IndicatorId": "IndicatorId",
           "IoCExpirationTime": "ExpirationDateTime",
-          "EventTime": "Event_TimeGenerated",
+          "IoCDescription": "Description",
           "ActivityGroupNames": "ActivityGroupNames",
           "IoCConfidenceScore": "ConfidenceScore",
-          "IoCDescription": "Description",
-          "ThreatType": "ThreatType"
+          "ThreatType": "ThreatType",
+          "EventTime": "Event_TimeGenerated"
         },
+        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n//Create a list of TLDs in our threat feed for later validation\nlet DOMAIN_TI=ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName);\nlet DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) \n  | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));\nDOMAIN_TI\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )\n    //Extract domain patterns from syslog message\n    | extend domain = tostring(parse_url(Url)[\"Host\"])\n    | where isnotempty(domain)\n    | extend tld = tostring(split(domain, '.')[-1])\n    | extend Event_TimeGenerated = TimeGenerated\n) on $left.DomainName==$right.domain\n| where Event_TimeGenerated < ExpirationDateTime\n| summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain\n| project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, domain, SrcIpAddr, Url   \n",
+        "description": "'This rule identifies Web Sessions for which the target URL hostname is a known IoC. <br><br>This rule uses the [Advanced Security Information Model (ASIM)](https:/aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'\n",
+        "tactics": [
+          "Impact"
+        ],
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{Url}}, whose hostname is a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator.",
+          "alertDisplayNameFormat": "A web request from {{SrcIpAddr}} to hostname  {{domain}} matched an IoC"
+        },
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SrcIpAddr",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
               }
             ]
           },
@@ -45,19 +49,15 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ]
           }
         ],
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "severity": "Medium",
         "triggerOperator": "gt",
-        "name": "TI map Domain entity to Web Session Events (ASIM Web Session schema)",
-        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n//Create a list of TLDs in our threat feed for later validation\nlet DOMAIN_TI=ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(DomainName);\nlet DOMAIN_TI_list= todynamic(toscalar(DOMAIN_TI | summarize NIoCs = dcount(DomainName), Domains = make_set(DomainName) \n  | project Domains=iff(NIoCs > HAS_ANY_MAX, dynamic([]), Domains) ));\nDOMAIN_TI\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any= DOMAIN_TI_list )\n    //Extract domain patterns from syslog message\n    | extend domain = tostring(parse_url(Url)[\"Host\"])\n    | where isnotempty(domain)\n    | extend tld = tostring(split(domain, '.')[-1])\n    | extend Event_TimeGenerated = TimeGenerated\n) on $left.DomainName==$right.domain\n| where Event_TimeGenerated < ExpirationDateTime\n| summarize Event_TimeGenerated  = arg_max(Event_TimeGenerated , *) by IndicatorId, domain\n| project Event_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, domain, SrcIpAddr, Url   \n",
-        "triggerThreshold": 0
+        "queryFrequency": "1h",
+        "name": "TI map Domain entity to Web Session Events (ASIM Web Session schema)"
       }
     }
   ]
