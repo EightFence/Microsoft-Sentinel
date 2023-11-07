@@ -14,7 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "Exfiltration"
+        ],
+        "triggerOperator": "gt",
+        "queryFrequency": "15m",
+        "queryPeriod": "15m",
+        "customDetails": {
+          "FilesList": "dirlist",
+          "TransferCount": "count_distinct_SourceRelativeUrl"
+        },
         "name": "Office365 Sharepoint File transfer above threshold",
+        "triggerThreshold": 0,
+        "query": "let threshold = 500;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_SourceRelativeUrl=dcount(SourceRelativeUrl), dirlist=make_set(SourceRelativeUrl) by UserId,ClientIP,UserAgent,bin(TimeGenerated, 15m)\n| where count_distinct_SourceRelativeUrl >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n",
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "groupByCustomDetails": [],
+            "reopenClosedIncident": false,
+            "lookbackDuration": "5h",
+            "groupByEntities": [
+              "Account"
+            ],
+            "groupByAlertDetails": [],
+            "matchingMethod": "Selected"
+          }
+        },
+        "description": "'Identifies Office365 Sharepoint File Transfers with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that\n value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,\n if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,35 +71,7 @@
             ],
             "entityType": "File"
           }
-        ],
-        "triggerThreshold": 0,
-        "query": "let threshold = 500;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_SourceRelativeUrl=dcount(SourceRelativeUrl), dirlist=make_set(SourceRelativeUrl) by UserId,ClientIP,UserAgent,bin(TimeGenerated, 15m)\n| where count_distinct_SourceRelativeUrl >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "5h",
-            "groupByEntities": [
-              "Account"
-            ],
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "groupByCustomDetails": [],
-            "groupByAlertDetails": []
-          }
-        },
-        "customDetails": {
-          "FilesList": "dirlist",
-          "TransferCount": "count_distinct_SourceRelativeUrl"
-        },
-        "tactics": [
-          "Exfiltration"
-        ],
-        "description": "'Identifies Office365 Sharepoint File Transfers with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that\n value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,\n if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
-        "severity": "Medium",
-        "queryFrequency": "15m",
-        "triggerOperator": "gt",
-        "queryPeriod": "15m"
+        ]
       }
     }
   ]
