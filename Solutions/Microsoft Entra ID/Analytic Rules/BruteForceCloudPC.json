@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3fbc20a4-04c4-464e-8fcb-6667f53e4987')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3fbc20a4-04c4-464e-8fcb-6667f53e4987')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Brute force attack against a Cloud PC",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "description": "'Identifies evidence of brute force activity against a Windows 365 Cloud PC by highlighting multiple authentication failures and by a successful authentication within a given time window.'\n",
+        "query": "let authenticationWindow = 20m;\nlet sensitivity = 2.5;\nSigninLogs\n| where AppDisplayName =~ \"Windows Sign In\"\n| extend FailureOrSuccess = iff(ResultType in (\"0\", \"50125\", \"50140\", \"70043\", \"70044\"), \"Success\", \"Failure\")\n| summarize FailureCount = countif(FailureOrSuccess==\"Failure\"), SuccessCount = countif(FailureOrSuccess==\"Success\"), IPAddresses = make_set(IPAddress,1000)\n                          by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName\n| extend FailureSuccessDiff = FailureCount - SuccessCount\n| where FailureSuccessDiff > 0\n| summarize Diff = make_list(FailureSuccessDiff, 10000), TimeStamp = make_list(TimeGenerated, 10000) by UserDisplayName, UserPrincipalName//, tostring(IPAddresses)\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Diff, sensitivity, -1, 'linefit')  \n| mv-expand Diff to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0\n| summarize by UserDisplayName, UserPrincipalName\n| join kind=leftouter (\n      SigninLogs\n      | where AppDisplayName =~ \"Windows Sign In\"\n      | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)\n      | summarize StartTime = min(TimeGenerated), \n                  EndTime = max(TimeGenerated), \n                  IPAddress = make_set(IPAddress,100), \n                  OS = make_set(OS,20), \n                  Browser = make_set(Browser,20), \n                  City = make_set(City,100), \n                  ResultType = make_set(ResultType,100)\n              by UserDisplayName, UserPrincipalName\n  ) on UserDisplayName, UserPrincipalName\n| extend IPAddressFirst = IPAddress[0]\n| extend timestamp = StartTime, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPAddressFirst",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "queryFrequency": "1d",
+        "status": "Available"
+      }
+    }
+  ]
+}

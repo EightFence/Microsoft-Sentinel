@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6d63efa6-7c25-4bd4-a486-aa6bf50fde8a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6d63efa6-7c25-4bd4-a486-aa6bf50fde8a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Account created or deleted by non-approved user",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "description": "'Identifies accounts that were created or deleted by a defined list of non-approved user principal names. Add to this list before running the query for accurate results.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts'\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "InitiatedUserIpAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "query": "// Add non-approved user principal names to the list below to search for their account creation/deletion activity\n// ex: dynamic([\"UPN1\", \"upn123\"])\nlet nonapproved_users = dynamic([]);\nAuditLogs\n| where OperationName =~ \"Add user\" or OperationName =~ \"Delete user\"\n| where Result =~ \"success\"\n| extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)\n| where InitiatingUser has_any (nonapproved_users)\n| project-reorder TimeGenerated, ResourceId, OperationName, InitiatingUser, TargetResources\n| extend InitiatedUserIpAddress = tostring(InitiatedBy.user.ipAddress)\n| extend Name = tostring(split(InitiatingUser,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUser,'@',1)[0])\n",
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "queryFrequency": "1d",
+        "status": "Available"
+      }
+    }
+  ]
+}

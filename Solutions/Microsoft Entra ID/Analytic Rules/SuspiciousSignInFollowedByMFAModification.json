@@ -1,0 +1,94 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/aec77100-25c5-4254-a20a-8027ed92c46c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/aec77100-25c5-4254-a20a-8027ed92c46c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Suspicious Sign In Followed by MFA Modification",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "description": "'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'\n",
+        "query": "let PriorityScore = 9;\nBehaviorAnalytics\n| where ActionType == \"Sign-in\"\n| where InvestigationPriority > PriorityScore\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend LogOnTime = TimeGenerated\n| join kind=inner (AuditLogs\n| where Category =~ \"UserManagement\" \n| where OperationName in~ (\"Admin registered security info\", \"Admin updated security info\", \"Admin deleted security info\", \"User registered security info\", \"User changed default security info\", \"User deleted security info\",\"User registered all required security info\",\"User started security info registration\") \n| extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))\n| extend InitiatorID = tostring(InitiatedBy.user.id)\n| extend FromIP = tostring(InitiatedBy.user.ipAddress) \n| extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| extend TargetId = tostring(TargetResources[0].id)\n| extend MFAModTime = TimeGenerated\n| where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN\n| where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))\n| extend InitiatorName = tostring(split(InitiatorUPN, \"@\")[0]), InitiatorSuffix = tostring(split(InitiatorUPN, \"@\")[1]), TargetName = tostring(split(TargetUPN, \"@\")[0]), TargetSuffix = tostring(split(TargetUPN, \"@\")[1])\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Suspicious Sign In by {{InitiatorUPN}} Followed by MFA Modification to {{TargetUPN}}",
+          "alertDescriptionFormat": "This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.\nIn this case {{InitiatorUPN}} logged in followed by a modification to MFA settings for {{TargetUPN}}.\nThe sign in was from {{SourceIPAddress}}.\n"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "InitiatorID",
+                "identifier": "AadUserId"
+              },
+              {
+                "columnName": "InitiatorName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatorSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "TargetId",
+                "identifier": "AadUserId"
+              },
+              {
+                "columnName": "TargetName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "TargetSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "FromIP",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SourceIPAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess",
+          "DefenseEvasion"
+        ],
+        "queryFrequency": "1d",
+        "status": "Available"
+      }
+    }
+  ]
+}

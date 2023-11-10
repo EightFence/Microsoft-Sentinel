@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a22740ec-fc1e-4c91-8de6-c29c6450ad00')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a22740ec-fc1e-4c91-8de6-c29c6450ad00')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Explicit MFA Deny",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "description": "'User explicitly denies MFA push, indicating that login was not expected and the account's password may be compromised.'\n",
+        "query": "let aadFunc = (tableName:string){\ntable(tableName)\n| where ResultType == 500121\n| where Status has \"MFA Denied; user declined the authentication\" or Status has \"MFA denied; Phone App Reported Fraud\"\n| extend Type = Type\n| extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPAddress",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "ClientAppUsed",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "queryFrequency": "1d",
+        "status": "Available"
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5db427b2-f406-4274-b413-e9fcb29412f8')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5db427b2-f406-4274-b413-e9fcb29412f8')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "NRT PIM Elevation Request Rejected",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatingUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UserUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingIpAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "description": "'Identifies when a user is rejected for a privileged role elevation via PIM. Monitor rejections for indicators of attacker compromise of the requesting account.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
+        "query": "AuditLogs\n| where ActivityDisplayName =~'Add member to role completed (PIM activation)'\n| where Result =~ \"failure\"\n| mv-apply ResourceItem = TargetResources on \n  (\n      where ResourceItem.type =~ \"Role\"\n      | extend Role = trim(@'\"',tostring(ResourceItem.displayName))\n  )\n| mv-apply ResourceItem = TargetResources on \n  (\n      where ResourceItem.type =~ \"User\"\n      | extend User = trim(@'\"',tostring(ResourceItem.userPrincipalName))\n  )\n| project-reorder TimeGenerated, User, Role, OperationName, Result, ResultDescription\n| where isnotempty(InitiatedBy.user)\n| extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName), InitiatingIpAddress = tostring(InitiatedBy.user.ipAddress)\n| extend InitiatingName = tostring(split(InitiatingUser,'@',0)[0]), InitiatingUPNSuffix = tostring(split(InitiatingUser,'@',1)[0])\n| extend UserName = tostring(split(User,'@',0)[0]), UserUPNSuffix = tostring(split(User,'@',1)[0])\n",
+        "severity": "High",
+        "tactics": [
+          "Persistence"
+        ],
+        "status": "Available"
+      }
+    }
+  ]
+}
