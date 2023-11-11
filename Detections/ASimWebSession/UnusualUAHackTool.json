@@ -14,19 +14,53 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "15m",
+        "tactics": [
+          "CommandandControl"
+        ],
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "queryFrequency": "15m",
+        "entityMappings": [
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "Url"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "SrcUsername"
+              }
+            ]
+          }
+        ],
         "customDetails": {
           "UserAgent": "HttpUserAgent"
         },
-        "queryPeriod": "15m",
-        "triggerOperator": "gt",
+        "name": "A host is potentially running a hacking tool (ASIM Web Session schema)",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Host {{SrcIpAddr}} is potentially running a hacking tool",
           "alertDescriptionFormat": "The host at address {{SrcIpAddr}} sent an HTTP request to the URL {{Url}} with the HTTP user agent header {{HttpUserAgent}}. This user agent is known to be used by a hacking tool and indicates suspicious activity on the host."
         },
-        "queryFrequency": "15m",
+        "severity": "Medium",
+        "query": "let threatCategory=\"Hacking Tool\";\nlet knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)\n    [ @\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv\"] \n        with(format=\"csv\", ignoreFirstRecord=True));\nlet knownUserAgents=toscalar(knownUserAgentsIndicators | where Category==threatCategory | where isnotempty(UserAgent) | summarize make_list(UserAgent));\nlet customUserAgents=toscalar(_GetWatchlist(\"UnusualUserAgents\") | where SearchKey==threatCategory | extend UserAgent=column_ifexists(\"UserAgent\",\"\") | where isnotempty(UserAgent) | summarize make_list(UserAgent));\nlet fullUAList = array_concat(knownUserAgents,customUserAgents);\n_Im_WebSession(httpuseragent_has_any=fullUAList)\n| project SrcIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername\n",
         "metadata": {
           "support": {
             "tier": "Community"
@@ -36,50 +70,16 @@
               "Security - Threat Protection"
             ]
           },
-          "author": {
-            "name": "Yaron"
-          },
           "source": {
             "kind": "Community"
+          },
+          "author": {
+            "name": "Yaron"
           }
         },
         "triggerThreshold": 0,
-        "tactics": [
-          "CommandandControl"
-        ],
         "description": "'This rule identifies a web request with a user agent header known to belong to a hacking tool. This indicates a hacking tool is used on the host.<br>You can add custom hacking tool indicating User-Agent headers using a watchlist, for more information refer to the [UnusualUserAgents Watchlist](https://aka.ms/ASimUnusualUserAgentsWatchlist).<br><br>\n This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "Url"
-              }
-            ],
-            "entityType": "URL"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "SrcUsername"
-              }
-            ],
-            "entityType": "Account"
-          }
-        ],
-        "name": "A host is potentially running a hacking tool (ASIM Web Session schema)",
-        "query": "let threatCategory=\"Hacking Tool\";\nlet knownUserAgentsIndicators = materialize(externaldata(UserAgent:string, Category:string)\n    [ @\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv\"] \n        with(format=\"csv\", ignoreFirstRecord=True));\nlet knownUserAgents=toscalar(knownUserAgentsIndicators | where Category==threatCategory | where isnotempty(UserAgent) | summarize make_list(UserAgent));\nlet customUserAgents=toscalar(_GetWatchlist(\"UnusualUserAgents\") | where SearchKey==threatCategory | extend UserAgent=column_ifexists(\"UserAgent\",\"\") | where isnotempty(UserAgent) | summarize make_list(UserAgent));\nlet fullUAList = array_concat(knownUserAgents,customUserAgents);\n_Im_WebSession(httpuseragent_has_any=fullUAList)\n| project SrcIpAddr, Url, TimeGenerated,HttpUserAgent, SrcUsername\n",
-        "severity": "Medium"
+        "triggerOperator": "gt"
       }
     }
   ]
