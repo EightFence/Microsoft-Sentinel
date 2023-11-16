@@ -14,22 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerOperator": "gt",
         "customDetails": {
+          "EventResultSet": "EventResultDetailsSet",
           "EventStartTime": "EventStartTime",
           "EventEndTime": "EventEndTime",
           "TotalErrorCount": "TotalErrorCount",
-          "EventResultSet": "EventResultDetailsSet",
-          "ErrorThreshold": "Threshold",
-          "RequestURLs": "URLs"
+          "RequestURLs": "URLs",
+          "ErrorThreshold": "Threshold"
         },
-        "description": "'This detection mechanism identifies situations where multiple client errors originate from a single source within a limited time frame.'\n",
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SrcIpAddr",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
               }
             ]
           },
@@ -37,12 +44,12 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -50,31 +57,24 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SrcHostname",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SrcHostname"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "name": "Detect instances of multiple client errors occurring within a brief period of time (ASIM Web Session)",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "status": "Available",
         "severity": "Medium",
         "queryFrequency": "1h",
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl"
-        ],
+        "description": "'This detection mechanism identifies situations where multiple client errors originate from a single source within a limited time frame.'\n",
+        "name": "Detect instances of multiple client errors occurring within a brief period of time (ASIM Web Session)",
+        "triggerThreshold": 0,
+        "status": "Available",
         "query": "// HTTP response status codes indicate whether a specific HTTP request has been successfully completed.\n// Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status\nlet threshold = 100; // You can set threshold value that suits your environment\n_Im_WebSession(starttime=ago(1h))\n| where toint(EventResultDetails) between (400 .. 499)\n| summarize\n    TotalErrorCount = count(),\n    EventStartTime = min(TimeGenerated),\n    EventEndTime = max(TimeGenerated),\n    URLs=make_set(Url, 100),\n    EventResultDetailsSet=make_set(EventResultDetails,10)\n    by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname\n| where TotalErrorCount > threshold\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\"), Threshold=threshold\n",
-        "triggerOperator": "gt",
+        "queryPeriod": "1h",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "High number of client errors originated by user '{{SrcUsername}}' from IP address '{{SrcIpAddr}}'",
           "alertDescriptionFormat": "The client has made a total of '{{TotalErrorCount}}' requests to URLs '{{URLs}}', which have resulted in client errors. A sudden surge in HTTP code errors, especially in the form of client-side errors like 400 or 401, could indicate malicious activity, such as attackers attempting to exploit vulnerabilities or perform unauthorized actions. For detailed information regarding the specific errors encountered, please refer to the following link: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status."
-        },
-        "queryPeriod": "1h"
+        }
       }
     }
   ]

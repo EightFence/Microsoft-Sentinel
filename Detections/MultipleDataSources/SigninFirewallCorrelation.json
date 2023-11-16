@@ -14,13 +14,27 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
           "categories": {
             "domains": [
               "Security - Network"
@@ -28,36 +42,22 @@
           },
           "author": {
             "name": "timbMSFT"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
         "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect\nand could indicate credential compromise for the user account.'\n",
         "triggerThreshold": 0,
         "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend timestamp = TimeGenerated, IPCustomEntity = SourceIP, AccountCustomEntity = UserPrincipalName\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "triggerOperator": "gt",
-        "severity": "Medium",
         "queryFrequency": "1d",
-        "queryPeriod": "1d",
+        "triggerOperator": "gt",
         "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
+        "severity": "Medium",
+        "queryPeriod": "1d",
         "tactics": [
           "InitialAccess"
         ]
