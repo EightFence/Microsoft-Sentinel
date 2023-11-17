@@ -14,13 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
         "tactics": [
           "CredentialAccess"
         ],
-        "triggerOperator": "gt",
+        "query": "let aadFunc = (tableName:string){ \ntable(tableName) \n| where ResultType == 500121 \n| where Status has \"MFA Denied; user declined the authentication\" or Status has \"MFA denied; Phone App Reported Fraud\" \n| extend Type = Type \n| extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]) \n}; \nlet aadSignin = aadFunc(\"SigninLogs\"); \nlet dvcInfo = DeviceInfo\n| extend SensorHealthState = column_ifexists(\"SensorHealthState\", \"\")\n| where OnboardingStatus == \"Onboarded\" and SensorHealthState == \"Active\" \n| project PublicIP, AadDeviceId; \nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"); \nunion isfuzzy=true aadSignin, aadNonInt \n| project-rename PublicIP = IPAddress   \n| join kind=leftouter dvcInfo on PublicIP  \n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -30,44 +32,42 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "AzureResource",
             "fieldMappings": [
               {
                 "identifier": "ResourceID",
                 "columnName": "ResourceID"
               }
-            ]
+            ],
+            "entityType": "AzureResource"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "ClientAppUsed"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "description": "'User explicitly denies MFA push, indicating that login was not expected and the account's password may be compromised.'\n",
+        "queryPeriod": "1d",
         "name": "Explicit MFA Deny",
-        "triggerThreshold": 0,
         "status": "Available",
-        "query": "let aadFunc = (tableName:string){ \ntable(tableName) \n| where ResultType == 500121 \n| where Status has \"MFA Denied; user declined the authentication\" or Status has \"MFA denied; Phone App Reported Fraud\" \n| extend Type = Type \n| extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]) \n}; \nlet aadSignin = aadFunc(\"SigninLogs\"); \nlet dvcInfo = DeviceInfo\n| extend SensorHealthState = column_ifexists(\"SensorHealthState\", \"\")\n| where OnboardingStatus == \"Onboarded\" and SensorHealthState == \"Active\" \n| project PublicIP, AadDeviceId; \nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\"); \nunion isfuzzy=true aadSignin, aadNonInt \n| project-rename PublicIP = IPAddress   \n| join kind=leftouter dvcInfo on PublicIP  \n",
-        "queryPeriod": "1d"
+        "severity": "Medium",
+        "description": "'User explicitly denies MFA push, indicating that login was not expected and the account's password may be compromised.'\n"
       }
     }
   ]
