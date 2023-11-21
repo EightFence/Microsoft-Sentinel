@@ -14,14 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "InitialAccess"
-        ],
         "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "status": "Available",
         "name": "Exchange OAB Virtual Directory Attribute Containing Potential Webshell",
+        "queryPeriod": "1h",
+        "severity": "High",
+        "query": "SecurityEvent\n// Look for specific Directory Service Changes and parse data\n| where EventID == 5136\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion = array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value),TimeGenerated, EventID, Computer, Account, AccountType, EventSourceName, Activity, SubjectAccount)\n// Where changes relate to Exchange OAB\n| extend ObjectClass = column_ifexists(\"ObjectClass\", \"\")\n| where ObjectClass =~ \"msExchOABVirtualDirectory\"\n// Look for InternalHostName or ExternalHostName properties being changed\n| extend AttributeLDAPDisplayName = column_ifexists(\"AttributeLDAPDisplayName\", \"\")\n| where AttributeLDAPDisplayName in~ (\"msExchExternalHostName\", \"msExchInternalHostName\")\n// Look for suspected webshell activity\n| extend AttributeValue = column_ifexists(\"AttributeValue\", \"\")\n| where AttributeValue has \"script\"\n| project-rename LastSeen = TimeGenerated\n| extend ObjectDN = column_ifexists(\"ObjectDN\", \"\")\n| project-reorder LastSeen, Computer, Account, ObjectDN, AttributeLDAPDisplayName, AttributeValue\n| extend timestamp = LastSeen, AccountCustomEntity = Account, HostCustomEntity = Computer\n",
+        "status": "Available",
+        "queryFrequency": "1h",
+        "description": "'This query uses Windows Event ID 5136 in order to detect potential webshell deployment by exploitation of CVE-2021-27065.\nThis query looks for changes to the InternalHostName or ExternalHostName properties of Exchange OAB Virtual Directory objects in AD Directory Services\nwhere the new objects contain potential webshell objects.'\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
@@ -42,10 +43,9 @@
             "entityType": "Host"
           }
         ],
-        "severity": "High",
-        "description": "'This query uses Windows Event ID 5136 in order to detect potential webshell deployment by exploitation of CVE-2021-27065.\nThis query looks for changes to the InternalHostName or ExternalHostName properties of Exchange OAB Virtual Directory objects in AD Directory Services\nwhere the new objects contain potential webshell objects.'\n",
-        "queryPeriod": "1h",
-        "query": "SecurityEvent\n// Look for specific Directory Service Changes and parse data\n| where EventID == 5136\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion = array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value),TimeGenerated, EventID, Computer, Account, AccountType, EventSourceName, Activity, SubjectAccount)\n// Where changes relate to Exchange OAB\n| extend ObjectClass = column_ifexists(\"ObjectClass\", \"\")\n| where ObjectClass =~ \"msExchOABVirtualDirectory\"\n// Look for InternalHostName or ExternalHostName properties being changed\n| extend AttributeLDAPDisplayName = column_ifexists(\"AttributeLDAPDisplayName\", \"\")\n| where AttributeLDAPDisplayName in~ (\"msExchExternalHostName\", \"msExchInternalHostName\")\n// Look for suspected webshell activity\n| extend AttributeValue = column_ifexists(\"AttributeValue\", \"\")\n| where AttributeValue has \"script\"\n| project-rename LastSeen = TimeGenerated\n| extend ObjectDN = column_ifexists(\"ObjectDN\", \"\")\n| project-reorder LastSeen, Computer, Account, ObjectDN, AttributeLDAPDisplayName, AttributeValue\n| extend timestamp = LastSeen, AccountCustomEntity = Account, HostCustomEntity = Computer\n"
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]
