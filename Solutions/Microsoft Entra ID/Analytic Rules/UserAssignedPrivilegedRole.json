@@ -14,7 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies when a privileged role is assigned to a new user. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\n",
+        "severity": "High",
+        "name": "New User Assigned to Privileged Role",
+        "queryPeriod": "14d",
+        "tactics": [
+          "Persistence"
+        ],
+        "query": "// Define the start and end times based on input values\nlet starttime = now()-1h;\nlet endtime = now();\n// Set a lookback period of 14 days\nlet lookback = starttime - 14d;\n// Define a reusable function to query audit logs\nlet awsFunc = (start:datetime, end:datetime) {\n  AuditLogs\n  | where TimeGenerated between (start..end)\n  | where Category =~ \"RoleManagement\"\n  | where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n  | where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n  | mv-apply TargetResource = TargetResources on\n    (\n      where TargetResource.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResource.type =~ \"ServicePrincipal\", tostring(TargetResource.displayName), tostring(TargetResource.userPrincipalName)),\n      props = TargetResource.modifiedProperties\n    )\n  | mv-apply Property = props on\n    (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"', tostring(Property.newValue))\n    )\n  | where RoleName contains \"Admin\" and Result == \"success\"\n};\n// Query for audit events in the current day\nlet EventInfo_CurrentDay = awsFunc(starttime, endtime);\n// Query for audit events in the historical period (lookback)\nlet EventInfo_historical = awsFunc(lookback, starttime);\n// Find unseen events by performing a left anti-join\nlet EventInfo_Unseen = (EventInfo_CurrentDay\n  | join kind=leftanti(EventInfo_historical) on Target, RoleName, OperationName\n);\n// Extend and clean up the results\nEventInfo_Unseen\n| extend InitiatingApp = tostring(InitiatedBy.app.displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))\n// You can uncomment the lines below to filter out PIM activations\n// | where Initiator != \"MS-PIM\"\n// | summarize StartTime=min(TimeGenerated), EndTime=min(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result\n// Project specific columns and split them for further analysis\n| project TimeGenerated, OperationName, RoleName, Target, Initiator, Result\n| extend TargetName = tostring(split(Target, '@', 0)[0]),\n         TargetUPNSuffix = tostring(split(Target, '@', 1)[0]),\n         InitiatorName = tostring(split(Initiator, '@', 0)[0]),\n         InitiatorUPNSuffix = tostring(split(Initiator, '@', 1)[0])\n",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,17 +50,10 @@
             "entityType": "Account"
           }
         ],
-        "name": "New User Assigned to Privileged Role",
-        "triggerOperator": "gt",
-        "severity": "High",
-        "status": "Available",
-        "queryPeriod": "14d",
-        "query": "// Define the start and end times based on input values\nlet starttime = now()-1h;\nlet endtime = now();\n// Set a lookback period of 14 days\nlet lookback = starttime - 14d;\n// Define a reusable function to query audit logs\nlet awsFunc = (start:datetime, end:datetime) {\n  AuditLogs\n  | where TimeGenerated between (start..end)\n  | where Category =~ \"RoleManagement\"\n  | where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n  | where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n  | mv-apply TargetResource = TargetResources on\n    (\n      where TargetResource.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResource.type =~ \"ServicePrincipal\", tostring(TargetResource.displayName), tostring(TargetResource.userPrincipalName)),\n      props = TargetResource.modifiedProperties\n    )\n  | mv-apply Property = props on\n    (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"', tostring(Property.newValue))\n    )\n  | where RoleName contains \"Admin\" and Result == \"success\"\n};\n// Query for audit events in the current day\nlet EventInfo_CurrentDay = awsFunc(starttime, endtime);\n// Query for audit events in the historical period (lookback)\nlet EventInfo_historical = awsFunc(lookback, starttime);\n// Find unseen events by performing a left anti-join\nlet EventInfo_Unseen = (EventInfo_CurrentDay\n  | join kind=leftanti(EventInfo_historical) on Target, RoleName, OperationName\n);\n// Extend and clean up the results\nEventInfo_Unseen\n| extend InitiatingApp = tostring(InitiatedBy.app.displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))\n// You can uncomment the lines below to filter out PIM activations\n// | where Initiator != \"MS-PIM\"\n// | summarize StartTime=min(TimeGenerated), EndTime=min(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result\n// Project specific columns and split them for further analysis\n| project TimeGenerated, OperationName, RoleName, Target, Initiator, Result\n| extend TargetName = tostring(split(Target, '@', 0)[0]),\n         TargetUPNSuffix = tostring(split(Target, '@', 1)[0]),\n         InitiatorName = tostring(split(Initiator, '@', 0)[0]),\n         InitiatorUPNSuffix = tostring(split(Initiator, '@', 1)[0])\n",
         "triggerThreshold": 0,
-        "tactics": [
-          "Persistence"
-        ],
-        "queryFrequency": "1h"
+        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "Identifies when a privileged role is assigned to a new user. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\n"
       }
     }
   ]
