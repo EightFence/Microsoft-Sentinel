@@ -14,12 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "Medium",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "query": "SecurityEvent\n| where EventID == 4656\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)\n| extend ObjectServer = column_ifexists('ObjectServer', \"\"), ObjectType = column_ifexists('ObjectType', \"\"), ObjectName = column_ifexists('ObjectName', \"\")\n| where isnotempty(ObjectServer) and isnotempty(ObjectType) and isnotempty(ObjectName)\n| where ObjectServer =~ \"SC Manager\" and ObjectType =~ \"SERVICE OBJECT\" and ObjectName =~ \"HealthService\"\n// Comment out the join below if the SACL only audits users that are part of the Network logon users, i.e. with user/group target pointing to \"NU.\"\n| join kind=leftouter (\n  SecurityEvent\n  | where EventID == 4624\n) on TargetLogonId\n| project TimeGenerated, Computer, Account, TargetAccount, IpAddress,TargetLogonId, ObjectServer, ObjectType, ObjectName\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, IPCustomEntity = IpAddress\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "Starting or Stopping HealthService to Avoid Detection",
+        "triggerOperator": "gt",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "description": "'This query detects events where an actor is stopping or starting HealthService to disable telemetry collection/detection from the agent.\n The query requires a SACL to audit for access request to the service.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -27,8 +39,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Host"
@@ -36,25 +48,13 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
-        ],
-        "queryPeriod": "1d",
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "name": "Starting or Stopping HealthService to Avoid Detection",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "triggerOperator": "gt",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "description": "'This query detects events where an actor is stopping or starting HealthService to disable telemetry collection/detection from the agent.\n The query requires a SACL to audit for access request to the service.'\n",
-        "query": "SecurityEvent\n| where EventID == 4656\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, TargetAccount, Computer, EventSourceName, Channel, Task, Level, EventID, Activity, TargetLogonId, SourceComputerId, EventOriginId, Type, _ResourceId, TenantId, SourceSystem, ManagementGroupName, IpAddress, Account)\n| extend ObjectServer = column_ifexists('ObjectServer', \"\"), ObjectType = column_ifexists('ObjectType', \"\"), ObjectName = column_ifexists('ObjectName', \"\")\n| where isnotempty(ObjectServer) and isnotempty(ObjectType) and isnotempty(ObjectName)\n| where ObjectServer =~ \"SC Manager\" and ObjectType =~ \"SERVICE OBJECT\" and ObjectName =~ \"HealthService\"\n// Comment out the join below if the SACL only audits users that are part of the Network logon users, i.e. with user/group target pointing to \"NU.\"\n| join kind=leftouter (\n  SecurityEvent\n  | where EventID == 4624\n) on TargetLogonId\n| project TimeGenerated, Computer, Account, TargetAccount, IpAddress,TargetLogonId, ObjectServer, ObjectType, ObjectName\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, IPCustomEntity = IpAddress\n"
+        ]
       }
     }
   ]
