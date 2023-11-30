@@ -14,38 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Changes to internet facing AWS RDS Database instances",
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "status": "Available",
+        "severity": "Low",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              },
+              {
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "description": "'Amazon Relational Database Service (RDS) is scalable relational database in the cloud.\nIf your organization have one or more AWS RDS Databases running, monitoring changes to especially internet facing AWS RDS (Relational Database Service)\nOnce alerts triggered, validate if changes observed are authorized and adhere to change control policy.\nMore information: https://medium.com/@GorillaStack/the-most-important-aws-cloudtrail-security-events-to-track-a5b9873f8255\nand RDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html'\n",
         "tactics": [
           "Persistence"
         ],
-        "severity": "Low",
-        "description": "'Amazon Relational Database Service (RDS) is scalable relational database in the cloud.\nIf your organization have one or more AWS RDS Databases running, monitoring changes to especially internet facing AWS RDS (Relational Database Service)\nOnce alerts triggered, validate if changes observed are authorized and adhere to change control policy.\nMore information: https://medium.com/@GorillaStack/the-most-important-aws-cloudtrail-security-events-to-track-a5b9873f8255\nand RDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html'\n",
         "queryPeriod": "1d",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
+        "queryFrequency": "1d",
         "triggerThreshold": 0,
-        "query": "let EventNameList = dynamic([\"AuthorizeDBSecurityGroupIngress\",\"CreateDBSecurityGroup\",\"DeleteDBSecurityGroup\",\"RevokeDBSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress\n"
+        "triggerOperator": "gt",
+        "status": "Available",
+        "name": "Changes to internet facing AWS RDS Database instances",
+        "query": "let EventNameList = dynamic([\"AuthorizeDBSecurityGroupIngress\",\"CreateDBSecurityGroup\",\"DeleteDBSecurityGroup\",\"RevokeDBSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n| extend timestamp = StartTimeUtc\n"
       }
     }
   ]
