@@ -1,0 +1,79 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/93de640a-314d-459a-9e21-00de2bffa92d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/93de640a-314d-459a-9e21-00de2bffa92d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Vectra Priority Entities",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "suppressionDuration": "5h",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Entity {{Name}} has been prioritized by the Vectra AI prioritization algorithm with an urgency score of {{Urgency Score}}.\nAttack rating is {{Attack Rating}}.",
+          "alertDynamicProperties": [
+            {
+              "value": "urgency",
+              "alertProperty": "ConfidenceLevel"
+            },
+            {
+              "value": "url",
+              "alertProperty": "AlertLink"
+            }
+          ],
+          "alertDisplayNameFormat": "Priority Incident - {{Name}}  with Urgency Score of {{Urgency Score}}  "
+        },
+        "customDetails": {
+          "Breadth": "breadth",
+          "Entity_type": "Type",
+          "detections": "detections",
+          "Attack_Rating": "attack_rating",
+          "Entity_importance": "Importance",
+          "Velocity": "Velocity"
+        },
+        "description": "Create an incident when an identity is suspected to be compromised. Vectra is using AI to prioritize an entity based on multiple factors (attack rating, velocity, breadth, importance.etc.). This layer of aggregation at the entity level provides a greater signal-to-noise ratio and help analyst focus on what matters.",
+        "query": "VectraEntityScoring\n| where ['Is Prioritized'] == true\n// custom details do not allow spaces in the attribute name\n| extend attack_rating = ['Attack Rating']\n| extend breadth = ['Breadth Contrib']\n| extend detections = ['Active Detection Types']\n| extend urgency = ['Urgency Score']\n| extend url = ['Vectra Pivot']\n| summarize arg_max(['Last Updated'], *) by ['Entity ID']\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "7d",
+            "groupByCustomDetails": [],
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "groupByAlertDetails": [],
+            "groupByEntities": [],
+            "reopenClosedIncident": true
+          },
+          "createIncident": true
+        },
+        "queryPeriod": "5m",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Name",
+                "identifier": "HostName"
+              }
+            ]
+          }
+        ],
+        "suppressionEnabled": false,
+        "queryFrequency": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        }
+      }
+    }
+  ]
+}
