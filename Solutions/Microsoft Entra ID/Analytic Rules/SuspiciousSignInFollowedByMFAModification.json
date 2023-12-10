@@ -14,10 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess",
+          "DefenseEvasion"
+        ],
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "status": "Available",
+        "description": "'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatorID",
@@ -31,10 +38,10 @@
                 "columnName": "InitiatorSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "TargetId",
@@ -48,46 +55,39 @@
                 "columnName": "TargetSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "FromIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIPAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "description": "'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'\n",
-        "severity": "Medium",
-        "tactics": [
-          "InitialAccess",
-          "DefenseEvasion"
-        ],
-        "queryPeriod": "1d",
-        "status": "Available",
-        "query": "let PriorityScore = 9;\nBehaviorAnalytics\n| where ActionType == \"Sign-in\"\n| where InvestigationPriority > PriorityScore\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend LogOnTime = TimeGenerated\n| join kind=inner (AuditLogs\n| where Category =~ \"UserManagement\" \n| where OperationName in~ (\"Admin registered security info\", \"Admin updated security info\", \"Admin deleted security info\", \"User registered security info\", \"User changed default security info\", \"User deleted security info\",\"User registered all required security info\",\"User started security info registration\") \n| extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))\n| extend InitiatorID = tostring(InitiatedBy.user.id)\n| extend FromIP = tostring(InitiatedBy.user.ipAddress) \n| extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| extend TargetId = tostring(TargetResources[0].id)\n| extend MFAModTime = TimeGenerated\n| where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN\n| where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))\n| extend InitiatorName = tostring(split(InitiatorUPN, \"@\")[0]), InitiatorSuffix = tostring(split(InitiatorUPN, \"@\")[1]), TargetName = tostring(split(TargetUPN, \"@\")[0]), TargetSuffix = tostring(split(TargetUPN, \"@\")[1])\n",
-        "queryFrequency": "1d",
         "name": "Suspicious Sign In Followed by MFA Modification",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Suspicious Sign In by {{InitiatorUPN}} Followed by MFA Modification to {{TargetUPN}}",
           "alertDescriptionFormat": "This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.\nIn this case {{InitiatorUPN}} logged in followed by a modification to MFA settings for {{TargetUPN}}.\nThe sign in was from {{SourceIPAddress}}.\n"
         },
-        "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        "query": "let PriorityScore = 9;\nBehaviorAnalytics\n| where ActionType == \"Sign-in\"\n| where InvestigationPriority > PriorityScore\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend LogOnTime = TimeGenerated\n| join kind=inner (AuditLogs\n| where Category =~ \"UserManagement\" \n| where OperationName in~ (\"Admin registered security info\", \"Admin updated security info\", \"Admin deleted security info\", \"User registered security info\", \"User changed default security info\", \"User deleted security info\",\"User registered all required security info\",\"User started security info registration\") \n| extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))\n| extend InitiatorID = tostring(InitiatedBy.user.id)\n| extend FromIP = tostring(InitiatedBy.user.ipAddress) \n| extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| extend TargetId = tostring(TargetResources[0].id)\n| extend MFAModTime = TimeGenerated\n| where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN\n| where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))\n| extend InitiatorName = tostring(split(InitiatorUPN, \"@\")[0]), InitiatorSuffix = tostring(split(InitiatorUPN, \"@\")[1]), TargetName = tostring(split(TargetUPN, \"@\")[0]), TargetSuffix = tostring(split(TargetUPN, \"@\")[1])\n",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d"
       }
     }
   ]
