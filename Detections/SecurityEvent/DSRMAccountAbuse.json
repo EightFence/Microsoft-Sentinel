@@ -14,100 +14,100 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID in (13)\n| parse EventData with * 'ProcessId\">' ProcessId \"<\"* 'Image\">' Image \"<\" * 'TargetObject\">' TargetObject \"<\" * 'Details\">' Details \"<\" * 'User\">' User \"<\" * \n| where TargetObject has (\"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\") and Details == \"DWORD (0x00000002)\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(User, \"\\\\\")[1]), AccountNTDomain = tostring(split(User, \"\\\\\")[0])\n| extend ImageFileName = tostring(split(Image, \"\\\\\")[-1])\n| extend ImageDirectory = replace_string(Image, ImageFileName, \"\")\n| project-away DomainIndex\n",
+        "description": "'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.\nRef: https://adsecurity.org/?p=1785'\n",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Persistence"
+        ],
+        "severity": "High",
+        "triggerOperator": "gt",
+        "queryPeriod": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Computer",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountNTDomain",
+                "identifier": "NTDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "columnName": "ProcessId",
+                "identifier": "ProcessId"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "columnName": "ImageFileName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "ImageDirectory",
+                "identifier": "Directory"
+              }
+            ]
+          },
+          {
+            "entityType": "RegistryKey",
+            "fieldMappings": [
+              {
+                "columnName": "TargetObject",
+                "identifier": "Key"
+              }
+            ]
+          }
+        ],
+        "name": "DSRM Account Abuse",
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "Vasileios Paschalidis"
-          },
           "categories": {
             "domains": [
               "Security - Others"
             ]
           },
+          "author": {
+            "name": "Vasileios Paschalidis"
+          },
           "support": {
             "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
-        "description": "'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.\nRef: https://adsecurity.org/?p=1785'\n",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "name": "DSRM Account Abuse",
-        "triggerOperator": "gt",
-        "tactics": [
-          "Persistence"
-        ],
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Computer"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "User"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "AccountNTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "ProcessId",
-                "columnName": "ProcessId"
-              }
-            ],
-            "entityType": "Process"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "ImageFileName"
-              },
-              {
-                "identifier": "Directory",
-                "columnName": "ImageDirectory"
-              }
-            ],
-            "entityType": "File"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Key",
-                "columnName": "TargetObject"
-              }
-            ],
-            "entityType": "RegistryKey"
-          }
-        ],
-        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID in (13)\n| parse EventData with * 'ProcessId\">' ProcessId \"<\"* 'Image\">' Image \"<\" * 'TargetObject\">' TargetObject \"<\" * 'Details\">' Details \"<\" * 'User\">' User \"<\" * \n| where TargetObject has (\"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\") and Details == \"DWORD (0x00000002)\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(User, \"\\\\\")[1]), AccountNTDomain = tostring(split(User, \"\\\\\")[0])\n| extend ImageFileName = tostring(split(Image, \"\\\\\")[-1])\n| extend ImageDirectory = replace_string(Image, ImageFileName, \"\")\n| project-away DomainIndex\n",
-        "queryPeriod": "1h"
+        "queryFrequency": "1h"
       }
     }
   ]
