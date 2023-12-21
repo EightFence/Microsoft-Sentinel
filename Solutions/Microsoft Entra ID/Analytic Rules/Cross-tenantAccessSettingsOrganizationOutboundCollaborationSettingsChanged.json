@@ -14,9 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "//In User & Groups and in Applications, the following \"AccessType\" values in columns PremodifiedOutboundSettings and ModifiedOutboundSettings are interpreted accordingly:\n// When Access Type in premodified outbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified outbound settings value was 2 that means that the initial access was blocked. \n// When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked. \nAuditLogs\n| where OperationName has \"Update a partner cross-tenant access setting\"\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"Policy\"\n      | extend Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on\n  (\n      where Property.displayName =~ \"b2bCollaborationOutbound\"\n      | extend PremodifiedOutboundSettings = trim('\"',tostring(Property.oldValue)),\n               ModifiedOutboundSettings = trim(@'\"',tostring(Property.newValue))\n  )\n| extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)\n| extend InitiatedByIPAdress = InitiatedBy.user.ipAddress\n| where PremodifiedOutboundSettings != ModifiedOutboundSettings\n| extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])\n",
+        "queryFrequency": "2d",
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "Discovery"
+        ],
+        "queryPeriod": "2d",
+        "triggerThreshold": 0,
         "name": "Cross-tenant Access Settings Organization Outbound Collaboration Settings Changed",
+        "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Outbound Collaboration Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Name",
@@ -26,32 +39,19 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "InitiatedByIPAdress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "Discovery"
-        ],
-        "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Outbound Collaboration Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
-        "triggerOperator": "gt",
-        "status": "Available",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "//In User & Groups and in Applications, the following \"AccessType\" values in columns PremodifiedOutboundSettings and ModifiedOutboundSettings are interpreted accordingly:\n// When Access Type in premodified outbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified outbound settings value was 2 that means that the initial access was blocked. \n// When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked. \nAuditLogs\n| where OperationName has \"Update a partner cross-tenant access setting\"\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"Policy\"\n      | extend Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on\n  (\n      where Property.displayName =~ \"b2bCollaborationOutbound\"\n      | extend PremodifiedOutboundSettings = trim('\"',tostring(Property.oldValue)),\n               ModifiedOutboundSettings = trim(@'\"',tostring(Property.newValue))\n  )\n| extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)\n| extend InitiatedByIPAdress = InitiatedBy.user.ipAddress\n| where PremodifiedOutboundSettings != ModifiedOutboundSettings\n| extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])\n",
-        "queryPeriod": "2d",
-        "queryFrequency": "2d"
+        "status": "Available"
       }
     }
   ]
