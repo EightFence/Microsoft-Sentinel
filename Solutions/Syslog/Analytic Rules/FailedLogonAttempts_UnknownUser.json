@@ -14,37 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "name": "Failed logon attempts in authpriv",
+        "triggerOperator": "gt",
         "queryFrequency": "1d",
+        "query": "let threshold = 15;\n// Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.\n// IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages\n// are aggregated.\nSyslog\n| where Facility =~ \"authpriv\"\n| where SyslogMessage has \"authentication failure\" and SyslogMessage has \" uid=0\"\n| extend RemoteIP = extract(@\".*?rhost=([\\d.]+).*?\", 1,SyslogMessage)\n| project TimeGenerated, Computer, ProcessName, HostIP, RemoteIP, ProcessID\n| join kind=innerunique (\n    // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. \n    Syslog \n    | where Facility =~ \"authpriv\"\n    | where SyslogMessage has \"user unknown\"\n    | project Computer, HostIP, ProcessID\n    ) on Computer, HostIP, ProcessID\n// Count the number of failed logon attempts by External IP and internal machine\n| summarize FirstLogonAttempt = min(TimeGenerated), LatestLogonAttempt = max(TimeGenerated), TotalLogonAttempts = count() by Computer, HostIP, RemoteIP\n// Calculate the time between first and last logon attempt (AttemptPeriodLength)\n| extend TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt\n| where TotalLogonAttempts >= threshold\n| project FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts, TotalLogonAttempts, SourceAddress = RemoteIP, DestinationHost = Computer, DestinationAddress = HostIP\n| sort by DestinationHost asc nulls last\n| extend timestamp = FirstLogonAttempt, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationAddress\n",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "HostCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "HostCustomEntity"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "triggerOperator": "gt",
-        "query": "let threshold = 15;\n// Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.\n// IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages\n// are aggregated.\nSyslog\n| where Facility =~ \"authpriv\"\n| where SyslogMessage has \"authentication failure\" and SyslogMessage has \" uid=0\"\n| extend RemoteIP = extract(@\".*?rhost=([\\d.]+).*?\", 1,SyslogMessage)\n| project TimeGenerated, Computer, ProcessName, HostIP, RemoteIP, ProcessID\n| join kind=innerunique (\n    // Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. \n    Syslog \n    | where Facility =~ \"authpriv\"\n    | where SyslogMessage has \"user unknown\"\n    | project Computer, HostIP, ProcessID\n    ) on Computer, HostIP, ProcessID\n// Count the number of failed logon attempts by External IP and internal machine\n| summarize FirstLogonAttempt = min(TimeGenerated), LatestLogonAttempt = max(TimeGenerated), TotalLogonAttempts = count() by Computer, HostIP, RemoteIP\n// Calculate the time between first and last logon attempt (AttemptPeriodLength)\n| extend TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt\n| where TotalLogonAttempts >= threshold\n| project FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts, TotalLogonAttempts, SourceAddress = RemoteIP, DestinationHost = Computer, DestinationAddress = HostIP\n| sort by DestinationHost asc nulls last\n| extend timestamp = FirstLogonAttempt, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationAddress\n",
+        "description": "'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in \nisn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. \nIf there are many of hits, especially from outside your network, it could indicate a brute force attack. \nDefault threshold for logon attempts is 15.'\n",
         "tactics": [
           "CredentialAccess"
         ],
         "severity": "Medium",
-        "description": "'Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in \nisn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. \nIf there are many of hits, especially from outside your network, it could indicate a brute force attack. \nDefault threshold for logon attempts is 15.'\n"
+        "name": "Failed logon attempts in authpriv",
+        "triggerThreshold": 0
       }
     }
   ]
