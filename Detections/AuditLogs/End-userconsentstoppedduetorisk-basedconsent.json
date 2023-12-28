@@ -14,30 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Detects a user's consent to an OAuth application being blocked due to it being too risky.\n  These events should be investigated to understand why the user attempted to consent to the applicaiton and what other applicaitons they may have consented to.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#end-user-stopped-due-to-risk-based-consent'\n",
-        "triggerThreshold": 0,
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          }
-        },
-        "query": "AuditLogs\n  | where OperationName has \"Consent to application\"\n  | where Result =~ \"failure\"\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend userAgent = iif(AdditionalDetails[0].key == \"User-Agent\", tostring(AdditionalDetails[0].value), tostring(AdditionalDetails[1].value))\n  | where isnotempty(TargetResources)\n  | extend TargetAppName = tostring(TargetResources[0].displayName)\n  | extend TargetAppId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | where TargetResources_0_modifiedProperties.displayName =~ \"MethodExecutionResult.\"\n  | extend TargetPropertyDisplayName = tostring(TargetResources_0_modifiedProperties.displayName)\n  | extend FailureReason = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where FailureReason contains \"Risky\"\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | project-reorder TimeGenerated, OperationName, Result, TargetAppName, TargetAppId, FailureReason, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, userAgent\n",
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
         "queryFrequency": "1d",
-        "name": "End-user consent stopped due to risk-based consent",
-        "severity": "Medium",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingUserPrincipalName",
@@ -51,28 +36,28 @@
                 "columnName": "InitiatingAccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingAadUserId",
                 "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "InitiatingIPAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "TargetAppId",
@@ -82,16 +67,31 @@
                 "columnName": "TargetAppName",
                 "identifier": "Name"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
+        "name": "End-user consent stopped due to risk-based consent",
+        "query": "AuditLogs\n  | where OperationName has \"Consent to application\"\n  | where Result =~ \"failure\"\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend userAgent = iif(AdditionalDetails[0].key == \"User-Agent\", tostring(AdditionalDetails[0].value), tostring(AdditionalDetails[1].value))\n  | where isnotempty(TargetResources)\n  | extend TargetAppName = tostring(TargetResources[0].displayName)\n  | extend TargetAppId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | where TargetResources_0_modifiedProperties.displayName =~ \"MethodExecutionResult.\"\n  | extend TargetPropertyDisplayName = tostring(TargetResources_0_modifiedProperties.displayName)\n  | extend FailureReason = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where FailureReason contains \"Risky\"\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | project-reorder TimeGenerated, OperationName, Result, TargetAppName, TargetAppId, FailureReason, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, userAgent\n",
+        "queryPeriod": "1d",
         "triggerOperator": "gt",
-        "queryPeriod": "1d"
+        "severity": "Medium",
+        "metadata": {
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "description": "'Detects a user's consent to an OAuth application being blocked due to it being too risky.\n  These events should be investigated to understand why the user attempted to consent to the applicaiton and what other applicaitons they may have consented to.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#end-user-stopped-due-to-risk-based-consent'\n"
       }
     }
   ]
