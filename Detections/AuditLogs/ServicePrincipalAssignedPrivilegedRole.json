@@ -14,54 +14,97 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingAppName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatingAppServicePrincipalId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingUserPrincipalName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "InitiatingAccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatingAccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingAadUserId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ServicePrincipalName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "ServicePrincipalId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingIPAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n  | extend ServicePrincipalName = tostring(TargetResources[0].displayName)\n  | extend ServicePrincipalId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where displayName == \"Role.DisplayName\" and newValue contains \"admin\"\n  | extend TargetRole = newValue\n  | project-reorder TimeGenerated, ServicePrincipalName, ServicePrincipalId, InitiatedBy, TargetRole, InitiatingIPAddress\n",
         "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
-        "severity": "Medium",
         "queryFrequency": "1d",
+        "severity": "Medium",
+        "name": "Service Principal Assigned Privileged Role",
+        "triggerThreshold": 0,
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Pete Bryan"
-          },
-          "source": {
-            "kind": "Community"
-          },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
-        "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend ServicePrincipal = tostring(TargetResources[0].displayName)\n  | extend SPID = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | where TargetResources_0_modifiedProperties.displayName =~ \"Role.DisplayName\"\n  | extend TargetRole = parse_json(tostring(TargetResources_0_modifiedProperties.newValue))\n  | where TargetRole contains \"admin\"\n  | extend AddedByApp = iif(\n  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)),\n  tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName),\n  tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  )\n  | extend AddedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend AddedBy = iif(isnotempty(AddedByApp), AddedByApp, AddedByUser)\n  | extend IpAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | project-reorder TimeGenerated, ServicePrincipal, SPID, TargetRole, AddedBy, IpAddress\n  | project-away AddedByApp, AddedByUser\n",
-        "name": "Service Principal Assigned Privileged Role",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "AadUserId",
-                "columnName": "SPID"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "AddedBy"
-              }
-            ]
-          }
-        ],
         "tactics": [
           "PrivilegeEscalation"
-        ]
+        ],
+        "queryPeriod": "1d",
+        "triggerOperator": "gt"
       }
     }
   ]
