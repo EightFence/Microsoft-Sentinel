@@ -14,16 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Identity",
+              "Security - Threat Protection"
+            ]
+          },
+          "author": {
+            "name": "Juanse"
+          }
+        },
+        "triggerThreshold": 0,
+        "queryPeriod": "7d",
+        "severity": "Medium",
         "customDetails": {
+          "PasswordResult": "PasswordResult",
           "NewCountryEvent": "NewCountryEvent",
           "LastObservedTime": "LastObservedTime",
-          "AuthSucceeded": "AuthSucceeded",
-          "AppName": "AppName",
           "failureReason": "failureReason",
-          "PasswordResult": "PasswordResult"
+          "AuthSucceeded": "AuthSucceeded",
+          "AppName": "AppName"
         },
-        "query": "// Creating a list of successful sign-in by users in the last 7 days.\nlet KnownUserCountry = (\nSigninLogs\n| where TimeGenerated between (ago(7d) .. ago(1d) ) \n| where ResultType == 0\n| summarize KnownCountry = make_set(Location,1048576) by UserPrincipalName\n);\n// Identify sign-ins that are no successful but have the auth details indicating a correct password.\nSigninLogs\n| where TimeGenerated >= ago(1d)\n| where ResultType != 0\n| extend ParseAuth = parse_json(AuthenticationDetails)\n| extend AuthMethod = tostring(ParseAuth.[0].authenticationMethod),\n    PasswordResult = tostring(ParseAuth.[0].authenticationStepResultDetail),\n    AuthSucceeded = tostring(ParseAuth.[0].succeeded)\n| where PasswordResult == \"Correct Password\" or AuthSucceeded == \"true\"\n| where AuthMethod == \"Password\"\n| extend failureReason = tostring(Status.failureReason)\n| summarize NewCountry = make_set(Location,1048576), LastObservedTime = max(TimeGenerated), AppName = make_set(AppDisplayName,1048576) by UserPrincipalName, PasswordResult, AuthSucceeded, failureReason\n// Combining both tables by user\n| join kind=inner KnownUserCountry on UserPrincipalName\n// Compare both arrays and identify if the country has been observed in the past.\n| extend CountryDiff = set_difference(NewCountry,KnownCountry)\n| extend CountryDiffCount = array_length(CountryDiff)\n// Count the new column to only alert if there is a difference between both arrays\n| where CountryDiffCount != 0\n| extend NewCountryEvent = CountryDiff\n// Getting UserName and Domain\n| extend Name = split(UserPrincipalName,\"@\",0),\n    Domain = split(UserPrincipalName,\"@\",1)\n| mv-expand Name,Domain\n",
-        "severity": "Medium",
+        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess",
           "CredentialAccess"
@@ -32,9 +51,6 @@
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
-        "queryPeriod": "7d",
-        "name": "New country signIn with correct password",
-        "queryFrequency": "1d",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -54,25 +70,9 @@
             "entityType": "Account"
           }
         ],
-        "triggerOperator": "gt",
-        "metadata": {
-          "author": {
-            "name": "Juanse"
-          },
-          "categories": {
-            "domains": [
-              "Identity",
-              "Security - Threat Protection"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          }
-        },
-        "triggerThreshold": 0
+        "query": "// Creating a list of successful sign-in by users in the last 7 days.\nlet KnownUserCountry = (\nSigninLogs\n| where TimeGenerated between (ago(7d) .. ago(1d) ) \n| where ResultType == 0\n| summarize KnownCountry = make_set(Location,1048576) by UserPrincipalName\n);\n// Identify sign-ins that are no successful but have the auth details indicating a correct password.\nSigninLogs\n| where TimeGenerated >= ago(1d)\n| where ResultType != 0\n| extend ParseAuth = parse_json(AuthenticationDetails)\n| extend AuthMethod = tostring(ParseAuth.[0].authenticationMethod),\n    PasswordResult = tostring(ParseAuth.[0].authenticationStepResultDetail),\n    AuthSucceeded = tostring(ParseAuth.[0].succeeded)\n| where PasswordResult == \"Correct Password\" or AuthSucceeded == \"true\"\n| where AuthMethod == \"Password\"\n| extend failureReason = tostring(Status.failureReason)\n| summarize NewCountry = make_set(Location,1048576), LastObservedTime = max(TimeGenerated), AppName = make_set(AppDisplayName,1048576) by UserPrincipalName, PasswordResult, AuthSucceeded, failureReason\n// Combining both tables by user\n| join kind=inner KnownUserCountry on UserPrincipalName\n// Compare both arrays and identify if the country has been observed in the past.\n| extend CountryDiff = set_difference(NewCountry,KnownCountry)\n| extend CountryDiffCount = array_length(CountryDiff)\n// Count the new column to only alert if there is a difference between both arrays\n| where CountryDiffCount != 0\n| extend NewCountryEvent = CountryDiff\n// Getting UserName and Domain\n| extend Name = split(UserPrincipalName,\"@\",0),\n    Domain = split(UserPrincipalName,\"@\",1)\n| mv-expand Name,Domain\n",
+        "name": "New country signIn with correct password",
+        "queryFrequency": "1d"
       }
     }
   ]
