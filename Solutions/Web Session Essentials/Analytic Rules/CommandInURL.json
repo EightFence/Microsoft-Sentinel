@@ -14,13 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Detect URLs containing known malicious keywords or commands (ASIM Web Session)",
-        "description": "'The utilization of system commands or functions in the request URL may suggest that an attacker is trying to gain unauthorized access to the environment by exploiting a vulnerable service.'\n",
         "tactics": [
           "InitialAccess",
           "CommandAndControl"
         ],
-        "queryFrequency": "5m",
+        "queryPeriod": "5m",
+        "customDetails": {
+          "EventStartTime": "EventStartTime",
+          "EventEndTime": "EventEndTime",
+          "EventCount": "EventCount",
+          "Decoded_url": "Decoded_url"
+        },
+        "status": "Available",
+        "name": "Detect URLs containing known malicious keywords or commands (ASIM Web Session)",
+        "description": "'The utilization of system commands or functions in the request URL may suggest that an attacker is trying to gain unauthorized access to the environment by exploiting a vulnerable service.'\n",
+        "query": "let lookback = 5m;\nlet RiskyCommandsInUrl = materialize(externaldata(Commands: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/CommandsInURL.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomRiskyCommandsInUrl = (_ASIM_GetWatchlistRaw(\"Web_RiskyCommandsInUrl\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Commands = tostring(WatchlistItem[\"Commands\"])\n    | project Commands\n    | where isnotempty(Commands));\nlet CombinedRiskyCommandsInUrl = union RiskyCommandsInUrl, CustomRiskyCommandsInUrl;\nlet knownRiskyCommandsInUrl=toscalar(CombinedRiskyCommandsInUrl\n    | where isnotempty(Commands)\n    | summarize make_set(Commands, 1000));\n// You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.\n_Im_WebSession (starttime=ago(lookback), eventresult='Success', url_has_any=knownRiskyCommandsInUrl)\n| where isnotempty(Url)\n| project Url, SrcIpAddr, SrcUsername, SrcHostname, DstIpAddr, TimeGenerated\n| extend Decoded_url = url_decode(Url)\n| where Decoded_url has_any (knownRiskyCommandsInUrl)\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url, DstIpAddr\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n",
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been identified as making request for URL '{{Url}}' that includes a recognizable malicious command"
         },
@@ -30,34 +39,33 @@
         "severity": "High",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SrcIpAddr"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "DstIpAddr"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -67,20 +75,12 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "status": "Available",
-        "queryPeriod": "5m",
-        "triggerOperator": "gt",
-        "query": "let lookback = 5m;\nlet RiskyCommandsInUrl = materialize(externaldata(Commands: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/CommandsInURL.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomRiskyCommandsInUrl = (_ASIM_GetWatchlistRaw(\"Web_RiskyCommandsInUrl\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Commands = tostring(WatchlistItem[\"Commands\"])\n    | project Commands\n    | where isnotempty(Commands));\nlet CombinedRiskyCommandsInUrl = union RiskyCommandsInUrl, CustomRiskyCommandsInUrl;\nlet knownRiskyCommandsInUrl=toscalar(CombinedRiskyCommandsInUrl\n    | where isnotempty(Commands)\n    | summarize make_set(Commands, 1000));\n// You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.\n_Im_WebSession (starttime=ago(lookback), eventresult='Success', url_has_any=knownRiskyCommandsInUrl)\n| where isnotempty(Url)\n| project Url, SrcIpAddr, SrcUsername, SrcHostname, DstIpAddr, TimeGenerated\n| extend Decoded_url = url_decode(Url)\n| where Decoded_url has_any (knownRiskyCommandsInUrl)\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url, DstIpAddr\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n",
-        "customDetails": {
-          "EventEndTime": "EventEndTime",
-          "Decoded_url": "Decoded_url",
-          "EventCount": "EventCount",
-          "EventStartTime": "EventStartTime"
-        },
-        "triggerThreshold": 0
+        "queryFrequency": "5m",
+        "triggerOperator": "gt"
       }
     }
   ]

@@ -14,16 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Bulk Changes to Privileged Account Permissions",
-        "description": "'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "queryFrequency": "2h",
+        "queryPeriod": "2h",
+        "customDetails": {
+          "InitiatedByUser": "InitiatedByUser",
+          "TargetUser": "Target"
+        },
+        "status": "Available",
+        "name": "Bulk Changes to Privileged Account Permissions",
+        "description": "'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
+        "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(Target) by bin(TimeGenerated, 1h)\n| where dcount_Target > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]),\n         InitiatedByUserName = tostring(split(InitiatedByUser,'@',0)[0]), InitiatedByUserUPNSuffix = tostring(split(InitiatedByUser,'@',1)[0])\n",
+        "triggerThreshold": 0,
         "severity": "High",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -33,10 +39,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "TargetUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -46,18 +52,12 @@
                 "identifier": "UPNSuffix",
                 "columnName": "InitiatedByUserUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "status": "Available",
-        "queryPeriod": "2h",
-        "triggerOperator": "gt",
-        "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(Target) by bin(TimeGenerated, 1h)\n| where dcount_Target > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]),\n         InitiatedByUserName = tostring(split(InitiatedByUser,'@',0)[0]), InitiatedByUserUPNSuffix = tostring(split(InitiatedByUser,'@',1)[0])\n",
-        "customDetails": {
-          "TargetUser": "Target",
-          "InitiatedByUser": "InitiatedByUser"
-        },
-        "triggerThreshold": 0
+        "queryFrequency": "2h",
+        "triggerOperator": "gt"
       }
     }
   ]
