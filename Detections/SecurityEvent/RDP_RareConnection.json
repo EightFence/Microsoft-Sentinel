@@ -14,57 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "14d",
         "tactics": [
           "LateralMovement"
         ],
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Account"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "AccountNTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Computer"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "HostNameDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IpAddress"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
         "queryFrequency": "1d",
+        "triggerThreshold": 0,
         "query": "let starttime = 14d;\nlet endtime = 1d;\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()\nby Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n// use left anti to exclude anything from the previous 14 days that is not rare\n),\n(WindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = tostring(EventData.LogonType)\n| where  LogonType == 10\n| extend Account = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend TargetUserSid = tostring(EventData.TargetUserSid)\n| extend AccountType=case(Account endswith \"$\" or TargetUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(TargetUserSid), \"\", \"User\")\n| extend Activity=\"4624 - An account was successfully logged on.\"\n| extend LogonTypeName=\"10 - RemoteInteractive\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()\nby Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n))\n| join kind=leftanti (\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where EventID == 4624\n| summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)\n),\n( WindowsEvent\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where EventID == 4624\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend Account = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)\n))\n) on Account, Computer\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)\nby Account, Computer, IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, @\"\\\")[1]), AccountNTDomain = tostring(split(Account, @\"\\\")[0])\n| project-away DomainIndex\n",
+        "description": "'Identifies when an RDP connection is new or rare related to any logon type by a given account today compared with the previous 14 days.\nRDP connections are indicated by the EventID 4624 with LogonType = 10'\n",
+        "severity": "Medium",
         "metadata": {
           "author": {
             "name": "Microsoft Security Research"
@@ -74,18 +32,60 @@
               "Security - Threat Protection"
             ]
           },
-          "support": {
-            "tier": "Community"
-          },
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           }
         },
-        "queryPeriod": "14d",
-        "description": "'Identifies when an RDP connection is new or rare related to any logon type by a given account today compared with the previous 14 days.\nRDP connections are indicated by the EventID 4624 with LogonType = 10'\n",
         "triggerOperator": "gt",
-        "name": "Rare RDP Connections",
-        "severity": "Medium"
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Account",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountNTDomain",
+                "identifier": "NTDomain"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Computer",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "HostNameDomain",
+                "identifier": "NTDomain"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "IpAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "name": "Rare RDP Connections"
       }
     }
   ]

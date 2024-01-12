@@ -14,95 +14,95 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryFrequency": "1d",
+        "name": "Suspicious Entra ID Joined Device Update",
         "description": "'This query looks for suspicious updates to an Microsoft Entra ID joined device where the device name is changed and the device falls out of compliance.\nThis could occur when a threat actor updates the details of an Autopilot provisioned device using a stolen device ticket, in order to access certificates and keys.\nRef: https://dirkjanm.io/assets/raw/Insomnihack%20Breaking%20and%20fixing%20Azure%20AD%20device%20identity%20security.pdf'\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Suspicious AAD Joined Device Update {{OldDeviceName}} renamed to {{NewDeviceName}} and {{UpdatedPropertiesCount}} properties changed",
-          "alertDescriptionFormat": "This query looks for suspicious updates to an Microsoft Entra ID joined device where the device name is changed and the device falls out of compliance.\nIn this case {{OldDeviceName}} was renamed to {{NewDeviceName}} and {{UpdatedPropertiesCount}} properties were changed.\nThis could occur when a threat actor steals a Device ticket from an Autopilot provisioned device and uses it to AAD Join a new  device.\nRef: https://dirkjanm.io/assets/raw/Insomnihack%20Breaking%20and%20fixing%20Azure%20AD%20device%20identity%20security.pdf\n"
-        },
         "tactics": [
           "CredentialAccess"
         ],
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "This query looks for suspicious updates to an Microsoft Entra ID joined device where the device name is changed and the device falls out of compliance.\nIn this case {{OldDeviceName}} was renamed to {{NewDeviceName}} and {{UpdatedPropertiesCount}} properties were changed.\nThis could occur when a threat actor steals a Device ticket from an Autopilot provisioned device and uses it to AAD Join a new  device.\nRef: https://dirkjanm.io/assets/raw/Insomnihack%20Breaking%20and%20fixing%20Azure%20AD%20device%20identity%20security.pdf\n",
+          "alertDisplayNameFormat": "Suspicious AAD Joined Device Update {{OldDeviceName}} renamed to {{NewDeviceName}} and {{UpdatedPropertiesCount}} properties changed"
+        },
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "NewDeviceName"
+                "columnName": "NewDeviceName",
+                "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "OldDeviceName"
+                "columnName": "OldDeviceName",
+                "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "AzureID",
-                "columnName": "DeviceId"
+                "columnName": "DeviceId",
+                "identifier": "AzureID"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "InitiatingUserPrincipalName"
+                "columnName": "InitiatingUserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "InitiatedByName"
+                "columnName": "InitiatedByName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatedByUPNSuffix"
+                "columnName": "InitiatedByUPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAadUserId"
+                "columnName": "InitiatingAadUserId",
+                "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAppServicePrincipalId"
+                "columnName": "InitiatingAppServicePrincipalId",
+                "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "InitiatingIpAddress"
+                "columnName": "InitiatingIpAddress",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "query": "AuditLogs\n| where OperationName =~ \"Update device\"\n| mv-apply TargetResource=TargetResources on (\n    where TargetResource.type =~ \"Device\"\n    | extend ModifiedProperties = TargetResource.modifiedProperties\n    | extend DeviceId = TargetResource.id)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"CloudDisplayName\"\n    | extend OldName = Prop.oldValue \n    | extend NewName = Prop.newValue)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"IsCompliant\"\n    | extend OldComplianceState = Prop.oldValue  \n    | extend NewComplianceState = Prop.newValue)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"TargetId.DeviceTrustType\"\n    | extend OldTrustType = Prop.oldValue  \n    | extend NewTrustType = Prop.newValue)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"Included Updated Properties\" \n    | extend UpdatedProperties = Prop.newValue)\n| extend OldDeviceName = tostring(parse_json(tostring(OldName))[0])\n| extend NewDeviceName = tostring(parse_json(tostring(NewName))[0])\n| extend OldComplianceState = tostring(parse_json(tostring(OldComplianceState))[0])\n| extend NewComplianceState = tostring(parse_json(tostring(NewComplianceState))[0])\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend UpdatedPropertiesCount = array_length(split(UpdatedProperties, ','))\n| where OldDeviceName != NewDeviceName\n| where OldComplianceState =~ 'true' and NewComplianceState =~ 'false'\n// Most common is transferring from AAD Registered to AAD Joined - we just want AAD Joined devices\n| where NewTrustType == '\"AzureAd\"' and OldTrustType != '\"Workplace\"'\n// We can modify this value to tune FPs - more properties changed about the device beyond its name the more suspicious it could be\n| where UpdatedPropertiesCount > 1\n| project-reorder TimeGenerated, DeviceId, NewDeviceName, OldDeviceName, NewComplianceState, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, AADOperationType, OldTrustType, NewTrustType, UpdatedProperties, UpdatedPropertiesCount\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
-        "queryPeriod": "1d",
         "triggerOperator": "gt",
-        "name": "Suspicious Entra ID Joined Device Update",
-        "status": "Available"
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "query": "AuditLogs\n| where OperationName =~ \"Update device\"\n| mv-apply TargetResource=TargetResources on (\n    where TargetResource.type =~ \"Device\"\n    | extend ModifiedProperties = TargetResource.modifiedProperties\n    | extend DeviceId = TargetResource.id)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"CloudDisplayName\"\n    | extend OldName = Prop.oldValue \n    | extend NewName = Prop.newValue)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"IsCompliant\"\n    | extend OldComplianceState = Prop.oldValue  \n    | extend NewComplianceState = Prop.newValue)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"TargetId.DeviceTrustType\"\n    | extend OldTrustType = Prop.oldValue  \n    | extend NewTrustType = Prop.newValue)\n| mv-apply Prop=ModifiedProperties on ( \n    where Prop.displayName =~ \"Included Updated Properties\" \n    | extend UpdatedProperties = Prop.newValue)\n| extend OldDeviceName = tostring(parse_json(tostring(OldName))[0])\n| extend NewDeviceName = tostring(parse_json(tostring(NewName))[0])\n| extend OldComplianceState = tostring(parse_json(tostring(OldComplianceState))[0])\n| extend NewComplianceState = tostring(parse_json(tostring(NewComplianceState))[0])\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend UpdatedPropertiesCount = array_length(split(UpdatedProperties, ','))\n| where OldDeviceName != NewDeviceName\n| where OldComplianceState =~ 'true' and NewComplianceState =~ 'false'\n// Most common is transferring from AAD Registered to AAD Joined - we just want AAD Joined devices\n| where NewTrustType == '\"AzureAd\"' and OldTrustType != '\"Workplace\"'\n// We can modify this value to tune FPs - more properties changed about the device beyond its name the more suspicious it could be\n| where UpdatedPropertiesCount > 1\n| project-reorder TimeGenerated, DeviceId, NewDeviceName, OldDeviceName, NewComplianceState, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, AADOperationType, OldTrustType, NewTrustType, UpdatedProperties, UpdatedPropertiesCount\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
+        "status": "Available",
+        "severity": "Medium"
       }
     }
   ]
