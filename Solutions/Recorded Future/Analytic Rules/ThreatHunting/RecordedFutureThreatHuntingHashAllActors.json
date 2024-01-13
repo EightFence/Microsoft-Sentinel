@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "15m",
+        "severity": "Medium",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Value",
+                "columnName": "Hash"
+              },
+              {
+                "identifier": "Algorithm",
+                "columnName": "HashType"
+              }
+            ],
+            "entityType": "FileHash"
+          }
+        ],
         "incidentConfiguration": {
           "groupingConfiguration": {
+            "reopenClosedIncident": false,
             "matchingMethod": "AllEntities",
             "enabled": true,
-            "reopenClosedIncident": false,
             "lookbackDuration": "1h"
           },
           "createIncident": true
         },
-        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "value": "RecordedFuturePortalLink",
-              "alertProperty": "AlertLink"
-            }
-          ],
-          "alertDisplayNameFormat": "{{Description}}",
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash_s}} from the {{Type}} table.\\n"
-        },
-        "entityMappings": [
-          {
-            "entityType": "FileHash",
-            "fieldMappings": [
-              {
-                "columnName": "Hash",
-                "identifier": "Value"
-              },
-              {
-                "columnName": "HashType",
-                "identifier": "Algorithm"
-              }
-            ]
-          }
-        ],
-        "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "queryFrequency": "15m",
+        "name": "RecordedFuture Threat Hunting Hash All Actors",
         "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
-        "severity": "Medium",
+        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
+        "queryPeriod": "1d",
         "customDetails": {
           "ActorInformation": "RecordedFuturePortalLink"
         },
-        "name": "RecordedFuture Threat Hunting Hash All Actors",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash_s}} from the {{Type}} table.\\n",
+          "alertDisplayNameFormat": "{{Description}}",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "AlertLink",
+              "value": "RecordedFuturePortalLink"
+            }
+          ]
+        },
+        "triggerThreshold": 0,
+        "triggerOperator": "gt"
       }
     }
   ]
