@@ -14,32 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "6h",
+        "triggerOperator": "gt",
+        "name": "Insider Risk_Microsoft Purview Insider Risk Management Alert Observed",
+        "severity": "High",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
-        "name": "Insider Risk_Microsoft Purview Insider Risk Management Alert Observed",
-        "description": "'This alert is triggered when a Microsoft Purview Insider Risk Management alert is recieved in Microsoft Sentinel via the Microsoft Purview Insider Risk Management Connector. The alert extracts usernames from security alerts to provide UserPrincipalName, Alert Name, Reporting Product Name, Status, Alert Link, Previous Alerts Links, Time Generated. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Learn about insider risk management](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management)'\n",
-        "queryPeriod": "6h",
-        "severity": "High",
         "query": "let AlertLinks = SecurityAlert\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize PreciousSecurityAlertLinks=make_set(AlertLink) by UPN;\nSecurityAlert\n| where ProductName == \"Microsoft 365 Insider Risk Management\"\n    | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n    | mv-expand todynamic(Entities)\n    | where Entities[\"Type\"] =~ \"account\"\n    | extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n        Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n    | extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| join kind=inner (AlertLinks) on UPN\n| extend UserPrincipalName = UPN\n| extend PreviousAlertsLinks = strcat(PreciousSecurityAlertLinks)\n// | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey\n| project UserPrincipalName, AlertName, ProductName, Tactics, Status, AlertLink, PreviousAlertsLinks, TimeGenerated\n| sort by TimeGenerated desc\n| extend AccountName = tostring(split(UserPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
         "queryFrequency": "6h",
-        "triggerOperator": "gt",
-        "tactics": [
-          "Execution"
-        ],
-        "triggerThreshold": 0,
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
             "groupByEntities": [
               "Account"
             ],
             "matchingMethod": "Selected",
-            "lookbackDuration": "3d",
             "reopenClosedIncident": true,
-            "enabled": true
-          },
-          "createIncident": true
+            "enabled": true,
+            "lookbackDuration": "3d"
+          }
         },
+        "tactics": [
+          "Execution"
+        ],
         "entityMappings": [
           {
             "fieldMappings": [
@@ -58,7 +56,9 @@
             ],
             "entityType": "Account"
           }
-        ]
+        ],
+        "description": "'This alert is triggered when a Microsoft Purview Insider Risk Management alert is recieved in Microsoft Sentinel via the Microsoft Purview Insider Risk Management Connector. The alert extracts usernames from security alerts to provide UserPrincipalName, Alert Name, Reporting Product Name, Status, Alert Link, Previous Alerts Links, Time Generated. There is an option for configuration of correlations against Microsoft Sentinel watchlists. For more information, see [Learn about insider risk management](https://docs.microsoft.com/microsoft-365/compliance/insider-risk-management)'\n",
+        "triggerThreshold": 0
       }
     }
   ]
