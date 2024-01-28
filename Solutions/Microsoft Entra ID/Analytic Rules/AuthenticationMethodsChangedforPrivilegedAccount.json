@@ -14,55 +14,55 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n",
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "InitiatorName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatorUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "TargetName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "TargetUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IP",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "name": "Authentication Methods Changed for Privileged Account",
+        "severity": "High",
         "query": "let queryperiod = 14d;\nlet queryfrequency = 2h;\nlet security_info_actions = dynamic([\"User registered security info\", \"User changed default security info\", \"User deleted security info\", \"Admin updated security info\", \"User reviewed security info\", \"Admin deleted security info\", \"Admin registered security info\"]);\nlet VIPUsers = (\n    IdentityInfo\n    | where TimeGenerated > ago(queryperiod)\n    | mv-expand AssignedRoles\n    | where AssignedRoles contains 'Admin'\n    | summarize by AccountUPN);\nAuditLogs\n| where TimeGenerated > ago(queryfrequency)\n| where Category =~ \"UserManagement\"\n| where ActivityDisplayName in (security_info_actions)\n| extend Initiator = tostring(InitiatedBy.user.userPrincipalName)\n| extend IP = tostring(InitiatedBy.user.ipAddress)\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend Target = tostring(TargetResource.userPrincipalName)\n  )\n| where Target in~ (VIPUsers)\n// Uncomment the line below if you are experiencing high volumes of Target entities. If this is uncommented, the Target column will not be mapped to an entity.\n//| summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8), Targets=make_set(Target, MaxSize=256) by Initiator, IP, Result\n// Comment out this line below, if line above is used.\n| summarize Start=min(TimeGenerated), End=max(TimeGenerated), Actions = make_set(ResultReason, MaxSize=8) by Initiator, IP, Result, Targets = Target\n| extend InitiatorName = tostring(split(Initiator,'@',0)[0]), \n         InitiatorUPNSuffix = tostring(split(Initiator,'@',1)[0]),\n         TargetName = iff(tostring(Targets) has \"[\", \"\", tostring(split(Targets,'@',0)[0])), \n         TargetUPNSuffix = iff(tostring(Targets) has \"[\", \"\", tostring(split(Targets,'@',1)[0]))\n",
         "status": "Available",
+        "queryPeriod": "14d",
         "tactics": [
           "Persistence"
         ],
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "InitiatorName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatorUPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "TargetName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "TargetUPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IP"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "queryFrequency": "2h",
-        "severity": "High",
-        "queryPeriod": "14d",
-        "name": "Authentication Methods Changed for Privileged Account",
-        "triggerOperator": "gt",
-        "description": "'Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n"
+        "queryFrequency": "2h"
       }
     }
   ]
