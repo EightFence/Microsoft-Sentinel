@@ -14,34 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies Progress MOVEIt File Transfers  with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that\n value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,\n if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
+        "tactics": [
+          "Exfiltration"
+        ],
         "triggerOperator": "gt",
+        "queryFrequency": "15m",
+        "queryPeriod": "15m",
         "triggerThreshold": 0,
-        "name": "Progress MOVEIt File transfer folder count above threshold",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "lookbackDuration": "5h",
-            "reopenClosedIncident": false,
-            "groupByEntities": [
-              "Account",
-              "Host"
-            ],
-            "groupByAlertDetails": [],
-            "matchingMethod": "Selected",
-            "groupByCustomDetails": []
-          }
-        },
         "severity": "Medium",
+        "description": "'Identifies Progress MOVEIt File Transfers  with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that\n value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,\n if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
         "query": "let threshold = 500;\nEvent\n| where EventID == 0 and Source == \"MOVEit DMZ Audit\" and EventLog == \"Application\"\n| where RenderedDescription has_any (\"Downloaded\", \"Uploaded\")\n| parse RenderedDescription with * \"User '\" userdisplayname \"' (\" *\n| parse RenderedDescription with * \"IPAddress: \" ipaddress \" FileID:\" * \" FileName: \" filename \" FolderID: \" folderid \" FolderPath: \" folderpath \" Username: \" username \" AgentBrand: \" *\n| summarize count_distinct_folderpath=dcount(folderpath), dirlist=make_set(folderpath) by Computer,userdisplayname,username,ipaddress,bin(TimeGenerated, 15m)\n| where count_distinct_folderpath >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "userdisplayname",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "userdisplayname"
               }
             ]
           },
@@ -49,8 +38,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ipaddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ipaddress"
               }
             ]
           },
@@ -58,8 +47,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "Computer"
               }
             ]
           },
@@ -67,21 +56,32 @@
             "entityType": "File",
             "fieldMappings": [
               {
-                "columnName": "DirSample",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "DirSample"
               }
             ]
           }
         ],
-        "customDetails": {
-          "FilesList": "dirlist",
-          "TransferCount": "count_distinct_folderpath"
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "5h",
+            "groupByCustomDetails": [],
+            "groupByEntities": [
+              "Account",
+              "Host"
+            ],
+            "matchingMethod": "Selected",
+            "groupByAlertDetails": [],
+            "reopenClosedIncident": false
+          }
         },
-        "queryPeriod": "15m",
-        "tactics": [
-          "Exfiltration"
-        ],
-        "queryFrequency": "15m"
+        "name": "Progress MOVEIt File transfer folder count above threshold",
+        "customDetails": {
+          "TransferCount": "count_distinct_folderpath",
+          "FilesList": "dirlist"
+        }
       }
     }
   ]
