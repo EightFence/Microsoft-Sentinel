@@ -14,70 +14,65 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
+        "description": "'Identifies when an RDP connection is new or rare related to any logon type by a given account today compared with the previous 14 days.\nRDP connections are indicated by the EventID 4624 with LogonType = 10'\n",
+        "name": "Rare RDP Connections",
+        "queryPeriod": "14d",
         "queryFrequency": "1d",
         "triggerThreshold": 0,
-        "tactics": [
-          "LateralMovement"
-        ],
-        "name": "Rare RDP Connections",
-        "query": "let starttime = 14d;\nlet endtime = 1d;\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()\nby Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n// use left anti to exclude anything from the previous 14 days that is not rare\n),\n(WindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = tostring(EventData.LogonType)\n| where  LogonType == 10\n| extend Account = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend TargetUserSid = tostring(EventData.TargetUserSid)\n| extend AccountType=case(Account endswith \"$\" or TargetUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(TargetUserSid), \"\", \"User\")\n| extend Activity=\"4624 - An account was successfully logged on.\"\n| extend LogonTypeName=\"10 - RemoteInteractive\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()\nby Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n))\n| join kind=leftanti (\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where EventID == 4624\n| summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)\n),\n( WindowsEvent\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where EventID == 4624\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend Account = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)\n))\n) on Account, Computer\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)\nby Account, Computer, IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, @\"\\\")[1]), AccountNTDomain = tostring(split(Account, @\"\\\")[0])\n| project-away DomainIndex\n",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Account",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Account"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountNTDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "AccountNTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Computer"
               },
               {
-                "columnName": "HostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName"
               },
               {
-                "columnName": "HostNameDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "HostNameDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "severity": "Medium",
-        "queryPeriod": "14d",
-        "description": "'Identifies when an RDP connection is new or rare related to any logon type by a given account today compared with the previous 14 days.\nRDP connections are indicated by the EventID 4624 with LogonType = 10'\n",
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
           "categories": {
             "domains": [
               "Security - Threat Protection"
             ]
-          },
-          "support": {
-            "tier": "Community"
           },
           "source": {
             "kind": "Community"
@@ -85,7 +80,12 @@
           "author": {
             "name": "Microsoft Security Research"
           }
-        }
+        },
+        "severity": "Medium",
+        "tactics": [
+          "LateralMovement"
+        ],
+        "query": "let starttime = 14d;\nlet endtime = 1d;\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()\nby Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n// use left anti to exclude anything from the previous 14 days that is not rare\n),\n(WindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = tostring(EventData.LogonType)\n| where  LogonType == 10\n| extend Account = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend TargetUserSid = tostring(EventData.TargetUserSid)\n| extend AccountType=case(Account endswith \"$\" or TargetUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(TargetUserSid), \"\", \"User\")\n| extend Activity=\"4624 - An account was successfully logged on.\"\n| extend LogonTypeName=\"10 - RemoteInteractive\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ConnectionCount = count()\nby Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n))\n| join kind=leftanti (\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where EventID == 4624\n| summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)\n),\n( WindowsEvent\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where EventID == 4624\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend Account = strcat(tostring(EventData.TargetDomainName),\"\\\\\", tostring(EventData.TargetUserName))\n| summarize by Computer = toupper(Computer), IpAddress, Account = tolower(Account)\n))\n) on Account, Computer\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), ConnectionCount = sum(ConnectionCount)\nby Account, Computer, IpAddress, AccountType, Activity, LogonTypeName, ProcessName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, @\"\\\")[1]), AccountNTDomain = tostring(split(Account, @\"\\\")[0])\n| project-away DomainIndex\n"
       }
     }
   ]
