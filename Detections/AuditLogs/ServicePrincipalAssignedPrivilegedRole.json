@@ -14,22 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
-        "name": "Service Principal Assigned Privileged Role",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
         "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "InitiatingAppName"
+                "columnName": "InitiatingAppName",
+                "identifier": "Name"
               },
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAppServicePrincipalId"
+                "columnName": "InitiatingAppServicePrincipalId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -37,16 +32,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "InitiatingUserPrincipalName"
+                "columnName": "InitiatingUserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "InitiatingAccountName"
+                "columnName": "InitiatingAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatingAccountUPNSuffix"
+                "columnName": "InitiatingAccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -54,8 +49,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAadUserId"
+                "columnName": "InitiatingAadUserId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -63,12 +58,12 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ServicePrincipalName"
+                "columnName": "ServicePrincipalName",
+                "identifier": "Name"
               },
               {
-                "identifier": "AadUserId",
-                "columnName": "ServicePrincipalId"
+                "columnName": "ServicePrincipalId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -76,22 +71,26 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "InitiatingIPAddress"
+                "columnName": "InitiatingIPAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "name": "Service Principal Assigned Privileged Role",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
+          },
+          "support": {
+            "tier": "Community"
           },
           "source": {
             "kind": "Community"
@@ -100,11 +99,12 @@
             "name": "Microsoft Security Research"
           }
         },
+        "queryFrequency": "1d",
+        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n  | extend ServicePrincipalName = tostring(TargetResources[0].displayName)\n  | extend ServicePrincipalId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where displayName == \"Role.DisplayName\" and newValue contains \"admin\"\n  | extend TargetRole = newValue\n  | project-reorder TimeGenerated, ServicePrincipalName, ServicePrincipalId, InitiatedBy, TargetRole, InitiatingIPAddress\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
         "severity": "Medium",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n  | extend ServicePrincipalName = tostring(TargetResources[0].displayName)\n  | extend ServicePrincipalId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where displayName == \"Role.DisplayName\" and newValue contains \"admin\"\n  | extend TargetRole = newValue\n  | project-reorder TimeGenerated, ServicePrincipalName, ServicePrincipalId, InitiatedBy, TargetRole, InitiatingIPAddress\n"
+        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n"
       }
     }
   ]

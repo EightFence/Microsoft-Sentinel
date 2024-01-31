@@ -14,26 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect\nand could indicate credential compromise for the user account.'\n",
-        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
         "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -41,21 +36,25 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIP"
+                "columnName": "SourceIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "categories": {
             "domains": [
               "Security - Network"
             ]
+          },
+          "support": {
+            "tier": "Community"
           },
           "source": {
             "kind": "Community"
@@ -64,11 +63,12 @@
             "name": "Microsoft Security Resarch"
           }
         },
+        "queryFrequency": "1d",
+        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
         "severity": "Medium",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n"
+        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect\nand could indicate credential compromise for the user account.'\n"
       }
     }
   ]
