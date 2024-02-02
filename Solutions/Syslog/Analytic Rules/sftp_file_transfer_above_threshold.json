@@ -14,28 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
         "severity": "Medium",
-        "description": "'Identifies SFTP File Transfers above certain threshold in a 15min time period. It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that\n value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,\n if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
+        "triggerOperator": "gt",
+        "customDetails": {
+          "TransferCount": "count_distinct_filepath",
+          "FilesList": "fileslist"
+        },
+        "name": "SFTP File transfer above threshold",
+        "query": "let threshold = 50;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_filepath=dcount(filepath), fileslist=make_set(filepath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_filepath >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n",
+        "queryPeriod": "15m",
+        "tactics": [
+          "Exfiltration"
+        ],
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [],
             "groupByEntities": [
               "Account",
               "Host"
             ],
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected",
-            "lookbackDuration": "5h",
-            "groupByAlertDetails": [],
             "groupByCustomDetails": [],
-            "enabled": true
-          },
-          "createIncident": true
+            "enabled": true,
+            "lookbackDuration": "5h"
+          }
         },
-        "queryFrequency": "15m",
+        "triggerThreshold": 0,
         "alertDetailsOverride": null,
-        "name": "SFTP File transfer above threshold",
-        "queryPeriod": "15m",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -74,15 +81,8 @@
             "entityType": "File"
           }
         ],
-        "customDetails": {
-          "FilesList": "fileslist",
-          "TransferCount": "count_distinct_filepath"
-        },
-        "tactics": [
-          "Exfiltration"
-        ],
-        "triggerOperator": "gt",
-        "query": "let threshold = 50;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_filepath=dcount(filepath), fileslist=make_set(filepath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_filepath >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n"
+        "description": "'Identifies SFTP File Transfers above certain threshold in a 15min time period. It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that\n value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,\n if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
+        "queryFrequency": "15m"
       }
     }
   ]
