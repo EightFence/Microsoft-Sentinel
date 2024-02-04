@@ -14,15 +14,95 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n    and isnotempty(EventSeverity)\n| extend\n    algorithm = \"SHA256\",\n    Host_IPs = tostring(parse_json(DvcIpAddr)[0]),\n    Tags = tostring(Match_facts[0].tags),\n    Tactics = case(Match_tags has \"Execution\", \"Execution\", Match_tags has \"Visibility\", \"Visibility\", Match_tags has \"Persistence\", \"Persistence\", Match_tags has \"LateralMovement\", \"LateralMovement\", Match_tags has \"CredentialAccess\", \"CredentialAcccess\", Match_tags has \"DefenseEvasion\", \"DefenseEvasion\", Match_tags has \"PrivilegeEscalation\", \"PrivilegeEscalation\", Match_tags has \"Impact\", \"Impact\", Match_tags has \"CommandAndControl\", \"CommandandControl\", Match_tags has \"Discovery\", \"Discovery\", Match_tags has \"InitialAccess\", \"InitialAccess\", \"\"),\n    Techniques = pack_array(extract(@\"[A-Za-z]\\d{4}\", 0, tostring(Match_tags))),\n    JamfPro = case(Match_actions has \"SmartGroup\", \"Workflow with Jamf Pro\", Match_actions has \"Prevented\", \"No workflow, Prevented by Protect\", \"No workflow\")\n",
-        "suppressionDuration": "PT5H",
+        "severity": "High",
+        "customDetails": {
+          "Protect_Tags": "Tags",
+          "TargetBinarySignMsg": "TargetBinarySigningInfoMessage",
+          "Protect_Event_Type": "EventType",
+          "TargetbinarySign": "TargetbinarySignerType",
+          "Related_Binaries": "TargetBinaryFilePath",
+          "Related_File_hash": "TargetBinarySHA256",
+          "TargetBinarySigner": "TargetBinarySigningTeamID",
+          "JamfPro_Status": "JamfPro",
+          "Protect_Analytic": "EventMessage"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DvcHostname"
+              },
+              {
+                "identifier": "OSFamily",
+                "columnName": "DvcOs"
+              },
+              {
+                "identifier": "OSVersion",
+                "columnName": "DvcOsVersion"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "Host_IPs"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "TargetUsername"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "TargetProcessCurrentDirectory"
+              },
+              {
+                "identifier": "ProcessId",
+                "columnName": "TargetProcessId"
+              }
+            ],
+            "entityType": "Process"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Algorithm",
+                "columnName": "algorithm"
+              },
+              {
+                "identifier": "Value",
+                "columnName": "TargetBinarySHA256"
+              }
+            ],
+            "entityType": "FileHash"
+          }
+        ],
         "tactics": null,
-        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": false,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H"
+          },
+          "createIncident": true
+        },
         "alertDetailsOverride": {
-          "alertTacticsColumnName": "Tactics",
-          "alertDescriptionFormat": "{{EventDescription}} - Please investigate",
-          "alertDisplayNameFormat": "{{EventMessage}} detected on {{DvcHostname}}",
           "alertSeverityColumnName": "EventSeverity",
+          "alertDisplayNameFormat": "{{EventMessage}} detected on {{DvcHostname}}",
+          "alertTacticsColumnName": "Tactics",
           "alertDynamicProperties": [
             {
               "alertProperty": "AlertLink",
@@ -40,98 +120,18 @@
               "alertProperty": "Techniques",
               "value": "Techniques"
             }
-          ]
+          ],
+          "alertDescriptionFormat": "{{EventDescription}} - Please investigate"
         },
-        "description": "'Creates an incident based on Jamf Protect Alert data in Microsoft Sentinel'\n",
-        "severity": "High",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "enabled": false,
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false
-          }
-        },
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "columnName": "DvcHostname",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "DvcOs",
-                "identifier": "OSFamily"
-              },
-              {
-                "columnName": "DvcOsVersion",
-                "identifier": "OSVersion"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "Host_IPs",
-                "identifier": "Address"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "TargetUsername",
-                "identifier": "Name"
-              }
-            ]
-          },
-          {
-            "entityType": "Process",
-            "fieldMappings": [
-              {
-                "columnName": "TargetProcessCurrentDirectory",
-                "identifier": "CommandLine"
-              },
-              {
-                "columnName": "TargetProcessId",
-                "identifier": "ProcessId"
-              }
-            ]
-          },
-          {
-            "entityType": "FileHash",
-            "fieldMappings": [
-              {
-                "columnName": "algorithm",
-                "identifier": "Algorithm"
-              },
-              {
-                "columnName": "TargetBinarySHA256",
-                "identifier": "Value"
-              }
-            ]
-          }
-        ],
-        "name": "Jamf Protect - Alerts",
         "status": "Available",
-        "customDetails": {
-          "TargetbinarySign": "TargetbinarySignerType",
-          "TargetBinarySigner": "TargetBinarySigningTeamID",
-          "Protect_Analytic": "EventMessage",
-          "Related_File_hash": "TargetBinarySHA256",
-          "Protect_Tags": "Tags",
-          "Related_Binaries": "TargetBinaryFilePath",
-          "JamfPro_Status": "JamfPro",
-          "TargetBinarySignMsg": "TargetBinarySigningInfoMessage",
-          "Protect_Event_Type": "EventType"
-        },
+        "suppressionDuration": "PT5H",
+        "name": "Jamf Protect - Alerts",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
-        }
+        },
+        "suppressionEnabled": false,
+        "description": "'Creates an incident based on Jamf Protect Alert data in Microsoft Sentinel'\n",
+        "query": "JamfProtect\n| where EventProduct == \"Jamf Protect - Alerts\"\n    and isnotempty(EventSeverity)\n| extend\n    algorithm = \"SHA256\",\n    Host_IPs = tostring(parse_json(DvcIpAddr)[0]),\n    Tags = tostring(Match_facts[0].tags),\n    Tactics = case(Match_tags has \"Execution\", \"Execution\", Match_tags has \"Visibility\", \"Visibility\", Match_tags has \"Persistence\", \"Persistence\", Match_tags has \"LateralMovement\", \"LateralMovement\", Match_tags has \"CredentialAccess\", \"CredentialAcccess\", Match_tags has \"DefenseEvasion\", \"DefenseEvasion\", Match_tags has \"PrivilegeEscalation\", \"PrivilegeEscalation\", Match_tags has \"Impact\", \"Impact\", Match_tags has \"CommandAndControl\", \"CommandandControl\", Match_tags has \"Discovery\", \"Discovery\", Match_tags has \"InitialAccess\", \"InitialAccess\", \"\"),\n    Techniques = pack_array(extract(@\"[A-Za-z]\\d{4}\", 0, tostring(Match_tags))),\n    JamfPro = case(Match_actions has \"SmartGroup\", \"Workflow with Jamf Pro\", Match_actions has \"Prevented\", \"No workflow, Prevented by Protect\", \"No workflow\")\n"
       }
     }
   ]
