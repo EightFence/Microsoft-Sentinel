@@ -14,41 +14,49 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "name": "A client made a web request to a potentially harmful file (ASIM Web Session schema)",
+        "severity": "Medium",
         "customDetails": {
-          "SrcHostname": "SrcHostname",
           "requestedFileExt": "requestedFileExtension",
+          "SrcHostname": "SrcHostname",
           "Username": "SrcUsername"
         },
-        "query": "let default_file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']); // Update this list as per your requirement\nlet custom_file_ext_blocklist=toscalar(_GetWatchlist('RiskyFileTypes')\n  | extend Extension=column_ifexists(\"Extension\", \"\")\n  | where isnotempty(Extension)\n  | summarize make_set(Extension)); // If you have an extensive list, you can also create a Watchlist that includes the file extensions you want to detect\nlet file_ext_blocklist = array_concat(default_file_ext_blocklist, custom_file_ext_blocklist);\n_Im_WebSession(starttime=ago(10min), url_has_any=file_ext_blocklist, eventresult='Success')\n| extend requestedFileName=tostring(split(tostring(parse_url(Url)[\"Path\"]), '/')[-1])\n| extend requestedFileExtension=extract(@'(\\.\\w+)$', 1, requestedFileName, typeof(string))\n| where requestedFileExtension in (file_ext_blocklist)\n| summarize\n  EventStartTime=min(TimeGenerated),\n  EventEndTime=max(TimeGenerated),\n  EventCount=count()\n  by SrcIpAddr, SrcUsername, SrcHostname, requestedFileName, Url\n| extend\n  Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n  UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n",
+        "queryFrequency": "10m",
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SrcIpAddr"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           },
           {
+            "entityType": "File",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "requestedFileName"
               }
-            ],
-            "entityType": "File"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -62,18 +70,18 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
+        "queryPeriod": "10m",
+        "description": "'This rule identifies a web request to a URL that holds a file type, including .ps1, .bat, .vbs, and .scr that can be harmful if downloaded. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'\n",
+        "query": "let default_file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']); // Update this list as per your requirement\nlet custom_file_ext_blocklist=toscalar(_GetWatchlist('RiskyFileTypes')\n  | extend Extension=column_ifexists(\"Extension\", \"\")\n  | where isnotempty(Extension)\n  | summarize make_set(Extension)); // If you have an extensive list, you can also create a Watchlist that includes the file extensions you want to detect\nlet file_ext_blocklist = array_concat(default_file_ext_blocklist, custom_file_ext_blocklist);\n_Im_WebSession(starttime=ago(10min), url_has_any=file_ext_blocklist, eventresult='Success')\n| extend requestedFileName=tostring(split(tostring(parse_url(Url)[\"Path\"]), '/')[-1])\n| extend requestedFileExtension=extract(@'(\\.\\w+)$', 1, requestedFileName, typeof(string))\n| where requestedFileExtension in (file_ext_blocklist)\n| summarize\n  EventStartTime=min(TimeGenerated),\n  EventEndTime=max(TimeGenerated),\n  EventCount=count()\n  by SrcIpAddr, SrcUsername, SrcHostname, requestedFileName, Url\n| extend\n  Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n  UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n",
         "tactics": [
           "InitialAccess"
         ],
-        "name": "A client made a web request to a potentially harmful file (ASIM Web Session schema)",
-        "queryPeriod": "10m",
         "metadata": {
-          "author": {
-            "name": "Yaron"
+          "source": {
+            "kind": "Community"
           },
           "categories": {
             "domains": [
@@ -83,22 +91,14 @@
           "support": {
             "tier": "Community"
           },
-          "source": {
-            "kind": "Community"
+          "author": {
+            "name": "Yaron"
           }
         },
-        "queryFrequency": "10m",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "The client at address {{SrcIpAddr}} accessed the URL {{Url}} that has the extension {{requestedFileExtension}}. Downloading a file with this extension may be harmful and may indicate malicious activity.",
-          "alertDisplayNameFormat": "Client {{SrcIpAddr}} accessed a URL with potentially harmful extension {{requestedFileExtension}}"
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "description": "'This rule identifies a web request to a URL that holds a file type, including .ps1, .bat, .vbs, and .scr that can be harmful if downloaded. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'\n",
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "triggerOperator": "gt"
+          "alertDisplayNameFormat": "Client {{SrcIpAddr}} accessed a URL with potentially harmful extension {{requestedFileExtension}}",
+          "alertDescriptionFormat": "The client at address {{SrcIpAddr}} accessed the URL {{Url}} that has the extension {{requestedFileExtension}}. Downloading a file with this extension may be harmful and may indicate malicious activity."
+        }
       }
     }
   ]
