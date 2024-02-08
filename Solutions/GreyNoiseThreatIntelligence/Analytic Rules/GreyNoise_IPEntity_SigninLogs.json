@@ -14,13 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'This query maps any GreyNoise IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SigninLogs.'\n",
-        "queryPeriod": "14d",
-        "severity": "Medium",
-        "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet aadFunc = (tableName:string){\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem == 'GreyNoise'\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    table(tableName) | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n    | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)\n    | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n    // renaming time column so it is clear the log this came from\n    | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type\n)\non $left.TI_ipEntity == $right.IPAddress\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "triggerOperator": "gt",
-        "name": "GreyNoise TI Map IP Entity to SigninLogs",
-        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -54,10 +49,15 @@
             ]
           }
         ],
+        "description": "'This query maps any GreyNoise IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SigninLogs.'\n",
+        "queryFrequency": "1h",
         "tactics": [
           "Impact"
         ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet aadFunc = (tableName:string){\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where SourceSystem == 'GreyNoise'\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    table(tableName) | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n    | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)\n    | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n    // renaming time column so it is clear the log this came from\n    | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type\n)\non $left.TI_ipEntity == $right.IPAddress\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, IPAddress\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n"
+        "triggerThreshold": 0,
+        "name": "GreyNoise TI Map IP Entity to SigninLogs",
+        "queryPeriod": "14d",
+        "severity": "Medium"
       }
     }
   ]
