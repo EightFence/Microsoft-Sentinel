@@ -15,10 +15,14 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "query": "let fileAccessThrehold = 10;\nOfficeActivity\n | where OfficeWorkload =~ \"MicrosoftTeams\"\n | where Operation =~ \"MemberAdded\"\n | extend UPN = tostring(parse_json(Members)[0].UPN)\n | where UPN contains (\"#EXT#\")\n | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName\n | join kind = inner(\n                       OfficeActivity\n                       | where OfficeWorkload =~ \"MicrosoftTeams\"\n                       | where Operation =~ \"MemberRemoved\"\n                       | extend UPN = tostring(parse_json(Members)[0].UPN)\n                       | where UPN contains (\"#EXT#\")\n                       | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName\n                     ) on UPN\n | where TimeDeleted > TimeAdded\n | join kind=inner \n                   (\n                   OfficeActivity\n                   | where RecordType == \"SharePointFileOperation\"\n                   | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n                   | where Operation == \"FileUploaded\"\n                   | join kind = inner \n                                       (\n                                       OfficeActivity\n                                       | where RecordType == \"SharePointFileOperation\"\n                                       | where Operation  == \"FileAccessed\"\n                                       | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n                                       | summarize FileAccessCount = count() by OfficeObjectId\n                                       | where FileAccessCount > fileAccessThrehold\n                                       ) on $left.OfficeObjectId == $right.OfficeObjectId\n                   )on $left.UPN == $right.UserId\n | extend AccountName = tostring(split(UserWhoAdded, \"@\")[0]), AccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n",
-        "triggerOperator": "gt",
-        "status": "Available",
-        "queryPeriod": "1h",
         "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "status": "Available",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "description": "'This detection identifies an external user is added to a Team or Teams chat\nand shares a files which is accessed by many users (>10) and the users is removed within short period of time. This might be\nan indicator of suspicious activity.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,13 +47,9 @@
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "name": "Accessed files shared by temporary external user",
+        "triggerOperator": "gt",
         "severity": "Low",
-        "description": "'This detection identifies an external user is added to a Team or Teams chat\nand shares a files which is accessed by many users (>10) and the users is removed within short period of time. This might be\nan indicator of suspicious activity.'\n",
-        "tactics": [
-          "InitialAccess"
-        ]
+        "name": "Accessed files shared by temporary external user"
       }
     }
   ]
