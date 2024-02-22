@@ -15,14 +15,10 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'An attacker with access to Azure DevOps could create a pipeline to inject artifacts used by other pipelines, \nor to create a malicious software build that looks legitimate by using a pipeline that incorporates legitimate elements. \nAn attacker would also likely want to cover their tracks once conducting such activity. This query looks for Pipelines \ncreated and deleted within the same day, this is unlikely to be legitimate user activity in the majority of cases.'\n",
-        "triggerThreshold": 0,
-        "queryPeriod": "3d",
         "triggerOperator": "gt",
-        "status": "Available",
         "name": "Azure DevOps Pipeline Created and Deleted on the Same Day",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -32,10 +28,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "CreatingUserAccountUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -45,33 +41,37 @@
                 "identifier": "UPNSuffix",
                 "columnName": "DeletingUserAccountUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "CreatingIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "DeletingIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "tactics": [
           "Execution"
         ],
+        "status": "Available",
+        "triggerThreshold": 0,
+        "queryPeriod": "3d",
         "severity": "Medium",
-        "queryFrequency": "3d",
-        "query": "let timeframe = 3d;\n// Get Release Pipeline Creation Events and group by day\nAzureDevOpsAuditing\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineCreated\"\n// Group by day\n| extend timekey = bin(TimeGenerated, 1d)\n| extend PipelineId = tostring(Data.PipelineId)\n| extend PipelineName = tostring(Data.PipelineName)\n// Rename some columns to make output clearer\n| project-rename TimeCreated = TimeGenerated, CreatingUser = ActorUPN, CreatingUserAgent = UserAgent, CreatingIP = IpAddress\n// Join with Release Pipeline Deletions where Pipeline ID is the same and deletion occurred on same day as creation\n| join (AzureDevOpsAuditing\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineDeleted\"\n// Group by day\n| extend timekey = bin(TimeGenerated, 1d)\n| extend PipelineId = tostring(Data.PipelineId)\n| extend PipelineName = tostring(Data.PipelineName)\n// Rename some things to make the output clearer\n| project-rename TimeDeleted = TimeGenerated,DeletingUser = ActorUPN, DeletingUserAgent = UserAgent, DeletingIP = IpAddress) on PipelineId, timekey\n| project TimeCreated, TimeDeleted, PipelineName, PipelineId, CreatingUser, CreatingIP, CreatingUserAgent, DeletingUser, DeletingIP, DeletingUserAgent, ScopeDisplayName, ProjectName, Data, OperationName, OperationName1\n| extend timestamp = TimeCreated\n| extend CreatingUserAccountName = tostring(split(CreatingUser, \"@\")[0]), CreatingUserAccountUPNSuffix = tostring(split(CreatingUser, \"@\")[1])\n| extend DeletingUserAccountName = tostring(split(DeletingUser, \"@\")[0]), DeletingUserAccountUPNSuffix = tostring(split(DeletingUser, \"@\")[1])\n"
+        "query": "let timeframe = 3d;\n// Get Release Pipeline Creation Events and group by day\nAzureDevOpsAuditing\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineCreated\"\n// Group by day\n| extend timekey = bin(TimeGenerated, 1d)\n| extend PipelineId = tostring(Data.PipelineId)\n| extend PipelineName = tostring(Data.PipelineName)\n// Rename some columns to make output clearer\n| project-rename TimeCreated = TimeGenerated, CreatingUser = ActorUPN, CreatingUserAgent = UserAgent, CreatingIP = IpAddress\n// Join with Release Pipeline Deletions where Pipeline ID is the same and deletion occurred on same day as creation\n| join (AzureDevOpsAuditing\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineDeleted\"\n// Group by day\n| extend timekey = bin(TimeGenerated, 1d)\n| extend PipelineId = tostring(Data.PipelineId)\n| extend PipelineName = tostring(Data.PipelineName)\n// Rename some things to make the output clearer\n| project-rename TimeDeleted = TimeGenerated,DeletingUser = ActorUPN, DeletingUserAgent = UserAgent, DeletingIP = IpAddress) on PipelineId, timekey\n| project TimeCreated, TimeDeleted, PipelineName, PipelineId, CreatingUser, CreatingIP, CreatingUserAgent, DeletingUser, DeletingIP, DeletingUserAgent, ScopeDisplayName, ProjectName, Data, OperationName, OperationName1\n| extend timestamp = TimeCreated\n| extend CreatingUserAccountName = tostring(split(CreatingUser, \"@\")[0]), CreatingUserAccountUPNSuffix = tostring(split(CreatingUser, \"@\")[1])\n| extend DeletingUserAccountName = tostring(split(DeletingUser, \"@\")[0]), DeletingUserAccountUPNSuffix = tostring(split(DeletingUser, \"@\")[1])\n",
+        "queryFrequency": "3d"
       }
     }
   ]
