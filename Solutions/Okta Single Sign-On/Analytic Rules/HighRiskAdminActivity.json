@@ -14,18 +14,11 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "tactics": [
           "Persistence"
         ],
-        "queryFrequency": "1h",
-        "queryPeriod": "1h",
-        "customDetails": {
-          "SessionId": "authenticationContext_externalSessionId_s"
-        },
-        "name": "High-Risk Admin Activity",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "status": "Available",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -50,9 +43,16 @@
             "entityType": "IP"
           }
         ],
+        "customDetails": {
+          "SessionId": "authenticationContext_externalSessionId_s"
+        },
+        "queryPeriod": "1h",
+        "name": "High-Risk Admin Activity",
+        "query": "let AdminActivity = dynamic([\"iam.role.create\",\"iam.role.permissions.add\",\"user.session.access_admin_app\",\"user.mfa.factor.suspend\", \"user.account.privilege.grant\", \"group.privilege.grant\", \"system.api_token.create\", \"user.session.impersonation.grant\"]);\nlet AdminOperations = OktaSSO\n| where eventType_s in (AdminActivity)\n| where outcome_result_s =~ 'SUCCESS' \n| summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s;\nlet HighRiskEvents = OktaSSO\n| where eventType_s in ('policy.evaluate_sign_on' , 'user.session.start')\n| where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).level =~ \"HIGH\"\n| where outcome_result_s =~ 'SUCCESS'\n| extend reasons = tostring(parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).reasons)\n| summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s, reasons;\nAdminOperations\n| join kind=inner (HighRiskEvents) on actor_displayName_s, client_ipAddress_s, authenticationContext_externalSessionId_s\n",
+        "queryFrequency": "1h",
+        "status": "Available",
         "description": "'The Okta risk engine auto-assigns risk levels to each login attempt. This query identifies admin operations originating from events associated with high-risk profiles.'\n",
-        "triggerThreshold": 0,
-        "query": "let AdminActivity = dynamic([\"iam.role.create\",\"iam.role.permissions.add\",\"user.session.access_admin_app\",\"user.mfa.factor.suspend\", \"user.account.privilege.grant\", \"group.privilege.grant\", \"system.api_token.create\", \"user.session.impersonation.grant\"]);\nlet AdminOperations = OktaSSO\n| where eventType_s in (AdminActivity)\n| where outcome_result_s =~ 'SUCCESS' \n| summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s;\nlet HighRiskEvents = OktaSSO\n| where eventType_s in ('policy.evaluate_sign_on' , 'user.session.start')\n| where parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).level =~ \"HIGH\"\n| where outcome_result_s =~ 'SUCCESS'\n| extend reasons = tostring(parse_json(tostring(parse_json(debugContext_debugData_logOnlySecurityData_s).risk)).reasons)\n| summarize  StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by  actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_userAgent_browser_s, client_device_s, client_userAgent_rawUserAgent_s, client_ipAddress_s, client_geographicalContext_country_s, client_geographicalContext_city_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, authenticationContext_externalSessionId_s, reasons;\nAdminOperations\n| join kind=inner (HighRiskEvents) on actor_displayName_s, client_ipAddress_s, authenticationContext_externalSessionId_s\n"
+        "triggerThreshold": 0
       }
     }
   ]
