@@ -14,27 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The client has made a total of '{{TotalErrorCount}}' requests to URLs '{{URLs}}', which have resulted in server errors. It is recommended to thoroughly investigate this alert to determine the underlying cause behind this significant number of errors. For detailed information regarding the specific errors encountered, please refer to the following link: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status.",
-          "alertDisplayNameFormat": "High number of server errors originated by user '{{SrcUsername}}' from IP address '{{SrcIpAddr}}'"
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "triggerOperator": "gt",
         "severity": "Medium",
+        "query": "// HTTP response status codes indicate whether a specific HTTP request has been successfully completed.\n// Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status\nlet threshold = 100; // You can update threshold value as per your environment\n_Im_WebSession(starttime=ago(1h))\n| where toint(EventResultDetails) between (500 .. 599)\n| summarize\n    TotalErrorCount = count(),\n    URLs=make_set(Url, 100),\n    EventStartTime = min(TimeGenerated),\n    EventEndTime = max(TimeGenerated),\n    EventResultDetailsSet=make_set(EventResultDetails,10)\n    by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname\n| where TotalErrorCount > threshold\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\"), Threshold=threshold\n",
+        "queryPeriod": "1h",
         "name": "Detect instances of multiple server errors occurring within a brief period of time (ASIM Web Session)",
-        "tactics": [
-          "InitialAccess",
-          "Impact"
-        ],
-        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
               }
             ]
           },
@@ -42,12 +33,12 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -55,26 +46,35 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "SrcHostname"
+                "columnName": "SrcHostname",
+                "identifier": "HostName"
               }
             ]
           }
         ],
-        "description": "'This detection mechanism identifies situations where multiple server errors originate from a single source within a limited time frame.'\n",
-        "triggerOperator": "gt",
-        "queryPeriod": "1h",
-        "query": "// HTTP response status codes indicate whether a specific HTTP request has been successfully completed.\n// Please refer this for more details: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status\nlet threshold = 100; // You can update threshold value as per your environment\n_Im_WebSession(starttime=ago(1h))\n| where toint(EventResultDetails) between (500 .. 599)\n| summarize\n    TotalErrorCount = count(),\n    URLs=make_set(Url, 100),\n    EventStartTime = min(TimeGenerated),\n    EventEndTime = max(TimeGenerated),\n    EventResultDetailsSet=make_set(EventResultDetails,10)\n    by SrcIpAddr, bin(TimeGenerated, 5m), SrcUsername, SrcHostname\n| where TotalErrorCount > threshold\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\"), Threshold=threshold\n",
-        "customDetails": {
-          "EventStartTime": "EventStartTime",
-          "EventEndTime": "EventEndTime",
-          "TotalErrorCount": "TotalErrorCount",
-          "EventResultSet": "EventResultDetailsSet",
-          "ErrorThreshold": "Threshold",
-          "RequestURLs": "URLs"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
         "status": "Available",
-        "triggerThreshold": 0
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "The client has made a total of '{{TotalErrorCount}}' requests to URLs '{{URLs}}', which have resulted in server errors. It is recommended to thoroughly investigate this alert to determine the underlying cause behind this significant number of errors. For detailed information regarding the specific errors encountered, please refer to the following link: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status.",
+          "alertDisplayNameFormat": "High number of server errors originated by user '{{SrcUsername}}' from IP address '{{SrcIpAddr}}'"
+        },
+        "queryFrequency": "1h",
+        "description": "'This detection mechanism identifies situations where multiple server errors originate from a single source within a limited time frame.'\n",
+        "customDetails": {
+          "TotalErrorCount": "TotalErrorCount",
+          "RequestURLs": "URLs",
+          "ErrorThreshold": "Threshold",
+          "EventEndTime": "EventEndTime",
+          "EventResultSet": "EventResultDetailsSet",
+          "EventStartTime": "EventStartTime"
+        },
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess",
+          "Impact"
+        ]
       }
     }
   ]
