@@ -14,28 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "description": "'Identifies when a recently created Group was added to a privileged built in domain local group or global group such as the \nEnterprise Admins, Cert Publishers or DnsAdmins.  Be sure to verify this is an expected addition.\nReferences: For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups.'\n",
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
         ],
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "query": "let WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nlet GroupAddition = (union isfuzzy=true   \n(SecurityEvent \n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group  \n| where EventID in (\"4728\", \"4732\", \"4756\")\n| where AccountType =~ \"User\"\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, \nGroupAddTargetAccount = TargetAccount, GroupAddTargetUserName = TargetUserName, GroupAddTargetDomainName = TargetDomainName, GroupAddTargetSid = TargetSid, \nGroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserName = SubjectUserName, GroupAddSubjectDomainName = SubjectDomainName, GroupAddSubjectUserSid = SubjectUserSid, \nGroupSid = MemberSid\n),\n(\nWindowsEvent \n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group  \n| where EventID in (\"4728\", \"4732\", \"4756\")  and not(EventData has \"S-1-5-32-555\")\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend Account = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(Account endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n| extend MemberName = tostring(EventData.MemberName)\n| where AccountType =~ \"User\"\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid !in (\"S-1-5-32-555\")\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend MemberSid = tostring(EventData.MemberSid)\n| extend Activity= \"GroupAddActivity\"\n| project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, \nGroupAddTargetAccount = TargetAccount, GroupAddTargetUserName = tostring(EventData.TargetUserName), GroupAddTargetDomainName = tostring(EventData.TargetDomainName), GroupAddTargetSid = TargetSid, \nGroupAddSubjectAccount = Account, GroupAddSubjectUserName = tostring(EventData.SubjectUserName), GroupAddSubjectDomainName = tostring(EventData.SubjectDomainName), GroupAddSubjectUserSid = SubjectUserSid, \nGroupSid = MemberSid\n));\nlet GroupCreated = (union isfuzzy=true  \n(SecurityEvent\n// 4727 - A security-enabled global group was created\n// 4731 - A security-enabled local group was created\n// 4754 - A security-enabled universal group was created\n| where EventID in (\"4727\", \"4731\", \"4754\")\n| where AccountType =~ \"User\"\n| project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, \nGroupCreateTargetAccount = TargetAccount, GroupCreateTargetUserName = TargetUserName, GroupCreateTargetDomainName = TargetDomainName,\nGroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserName = SubjectUserName, GroupCreateSubjectDomainName = SubjectDomainName, GroupCreateSubjectUserSid = SubjectUserSid, \nGroupSid = TargetSid\n),\n(WindowsEvent\n// 4727 - A security-enabled global group was created\n// 4731 - A security-enabled local group was created\n// 4754 - A security-enabled universal group was created\n| where EventID in (\"4727\", \"4731\", \"4754\")\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend Account = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(Account endswith \"$\", \"Machine\", iff(SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", iff(isempty(SubjectUserSid), \"\", \"User\")))\n| where AccountType =~ \"User\"\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend SubjectAccount = strcat(EventData.SubjectDomainName,\"\\\\\", EventData.SubjectUserName)  \n| extend TargetSid = tostring(EventData.TargetSid) \n| extend Activity= \"GroupAddActivity\"\n| project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, \nGroupCreateTargetAccount = TargetAccount, GroupCreateTargetUserName = tostring(EventData.TargetUserName), GroupCreateTargetDomainName = tostring(EventData.TargetDomainName), \nGroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserName = tostring(EventData.SubjectUserName), GroupCreateSubjectDomainName = tostring(EventData.SubjectDomainName),GroupCreateSubjectUserSid = SubjectUserSid, \nGroupSid = TargetSid\n));\nGroupCreated\n| join (\nGroupAddition\n) on GroupSid\n| extend GroupCreateHostName = tostring(split(GroupCreateComputer , \".\")[0]), DomainIndex = toint(indexof(GroupCreateComputer , '.'))\n| extend GroupCreateHostNameDomain = iff(DomainIndex != -1, substring(GroupCreateComputer , DomainIndex + 1), GroupCreateComputer)\n| extend GroupAddHostName = tostring(split(GroupAddComputer , \".\")[0]), DomainIndex = toint(indexof(GroupAddComputer , '.'))\n| extend GroupAddHostNameDomain = iff(DomainIndex != -1, substring(GroupAddComputer , DomainIndex + 1), GroupAddComputer)\n| project-away DomainIndex\n",
+        "name": "Group created then added to built in domain local or global group",
+        "queryFrequency": "1h",
         "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "GroupCreateSubjectAccount"
+                "columnName": "GroupCreateSubjectAccount",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "GroupCreateSubjectUserName"
+                "columnName": "GroupCreateSubjectUserName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "GroupCreateSubjectDomainName"
+                "columnName": "GroupCreateSubjectDomainName",
+                "identifier": "NTDomain"
               }
             ]
           },
@@ -43,16 +60,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "GroupCreateTargetAccount"
+                "columnName": "GroupCreateTargetAccount",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "GroupAddSubjectUserName"
+                "columnName": "GroupAddSubjectUserName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "GroupAddSubjectDomainName"
+                "columnName": "GroupAddSubjectDomainName",
+                "identifier": "NTDomain"
               }
             ]
           },
@@ -60,16 +77,16 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "GroupCreateComputer"
+                "columnName": "GroupCreateComputer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "GroupCreateHostName"
+                "columnName": "GroupCreateHostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "GroupCreateHostNameDomain"
+                "columnName": "GroupCreateHostNameDomain",
+                "identifier": "DnsDomain"
               }
             ]
           },
@@ -77,41 +94,24 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "GroupAddComputer"
+                "columnName": "GroupAddComputer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "GroupAddHostName"
+                "columnName": "GroupAddHostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "GroupAddHostNameDomain"
+                "columnName": "GroupAddHostNameDomain",
+                "identifier": "DnsDomain"
               }
             ]
           }
         ],
-        "query": "let WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nlet GroupAddition = (union isfuzzy=true   \n(SecurityEvent \n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group  \n| where EventID in (\"4728\", \"4732\", \"4756\")\n| where AccountType =~ \"User\"\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, \nGroupAddTargetAccount = TargetAccount, GroupAddTargetUserName = TargetUserName, GroupAddTargetDomainName = TargetDomainName, GroupAddTargetSid = TargetSid, \nGroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserName = SubjectUserName, GroupAddSubjectDomainName = SubjectDomainName, GroupAddSubjectUserSid = SubjectUserSid, \nGroupSid = MemberSid\n),\n(\nWindowsEvent \n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group  \n| where EventID in (\"4728\", \"4732\", \"4756\")  and not(EventData has \"S-1-5-32-555\")\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend Account = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(Account endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n| extend MemberName = tostring(EventData.MemberName)\n| where AccountType =~ \"User\"\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid !in (\"S-1-5-32-555\")\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend MemberSid = tostring(EventData.MemberSid)\n| extend Activity= \"GroupAddActivity\"\n| project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, \nGroupAddTargetAccount = TargetAccount, GroupAddTargetUserName = tostring(EventData.TargetUserName), GroupAddTargetDomainName = tostring(EventData.TargetDomainName), GroupAddTargetSid = TargetSid, \nGroupAddSubjectAccount = Account, GroupAddSubjectUserName = tostring(EventData.SubjectUserName), GroupAddSubjectDomainName = tostring(EventData.SubjectDomainName), GroupAddSubjectUserSid = SubjectUserSid, \nGroupSid = MemberSid\n));\nlet GroupCreated = (union isfuzzy=true  \n(SecurityEvent\n// 4727 - A security-enabled global group was created\n// 4731 - A security-enabled local group was created\n// 4754 - A security-enabled universal group was created\n| where EventID in (\"4727\", \"4731\", \"4754\")\n| where AccountType =~ \"User\"\n| project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, \nGroupCreateTargetAccount = TargetAccount, GroupCreateTargetUserName = TargetUserName, GroupCreateTargetDomainName = TargetDomainName,\nGroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserName = SubjectUserName, GroupCreateSubjectDomainName = SubjectDomainName, GroupCreateSubjectUserSid = SubjectUserSid, \nGroupSid = TargetSid\n),\n(WindowsEvent\n// 4727 - A security-enabled global group was created\n// 4731 - A security-enabled local group was created\n// 4754 - A security-enabled universal group was created\n| where EventID in (\"4727\", \"4731\", \"4754\")\n| extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend Account = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend AccountType=case(Account endswith \"$\", \"Machine\", iff(SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", iff(isempty(SubjectUserSid), \"\", \"User\")))\n| where AccountType =~ \"User\"\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend SubjectAccount = strcat(EventData.SubjectDomainName,\"\\\\\", EventData.SubjectUserName)  \n| extend TargetSid = tostring(EventData.TargetSid) \n| extend Activity= \"GroupAddActivity\"\n| project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, \nGroupCreateTargetAccount = TargetAccount, GroupCreateTargetUserName = tostring(EventData.TargetUserName), GroupCreateTargetDomainName = tostring(EventData.TargetDomainName), \nGroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserName = tostring(EventData.SubjectUserName), GroupCreateSubjectDomainName = tostring(EventData.SubjectDomainName),GroupCreateSubjectUserSid = SubjectUserSid, \nGroupSid = TargetSid\n));\nGroupCreated\n| join (\nGroupAddition\n) on GroupSid\n| extend GroupCreateHostName = tostring(split(GroupCreateComputer , \".\")[0]), DomainIndex = toint(indexof(GroupCreateComputer , '.'))\n| extend GroupCreateHostNameDomain = iff(DomainIndex != -1, substring(GroupCreateComputer , DomainIndex + 1), GroupCreateComputer)\n| extend GroupAddHostName = tostring(split(GroupAddComputer , \".\")[0]), DomainIndex = toint(indexof(GroupAddComputer , '.'))\n| extend GroupAddHostNameDomain = iff(DomainIndex != -1, substring(GroupAddComputer , DomainIndex + 1), GroupAddComputer)\n| project-away DomainIndex\n",
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
-          }
-        },
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
+        "description": "'Identifies when a recently created Group was added to a privileged built in domain local group or global group such as the \nEnterprise Admins, Cert Publishers or DnsAdmins.  Be sure to verify this is an expected addition.\nReferences: For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups.'\n",
         "severity": "Medium",
-        "name": "Group created then added to built in domain local or global group"
+        "triggerOperator": "gt",
+        "queryPeriod": "1h"
       }
     }
   ]
