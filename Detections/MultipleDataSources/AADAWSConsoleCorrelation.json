@@ -14,7 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "query": "//Adjust this threshold to fit your environment\nlet signin_threshold = 5;\n//Make a list of IPs with AAD signin failures above our threshold\nlet aadFunc = (tableName:string){\nlet Suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in (\"127.0.0.1\", \"::1\")\n| summarize count() by IPAddress\n| where count_ >  signin_threshold\n| summarize make_set(IPAddress);\nSuspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet Suspicious_signins =\nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into the AWS console\nAWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult =~ \"Success\"\n| where SourceIpAddress in (Suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, AWSRegion, SourceIpAddress, UserAgent, MFAUsed\n| extend timestamp = StartTime\n",
+        "triggerOperator": "gt",
         "description": "'Identifies a list of IP addresses with a minimum number (defualt of 5) of failed logon attempts to Microsoft Entra ID.\nUses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'\n",
+        "queryFrequency": "1d",
+        "name": "Failed AzureAD logons but success logon to AWS Console",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -43,15 +49,9 @@
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "name": "Failed AzureAD logons but success logon to AWS Console",
-        "query": "//Adjust this threshold to fit your environment\nlet signin_threshold = 5;\n//Make a list of IPs with AAD signin failures above our threshold\nlet aadFunc = (tableName:string){\nlet Suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in (\"127.0.0.1\", \"::1\")\n| summarize count() by IPAddress\n| where count_ >  signin_threshold\n| summarize make_set(IPAddress);\nSuspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet Suspicious_signins =\nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into the AWS console\nAWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult =~ \"Success\"\n| where SourceIpAddress in (Suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, AWSRegion, SourceIpAddress, UserAgent, MFAUsed\n| extend timestamp = StartTime\n",
-        "triggerOperator": "gt",
         "metadata": {
-          "support": {
-            "tier": "Community"
+          "source": {
+            "kind": "Community"
           },
           "categories": {
             "domains": [
@@ -59,11 +59,11 @@
               "Identity"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
           "author": {
             "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
           }
         },
         "queryPeriod": "1d",
