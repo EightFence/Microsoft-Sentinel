@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/63aa43c2-e88e-4102-aea5-0432851c541a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/63aa43c2-e88e-4102-aea5-0432851c541a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "description": "This query searches for changes to the local administrators group.\nBlogpost: https://www.verboon.info/2020/09/hunting-for-local-group-membership-changes.\n",
+        "name": "Local Admin Group Changes",
+        "query": "let ADAZUsers =  IdentityInfo \n| extend DirectoryDomain = AccountDomain \n| extend DirectoryAccount = AccountName \n| extend OnPremSid = AccountSID\n| distinct DirectoryDomain , DirectoryAccount , OnPremSid , AccountCloudSID, AccountUPN, GivenName, Surname;\n // check for any new created or modified local accounts \nlet NewUsers =  DeviceEvents\n| where ActionType contains \"UserAccountCreated\" or ActionType contains \"UserAccountModified\"\n| extend lUserAdded = AccountName\n| extend NewUserSID = AccountSid\n| extend laccountdomain = AccountDomain\n| distinct NewUserSID, lUserAdded,laccountdomain;\n// Check for any local group changes and enrich the data with the account name obtained from the previous query\nDeviceEvents \n| where ActionType == 'UserAccountAddedToLocalGroup' \n| extend AddedAccountSID = tostring(parse_json(AdditionalFields).MemberSid)\n| extend LocalGroup = AccountName\n| extend LocalGroupSID = AccountSid\n| extend Actor = trim(@\"[^\\w]+\",InitiatingProcessAccountName)\n// limit to local administrators group\n//  | where LocalGroupSID contains \"S-1-5-32-544\"\n| join kind= leftouter    (NewUsers)\non $left.AddedAccountSID == $right.NewUserSID\n| project TimeGenerated, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, lUserAdded , Actor, ActionType , laccountdomain \n| join kind=leftouter  (ADAZUsers)\non $left.AddedAccountSID == $right.OnPremSid\n| extend UserAdded = iff(isnotempty(lUserAdded),strcat(laccountdomain,\"\\\\\", lUserAdded), strcat(DirectoryDomain,\"\\\\\", DirectoryAccount))\n| extend AccountName = iff(isnotempty(lUserAdded), lUserAdded, DirectoryAccount)\n| project TimeGenerated, DeviceName, LocalGroup, LocalGroupSID, AddedAccountSID, UserAdded ,Actor, ActionType, AccountName, laccountdomain  \n| where DeviceName !contains Actor\n// Provide details on actors that added users\n// | summarize count()  by Actor \n// | join ADAZUsers\n// on $left.Actor == $right.DirectoryAccount \n// | render piechart\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "queryFrequency": "1h",
+        "tactics": [
+          "Persistence"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "DeviceName"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "DnsDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UserAdded"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "laccountdomain"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "1h",
+        "status": "Available"
+      }
+    }
+  ]
+}

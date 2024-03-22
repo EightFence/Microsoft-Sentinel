@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/515d0bba-b297-4f83-8280-20ff7f27ecb1')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/515d0bba-b297-4f83-8280-20ff7f27ecb1')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "description": "This query checks for attempts to clear at least 10 log entries from event logs using wevtutil. Clearing event logs can be a sign of ransomware activity, as ransomware often attempts to cover its tracks by deleting logs.\n",
+        "name": "Clearing of forensic evidence from event logs using wevtutil",
+        "query": "// Look for use of wevtutil to clear multiple logs\nDeviceProcessEvents\n| where ProcessCommandLine has \"WEVTUTIL\" and ProcessCommandLine has \"CL\"\n| summarize LogClearCount = dcount(tostring(ProcessCommandLine)), ClearedLogList = make_set(ProcessCommandLine, 100000) by DeviceId, DeviceName, bin(TimeGenerated, 5m)\n| where LogClearCount > 10\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "queryFrequency": "1d",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "DeviceName"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "DnsDomain"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "1d",
+        "status": "Available"
+      }
+    }
+  ]
+}
