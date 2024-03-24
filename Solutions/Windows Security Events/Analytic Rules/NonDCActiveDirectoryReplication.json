@@ -14,63 +14,63 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Account",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "AccountNTDomain",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Computer",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "HostName",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "HostNameDomain",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "IpAddress",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "queryPeriod": "7d",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
         "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "query": "// Enter a reference list of hostnames for your DC servers\n//let DCServersList = dynamic ([\"DC01.simulandlabs.com\",\"DC02.simulandlabs.com\"]);\nSecurityEvent\n//| where Computer in (DCServersList)\n| where EventID == 4662 and ObjectServer == 'DS'\n| where AccountType != 'Machine'\n| where Properties has '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes\n    or Properties has '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes-All\n    or Properties has '89e95b76-444d-4c62-991a-0facbeda640c' //DS-Replication-Get-Changes-In-Filtered-Set\n| project TimeGenerated, Account, Activity, Properties, SubjectLogonId, Computer\n| join kind=leftouter\n(\n    SecurityEvent\n    //| where Computer in (DCServersList)\n    | where EventID == 4624 and LogonType == 3\n    | where AccountType != 'Machine'\n    | project TargetLogonId, IpAddress\n)\non $left.SubjectLogonId == $right.TargetLogonId\n| project-reorder TimeGenerated, Computer, Account, IpAddress\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, \"\\\\\")[0]), AccountNTDomain = tostring(split(Account, \"\\\\\")[1])\n",
         "tactics": [
           "CredentialAccess"
         ],
+        "queryFrequency": "1d",
+        "description": "'This query detects potential attempts by non-computer accounts (non domain controllers) to retrieve/synchronize an active directory object leveraging directory replication services (DRS).\nA Domain Controller (computer account) would usually be performing these actions in a domain environment. Another detection rule can be created to cover domain controllers accounts doing at rare times.\nA domain user with privileged permissions to use directory replication services is rare.'\n",
+        "queryPeriod": "7d",
         "severity": "High",
-        "query": "// Enter a reference list of hostnames for your DC servers\n//let DCServersList = dynamic ([\"DC01.simulandlabs.com\",\"DC02.simulandlabs.com\"]);\nSecurityEvent\n//| where Computer in (DCServersList)\n| where EventID == 4662 and ObjectServer == 'DS'\n| where AccountType != 'Machine'\n| where Properties has '1131f6aa-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes\n    or Properties has '1131f6ad-9c07-11d1-f79f-00c04fc2dcd2' //DS-Replication-Get-Changes-All\n    or Properties has '89e95b76-444d-4c62-991a-0facbeda640c' //DS-Replication-Get-Changes-In-Filtered-Set\n| project TimeGenerated, Account, Activity, Properties, SubjectLogonId, Computer\n| join kind=leftouter\n(\n    SecurityEvent\n    //| where Computer in (DCServersList)\n    | where EventID == 4624 and LogonType == 3\n    | where AccountType != 'Machine'\n    | project TargetLogonId, IpAddress\n)\non $left.SubjectLogonId == $right.TargetLogonId\n| project-reorder TimeGenerated, Computer, Account, IpAddress\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, \"\\\\\")[0]), AccountNTDomain = tostring(split(Account, \"\\\\\")[1])\n",
-        "status": "Available",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Account"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "AccountNTDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Computer"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "HostNameDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IpAddress"
+              }
+            ]
+          }
+        ],
         "name": "Non Domain Controller Active Directory Replication",
-        "description": "'This query detects potential attempts by non-computer accounts (non domain controllers) to retrieve/synchronize an active directory object leveraging directory replication services (DRS).\nA Domain Controller (computer account) would usually be performing these actions in a domain environment. Another detection rule can be created to cover domain controllers accounts doing at rare times.\nA domain user with privileged permissions to use directory replication services is rare.'\n"
+        "status": "Available"
       }
     }
   ]
