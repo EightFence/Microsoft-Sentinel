@@ -14,29 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)\n//Normalizing the column to lower case for exact match with EmailSenderAddress column\n| extend TargetUserName = tolower(TargetUserName)\n// renaming timestamp column so it is clear the log this came from SecurityEvent table\n| extend SecurityEvent_TimeGenerated = TimeGenerated\n),\n(WindowsEvent\n| where TimeGenerated >= ago(dt_lookBack)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| where isnotempty(TargetUserName)\n//Normalizing the column to lower case for exact match with EmailSenderAddress column\n| extend TargetUserName = tolower(TargetUserName)\n// renaming timestamp column so it is clear the log this came from SecurityEvent table\n| extend SecurityEvent_TimeGenerated = TimeGenerated\n))\n)\non $left.EmailSenderAddress == $right.TargetUserName\n| where SecurityEvent_TimeGenerated < ExpirationDateTime\n| summarize SecurityEvent_TimeGenerated = arg_max(SecurityEvent_TimeGenerated, *) by IndicatorId, TargetUserName\n| project SecurityEvent_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nEmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,\nLogonTypeName, LogonProcessName, Status, SubStatus\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n| extend timestamp = SecurityEvent_TimeGenerated\n",
-        "severity": "Medium",
-        "name": "TI map Email entity to SecurityEvent",
-        "tactics": [
-          "Impact"
-        ],
-        "triggerThreshold": 0,
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in SecurityEvent table from any Email IOC from TI'\n",
-        "queryFrequency": "1h",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "TargetUserName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
@@ -46,27 +34,39 @@
                 "identifier": "DnsDomain",
                 "columnName": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
-        ]
+        ],
+        "tactics": [
+          "Impact"
+        ],
+        "queryFrequency": "1h",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)\n//Normalizing the column to lower case for exact match with EmailSenderAddress column\n| extend TargetUserName = tolower(TargetUserName)\n// renaming timestamp column so it is clear the log this came from SecurityEvent table\n| extend SecurityEvent_TimeGenerated = TimeGenerated\n),\n(WindowsEvent\n| where TimeGenerated >= ago(dt_lookBack)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| where isnotempty(TargetUserName)\n//Normalizing the column to lower case for exact match with EmailSenderAddress column\n| extend TargetUserName = tolower(TargetUserName)\n// renaming timestamp column so it is clear the log this came from SecurityEvent table\n| extend SecurityEvent_TimeGenerated = TimeGenerated\n))\n)\non $left.EmailSenderAddress == $right.TargetUserName\n| where SecurityEvent_TimeGenerated < ExpirationDateTime\n| summarize SecurityEvent_TimeGenerated = arg_max(SecurityEvent_TimeGenerated, *) by IndicatorId, TargetUserName\n| project SecurityEvent_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nEmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,\nLogonTypeName, LogonProcessName, Status, SubStatus\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n| extend timestamp = SecurityEvent_TimeGenerated\n",
+        "description": "'Identifies a match in SecurityEvent table from any Email IOC from TI'\n",
+        "triggerThreshold": 0,
+        "name": "TI map Email entity to SecurityEvent",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "severity": "Medium"
       }
     }
   ]
