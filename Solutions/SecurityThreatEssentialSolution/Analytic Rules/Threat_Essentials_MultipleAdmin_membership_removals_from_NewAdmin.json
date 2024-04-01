@@ -14,9 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'This query detects when newly created Global admin removes multiple existing global admins which can be an attempt by adversaries to lock down organization and retain sole access. \n Investigate reasoning and intention of multiple membership removal by new Global admins and take necessary actions accordingly.'\n",
+        "queryPeriod": "7d",
+        "queryFrequency": "1h",
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -26,20 +29,17 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "queryPeriod": "7d",
+        "name": "Threat Essentials - Multiple admin membership removals from newly created admin.",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "query": "let lookback = 7d; \nlet timeframe = 1h; \nlet GlobalAdminsRemoved = AuditLogs \n| where TimeGenerated > ago(timeframe) \n| where Category =~ \"RoleManagement\" \n| where AADOperationType in~ (\"Unassign\", \"RemoveEligibleRole\") \n| where ActivityDisplayName has_any (\"Remove member from role\", \"Remove eligible member from role\") \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) \n| where displayName_ =~ \"Role.DisplayName\" \n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue))) \n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable \n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) \n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) \n| where Initiator != \"MS-PIM\"  // Filtering PIM events \n| extend Target = tostring(TargetResources.userPrincipalName) \n| summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target) by OperationName,  RoleName, Initiator, Result; \nlet GlobalAdminsAdded = AuditLogs \n| where TimeGenerated > ago(lookback) \n| where Category =~ \"RoleManagement\" \n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\") \n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\") and Result =~ \"success\" \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) \n| where displayName_ =~ \"Role.DisplayName\" \n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue))) \n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable \n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) \n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) \n| where Initiator != \"MS-PIM\"  // Filtering PIM events \n| extend Target = tostring(TargetResources.userPrincipalName) \n| summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result; \nGlobalAdminsAdded \n| join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator \n| where AddedGlobalAdminTime < RemovedGlobalAdminTime \n| extend NoofAdminsRemoved = array_length(TargetAdmins) \n| where NoofAdminsRemoved > 1\n| project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved\n| extend Name=split(Target, \"@\")[0], UPNSuffix=split(Target, \"@\")[1]\n",
+        "description": "'This query detects when newly created Global admin removes multiple existing global admins which can be an attempt by adversaries to lock down organization and retain sole access. \n Investigate reasoning and intention of multiple membership removal by new Global admins and take necessary actions accordingly.'\n",
         "tactics": [
           "Impact"
         ],
-        "status": "Available",
-        "query": "let lookback = 7d; \nlet timeframe = 1h; \nlet GlobalAdminsRemoved = AuditLogs \n| where TimeGenerated > ago(timeframe) \n| where Category =~ \"RoleManagement\" \n| where AADOperationType in~ (\"Unassign\", \"RemoveEligibleRole\") \n| where ActivityDisplayName has_any (\"Remove member from role\", \"Remove eligible member from role\") \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) \n| where displayName_ =~ \"Role.DisplayName\" \n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue))) \n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable \n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) \n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) \n| where Initiator != \"MS-PIM\"  // Filtering PIM events \n| extend Target = tostring(TargetResources.userPrincipalName) \n| summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target) by OperationName,  RoleName, Initiator, Result; \nlet GlobalAdminsAdded = AuditLogs \n| where TimeGenerated > ago(lookback) \n| where Category =~ \"RoleManagement\" \n| where AADOperationType in~ (\"Assign\", \"AssignEligibleRole\") \n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\") and Result =~ \"success\" \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) \n| where displayName_ =~ \"Role.DisplayName\" \n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue))) \n| where RoleName =~ \"Global Administrator\" // Add other Privileged role if applicable \n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) \n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) \n| where Initiator != \"MS-PIM\"  // Filtering PIM events \n| extend Target = tostring(TargetResources.userPrincipalName) \n| summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result; \nGlobalAdminsAdded \n| join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator \n| where AddedGlobalAdminTime < RemovedGlobalAdminTime \n| extend NoofAdminsRemoved = array_length(TargetAdmins) \n| where NoofAdminsRemoved > 1\n| project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved\n| extend Name=split(Target, \"@\")[0], UPNSuffix=split(Target, \"@\")[1]\n",
-        "name": "Threat Essentials - Multiple admin membership removals from newly created admin.",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
         "triggerThreshold": 0
       }
     }
