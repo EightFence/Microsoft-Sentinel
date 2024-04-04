@@ -14,19 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let starttime = 8d;\nlet endtime = 1d;\nlet threshold = 0.333;\nlet countlimit = 50;\nSecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4625 and AccountType =~ \"User\"\n| where IpAddress !in (\"127.0.0.1\", \"::1\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), CountToday = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress, Process\n| join kind=leftouter (\n    SecurityEvent\n    | where TimeGenerated between (ago(starttime) .. ago(endtime))\n    | where EventID == 4625 and AccountType =~ \"User\"\n    | where IpAddress !in (\"127.0.0.1\", \"::1\")\n    | summarize CountPrev7day = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress\n) on EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress\n| where CountToday >= coalesce(CountPrev7day,0)*threshold and CountToday >= countlimit\n//SubStatus Codes are detailed here - https://docs.microsoft.com/windows/security/threat-protection/auditing/event-4625\n| extend Reason = case(\nSubStatus =~ '0xC000005E', 'There are currently no logon servers available to service the logon request.',\nSubStatus =~ '0xC0000064', 'User logon with misspelled or bad user account',\nSubStatus =~ '0xC000006A', 'User logon with misspelled or bad password',\nSubStatus =~ '0xC000006D', 'Bad user name or password',\nSubStatus =~ '0xC000006E', 'Unknown user name or bad password',\nSubStatus =~ '0xC000006F', 'User logon outside authorized hours',\nSubStatus =~ '0xC0000070', 'User logon from unauthorized workstation',\nSubStatus =~ '0xC0000071', 'User logon with expired password',\nSubStatus =~ '0xC0000072', 'User logon to account disabled by administrator',\nSubStatus =~ '0xC00000DC', 'Indicates the Sam Server was in the wrong state to perform the desired operation',\nSubStatus =~ '0xC0000133', 'Clocks between DC and other computer too far out of sync',\nSubStatus =~ '0xC000015B', 'The user has not been granted the requested logon type (aka logon right) at this machine',\nSubStatus =~ '0xC000018C', 'The logon request failed because the trust relationship between the primary domain and the trusted domain failed',\nSubStatus =~ '0xC0000192', 'An attempt was made to logon, but the Netlogon service was not started',\nSubStatus =~ '0xC0000193', 'User logon with expired account',\nSubStatus =~ '0xC0000224', 'User is required to change password at next logon',\nSubStatus =~ '0xC0000225', 'Evidently a bug in Windows and not a risk',\nSubStatus =~ '0xC0000234', 'User logon with account locked',\nSubStatus =~ '0xC00002EE', 'Failure Reason: An Error occurred during Logon',\nSubStatus =~ '0xC0000413', 'Logon Failure: The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine',\nstrcat('Unknown reason substatus: ', SubStatus))\n| extend WorkstationName = iff(WorkstationName == \"-\" or isempty(WorkstationName), Computer , WorkstationName)\n| project StartTime, EndTime, EventID, Account, LogonTypeName, SubStatus, Reason, AccountType, Computer, WorkstationName, IpAddress, CountToday, CountPrev7day, Avg7Day = round(CountPrev7day*1.00/7,2), Process\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), Computer = make_set(Computer,128), IpAddressList = make_set(IpAddress,128), sum(CountToday), sum(CountPrev7day), avg(Avg7Day)\nby EventID, Account, LogonTypeName, SubStatus, Reason, AccountType, WorkstationName, Process\n| order by sum_CountToday desc nulls last\n| extend timestamp = StartTime, NTDomain = tostring(split(Account, '\\\\', 0)[0]), Name = tostring(split(Account, '\\\\', 1)[0]), HostName = tostring(split(WorkstationName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(WorkstationName, '.'), 1, -1), '.'))\n",
-        "severity": "Low",
         "name": "Excessive Windows Logon Failures",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
-        "status": "Available",
-        "tactics": [
-          "CredentialAccess"
-        ],
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Account"
+              },
               {
                 "identifier": "Name",
                 "columnName": "Name"
@@ -35,11 +31,15 @@
                 "identifier": "NTDomain",
                 "columnName": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "WorkstationName"
+              },
               {
                 "identifier": "HostName",
                 "columnName": "HostName"
@@ -48,21 +48,29 @@
                 "identifier": "DnsDomain",
                 "columnName": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "Process",
             "fieldMappings": [
               {
                 "identifier": "CommandLine",
                 "columnName": "Process"
               }
-            ]
+            ],
+            "entityType": "Process"
           }
         ],
         "queryPeriod": "8d",
         "description": "'This query identifies user accounts which has over 50 Windows logon failures today and at least 33% of the count of logon failures over the previous 7 days.'\n",
-        "triggerThreshold": 0
+        "triggerOperator": "gt",
+        "query": "let starttime = 8d;\nlet endtime = 1d;\nlet threshold = 0.333;\nlet countlimit = 50;\nSecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4625 and AccountType =~ \"User\"\n| where IpAddress !in (\"127.0.0.1\", \"::1\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), CountToday = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress, Process\n| join kind=leftouter (\n    SecurityEvent\n    | where TimeGenerated between (ago(starttime) .. ago(endtime))\n    | where EventID == 4625 and AccountType =~ \"User\"\n    | where IpAddress !in (\"127.0.0.1\", \"::1\")\n    | summarize CountPrev7day = count() by EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress\n) on EventID, Account, LogonTypeName, SubStatus, AccountType, Computer, WorkstationName, IpAddress\n| where CountToday >= coalesce(CountPrev7day,0)*threshold and CountToday >= countlimit\n//SubStatus Codes are detailed here - https://docs.microsoft.com/windows/security/threat-protection/auditing/event-4625\n| extend Reason = case(\nSubStatus =~ '0xC000005E', 'There are currently no logon servers available to service the logon request.',\nSubStatus =~ '0xC0000064', 'User logon with misspelled or bad user account',\nSubStatus =~ '0xC000006A', 'User logon with misspelled or bad password',\nSubStatus =~ '0xC000006D', 'Bad user name or password',\nSubStatus =~ '0xC000006E', 'Unknown user name or bad password',\nSubStatus =~ '0xC000006F', 'User logon outside authorized hours',\nSubStatus =~ '0xC0000070', 'User logon from unauthorized workstation',\nSubStatus =~ '0xC0000071', 'User logon with expired password',\nSubStatus =~ '0xC0000072', 'User logon to account disabled by administrator',\nSubStatus =~ '0xC00000DC', 'Indicates the Sam Server was in the wrong state to perform the desired operation',\nSubStatus =~ '0xC0000133', 'Clocks between DC and other computer too far out of sync',\nSubStatus =~ '0xC000015B', 'The user has not been granted the requested logon type (aka logon right) at this machine',\nSubStatus =~ '0xC000018C', 'The logon request failed because the trust relationship between the primary domain and the trusted domain failed',\nSubStatus =~ '0xC0000192', 'An attempt was made to logon, but the Netlogon service was not started',\nSubStatus =~ '0xC0000193', 'User logon with expired account',\nSubStatus =~ '0xC0000224', 'User is required to change password at next logon',\nSubStatus =~ '0xC0000225', 'Evidently a bug in Windows and not a risk',\nSubStatus =~ '0xC0000234', 'User logon with account locked',\nSubStatus =~ '0xC00002EE', 'Failure Reason: An Error occurred during Logon',\nSubStatus =~ '0xC0000413', 'Logon Failure: The machine you are logging onto is protected by an authentication firewall. The specified account is not allowed to authenticate to the machine',\nstrcat('Unknown reason substatus: ', SubStatus))\n| extend WorkstationName = iff(WorkstationName == \"-\" or isempty(WorkstationName), Computer , WorkstationName)\n| project StartTime, EndTime, EventID, Account, LogonTypeName, SubStatus, Reason, AccountType, Computer, WorkstationName, IpAddress, CountToday, CountPrev7day, Avg7Day = round(CountPrev7day*1.00/7,2), Process\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), Computer = make_set(Computer,128), IpAddressList = make_set(IpAddress,128), sum(CountToday), sum(CountPrev7day), avg(Avg7Day)\nby EventID, Account, LogonTypeName, SubStatus, Reason, AccountType, WorkstationName, Process\n| order by sum_CountToday desc nulls last\n| extend timestamp = StartTime, NTDomain = tostring(split(Account, '\\\\', 0)[0]), Name = tostring(split(Account, '\\\\', 1)[0]), HostName = tostring(split(WorkstationName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(WorkstationName, '.'), 1, -1), '.'))\n",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "queryFrequency": "1d",
+        "severity": "Low",
+        "status": "Available"
       }
     }
   ]
