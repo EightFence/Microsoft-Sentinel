@@ -17,17 +17,9 @@
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "query": "let query_frequency = 1h;\nlet query_period = 1d;\nAuditLogs\n| where TimeGenerated > ago(query_frequency)\n| where Category =~ \"UserManagement\" and OperationName =~ \"Delete user\"\n| mv-expand TargetResource = TargetResources\n| where TargetResource[\"type\"] == \"User\" and TargetResource[\"userPrincipalName\"] has \"#EXT#\"\n| extend ParsedDeletedUserPrincipalName = extract(@\"^[0-9a-f]{32}([^\\#]+)\\#EXT\\#\", 1, tostring(TargetResource[\"userPrincipalName\"]))\n| extend\n    Initiator = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"displayName\"]), tostring(InitiatedBy[\"user\"][\"userPrincipalName\"])),\n    InitiatorId = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"]), tostring(InitiatedBy[\"user\"][\"id\"])),\n    Delete_IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])][\"ipAddress\"])\n| project Delete_TimeGenerated = TimeGenerated, Category, Identity, Initiator, Delete_IPAddress, OperationName, Result, ParsedDeletedUserPrincipalName, InitiatedBy, AdditionalDetails, TargetResources, InitiatorId, CorrelationId\n| join kind=inner (\n    SigninLogs\n    | where TimeGenerated > ago(query_period)\n    | where ResultType == 0\n    | summarize take_any(*) by UserPrincipalName\n    | extend ParsedUserPrincipalName = translate(\"@\", \"_\", UserPrincipalName)\n    | project SigninLogs_TimeGenerated = TimeGenerated, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, IPAddress, LocationDetails, AppDisplayName, ResourceDisplayName, ClientAppUsed, UserAgent, DeviceDetail, UserId, UserType, OriginalRequestId, ParsedUserPrincipalName\n    ) on $left.ParsedDeletedUserPrincipalName == $right.ParsedUserPrincipalName\n| where SigninLogs_TimeGenerated > Delete_TimeGenerated\n| project-away ParsedDeletedUserPrincipalName, ParsedUserPrincipalName\n| extend\n    AccountName = tostring(split(UserPrincipalName, \"@\")[0]),\n    AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
-        "name": "Suspicious Login from deleted guest account",
         "metadata": {
           "support": {
             "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
           },
           "categories": {
             "domains": [
@@ -37,23 +29,25 @@
           },
           "author": {
             "name": "Microsoft Security Research"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
-        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -61,15 +55,21 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
         "description": "' This query will detect logins from guest account which was recently deleted. \nFor any successful logins from deleted identities should be investigated further if any existing user accounts have been altered or linked to such identity prior deletion'\n",
-        "queryPeriod": "1d"
+        "name": "Suspicious Login from deleted guest account",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "query": "let query_frequency = 1h;\nlet query_period = 1d;\nAuditLogs\n| where TimeGenerated > ago(query_frequency)\n| where Category =~ \"UserManagement\" and OperationName =~ \"Delete user\"\n| mv-expand TargetResource = TargetResources\n| where TargetResource[\"type\"] == \"User\" and TargetResource[\"userPrincipalName\"] has \"#EXT#\"\n| extend ParsedDeletedUserPrincipalName = extract(@\"^[0-9a-f]{32}([^\\#]+)\\#EXT\\#\", 1, tostring(TargetResource[\"userPrincipalName\"]))\n| extend\n    Initiator = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"displayName\"]), tostring(InitiatedBy[\"user\"][\"userPrincipalName\"])),\n    InitiatorId = iif(isnotempty(InitiatedBy[\"app\"]), tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"]), tostring(InitiatedBy[\"user\"][\"id\"])),\n    Delete_IPAddress = tostring(InitiatedBy[tostring(bag_keys(InitiatedBy)[0])][\"ipAddress\"])\n| project Delete_TimeGenerated = TimeGenerated, Category, Identity, Initiator, Delete_IPAddress, OperationName, Result, ParsedDeletedUserPrincipalName, InitiatedBy, AdditionalDetails, TargetResources, InitiatorId, CorrelationId\n| join kind=inner (\n    SigninLogs\n    | where TimeGenerated > ago(query_period)\n    | where ResultType == 0\n    | summarize take_any(*) by UserPrincipalName\n    | extend ParsedUserPrincipalName = translate(\"@\", \"_\", UserPrincipalName)\n    | project SigninLogs_TimeGenerated = TimeGenerated, UserPrincipalName, UserDisplayName, ResultType, ResultDescription, IPAddress, LocationDetails, AppDisplayName, ResourceDisplayName, ClientAppUsed, UserAgent, DeviceDetail, UserId, UserType, OriginalRequestId, ParsedUserPrincipalName\n    ) on $left.ParsedDeletedUserPrincipalName == $right.ParsedUserPrincipalName\n| where SigninLogs_TimeGenerated > Delete_TimeGenerated\n| project-away ParsedDeletedUserPrincipalName, ParsedUserPrincipalName\n| extend\n    AccountName = tostring(split(UserPrincipalName, \"@\")[0]),\n    AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
+        "queryPeriod": "1d",
+        "queryFrequency": "1h"
       }
     }
   ]
