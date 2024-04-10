@@ -14,18 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "TI Map URL Entity to AuditLogs",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "tactics": [
+          "Impact"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -33,8 +39,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "DeviceName"
               }
             ]
           },
@@ -42,8 +48,8 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ]
           },
@@ -51,22 +57,16 @@
             "entityType": "Process",
             "fieldMappings": [
               {
-                "columnName": "InitiatingProcessCommandLine",
-                "identifier": "CommandLine"
+                "identifier": "CommandLine",
+                "columnName": "InitiatingProcessCommandLine"
               }
             ]
           }
         ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_ = DeviceNetworkEvents\n  | where isnotempty(RemoteUrl)\n  | where TimeGenerated >= ago(dt_lookBack)\n  | where ActionType !has \"ConnectionFailed\"\n  | extend RemoteUrl = tolower(RemoteUrl)\n  | project-rename DeviceNetworkEvents_TimeGenerated = TimeGenerated;\nlet DeviceNetworkEventUrls = DeviceNetworkEvents_\n  | distinct Url = RemoteUrl\n  | summarize make_list(Url);\nThreatIntelligenceIndicator\n| where isnotempty(Url)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend Url = tolower(Url)\n| where Url in (DeviceNetworkEventUrls)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceNetworkEvents_) on $left.Url == $right.RemoteUrl\n| where DeviceNetworkEvents_TimeGenerated < ExpirationDateTime\n| summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId, Url\n| project DeviceNetworkEvents_TimeGenerated, IndicatorId, Url, ConfidenceScore, Description, ThreatType, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort\n| extend Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])\n| extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName = InitiatingProcessAccountUpn\n",
-        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in DeviceNetworkEvents.'\n",
-        "triggerThreshold": 0,
         "queryPeriod": "14d",
-        "name": "TI Map URL Entity to AuditLogs",
-        "tactics": [
-          "Impact"
-        ],
         "severity": "Medium",
-        "queryFrequency": "1h"
+        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in DeviceNetworkEvents.'\n",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_ = DeviceNetworkEvents\n  | where isnotempty(RemoteUrl)\n  | where TimeGenerated >= ago(dt_lookBack)\n  | where ActionType !has \"ConnectionFailed\"\n  | extend RemoteUrl = tolower(RemoteUrl)\n  | project-rename DeviceNetworkEvents_TimeGenerated = TimeGenerated;\nlet DeviceNetworkEventUrls = DeviceNetworkEvents_\n  | distinct Url = RemoteUrl\n  | summarize make_list(Url);\nThreatIntelligenceIndicator\n| where isnotempty(Url)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend Url = tolower(Url)\n| where Url in (DeviceNetworkEventUrls)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceNetworkEvents_) on $left.Url == $right.RemoteUrl\n| where DeviceNetworkEvents_TimeGenerated < ExpirationDateTime\n| summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId, Url\n| project DeviceNetworkEvents_TimeGenerated, IndicatorId, Url, ConfidenceScore, Description, ThreatType, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort\n| extend Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])\n| extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName = InitiatingProcessAccountUpn\n"
       }
     }
   ]
