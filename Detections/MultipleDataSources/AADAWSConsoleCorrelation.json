@@ -14,32 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Failed AzureAD logons but success logon to AWS Console",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
         "queryFrequency": "1d",
-        "severity": "Medium",
-        "tactics": [
-          "InitialAccess",
-          "CredentialAccess"
-        ],
-        "description": "'Identifies a list of IP addresses with a minimum number (defualt of 5) of failed logon attempts to Microsoft Entra ID.\nUses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'\n",
-        "queryPeriod": "1d",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -47,30 +38,39 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
+        "query": "//Adjust this threshold to fit your environment\nlet signin_threshold = 5;\n//Make a list of IPs with AAD signin failures above our threshold\nlet aadFunc = (tableName:string){\nlet Suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in (\"127.0.0.1\", \"::1\")\n| summarize count() by IPAddress\n| where count_ >  signin_threshold\n| summarize make_set(IPAddress);\nSuspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet Suspicious_signins =\nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into the AWS console\nAWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult =~ \"Success\"\n| where SourceIpAddress in (Suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, AWSRegion, SourceIpAddress, UserAgent, MFAUsed\n| extend timestamp = StartTime\n",
+        "name": "Failed AzureAD logons but success logon to AWS Console",
         "metadata": {
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "source": {
+            "kind": "Community"
+          },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
           "support": {
             "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           }
         },
-        "query": "//Adjust this threshold to fit your environment\nlet signin_threshold = 5;\n//Make a list of IPs with AAD signin failures above our threshold\nlet aadFunc = (tableName:string){\nlet Suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in (\"127.0.0.1\", \"::1\")\n| summarize count() by IPAddress\n| where count_ >  signin_threshold\n| summarize make_set(IPAddress);\nSuspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet Suspicious_signins =\nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into the AWS console\nAWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult =~ \"Success\"\n| where SourceIpAddress in (Suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, AWSRegion, SourceIpAddress, UserAgent, MFAUsed\n| extend timestamp = StartTime\n"
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess"
+        ],
+        "severity": "Medium",
+        "description": "'Identifies a list of IP addresses with a minimum number (defualt of 5) of failed logon attempts to Microsoft Entra ID.\nUses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d"
       }
     }
   ]
