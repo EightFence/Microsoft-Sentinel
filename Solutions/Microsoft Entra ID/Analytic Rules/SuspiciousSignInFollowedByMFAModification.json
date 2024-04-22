@@ -14,9 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
+        "name": "Suspicious Sign In Followed by MFA Modification",
         "query": "let PriorityScore = 9;\nBehaviorAnalytics\n| where ActionType == \"Sign-in\"\n| where InvestigationPriority > PriorityScore\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend LogOnTime = TimeGenerated\n| join kind=inner (AuditLogs\n| where Category =~ \"UserManagement\" \n| where OperationName in~ (\"Admin registered security info\", \"Admin updated security info\", \"Admin deleted security info\", \"User registered security info\", \"User changed default security info\", \"User deleted security info\",\"User registered all required security info\",\"User started security info registration\") \n| extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))\n| extend InitiatorID = tostring(InitiatedBy.user.id)\n| extend FromIP = tostring(InitiatedBy.user.ipAddress) \n| extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| extend TargetId = tostring(TargetResources[0].id)\n| extend MFAModTime = TimeGenerated\n| where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN\n| where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))\n| extend InitiatorName = tostring(split(InitiatorUPN, \"@\")[0]), InitiatorUPNSuffix = tostring(split(InitiatorUPN, \"@\")[1]), TargetName = tostring(split(TargetUPN, \"@\")[0]), TargetUPNSuffix = tostring(split(TargetUPN, \"@\")[1])\n",
-        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "tactics": [
           "InitialAccess",
           "DefenseEvasion"
@@ -25,29 +32,21 @@
           "alertDisplayNameFormat": "Suspicious Sign In by {{InitiatorUPN}} Followed by MFA Modification to {{TargetUPN}}",
           "alertDescriptionFormat": "This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.\nIn this case {{InitiatorUPN}} logged in followed by a modification to MFA settings for {{TargetUPN}}.\nThe sign in was from {{SourceIPAddress}}.\n"
         },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "1d",
-        "description": "'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'\n",
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "InitiatorUPN"
+                "columnName": "InitiatorUPN",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "InitiatorName"
+                "columnName": "InitiatorName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatorUPNSuffix"
+                "columnName": "InitiatorUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -55,8 +54,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatorID"
+                "columnName": "InitiatorID",
+                "identifier": "AadUserId"
               }
             ]
           },
@@ -64,16 +63,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "TargetUPN"
+                "columnName": "TargetUPN",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "TargetName"
+                "columnName": "TargetName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "TargetUPNSuffix"
+                "columnName": "TargetUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -81,8 +80,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "TargetId"
+                "columnName": "TargetId",
+                "identifier": "AadUserId"
               }
             ]
           },
@@ -90,8 +89,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "FromIP"
+                "columnName": "FromIP",
+                "identifier": "Address"
               }
             ]
           },
@@ -99,13 +98,14 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIPAddress"
+                "columnName": "SourceIPAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "name": "Suspicious Sign In Followed by MFA Modification"
+        "severity": "Medium",
+        "status": "Available"
       }
     }
   ]
