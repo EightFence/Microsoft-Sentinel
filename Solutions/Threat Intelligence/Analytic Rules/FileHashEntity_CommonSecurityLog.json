@@ -14,84 +14,84 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "TI map File Hash to CommonSecurityLog Event",
-        "triggerOperator": "gt",
-        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n",
-        "triggerThreshold": 0,
         "queryPeriod": "14d",
+        "name": "TI map File Hash to CommonSecurityLog Event",
         "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelligenceIndicator\n| where isnotempty(FileHashValue)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now();\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | where isnotempty(FileHash)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "tactics": [
           "Impact"
         ],
+        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "SourceUserName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "SourceUserName"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "DeviceName"
               },
               {
-                "columnName": "HostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName"
               },
               {
-                "columnName": "DnsDomain",
-                "identifier": "DnsDomain"
+                "identifier": "DnsDomain",
+                "columnName": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
-                "columnName": "FileHashValue",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "FileHashValue"
               },
               {
-                "columnName": "FileHashType",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "FileHashType"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
-        ],
-        "severity": "Medium"
+        ]
       }
     }
   ]
