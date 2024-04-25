@@ -14,37 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "AzureActivity\n// Isolate run command actions\n| where OperationNameValue =~ \"MICROSOFT.COMPUTE/VIRTUALMACHINES/RUNCOMMAND/ACTION\"\n// Confirm that the operation impacted a virtual machine\n| where Authorization has \"virtualMachines\"\n// Each runcommand operation consists of three events when successful, Started, Accepted (or Rejected), Successful (or Failed).\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller\n// Limit to Run Command executions that Succeeded\n| where list_ActivityStatusValue has_any (\"Success\", \"Succeeded\")\n// Extract data from the Authorization field\n| extend Authorization_d = parse_json(Authorization)\n| extend Scope = Authorization_d.scope\n| extend Scope_s = split(Scope, \"/\")\n| extend Subscription = tostring(Scope_s[2])\n| extend VirtualMachineName = tostring(Scope_s[-1])\n| project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress\n// Create a join key using  the Caller (UPN)\n| extend joinkey = tolower(Caller)\n// Join the Run Command actions to UEBA data\n| join kind = inner (\n    BehaviorAnalytics\n    // We are specifically interested in unusual logins\n    | where EventSource == \"Azure AD\" and ActivityInsights.ActionUncommonlyPerformedByUser == \"True\"\n    | project UEBAEventTime=TimeGenerated, UEBAActionType=ActionType, UserPrincipalName, UEBASourceIPLocation=SourceIPLocation, UEBAActivityInsights=ActivityInsights, UEBAUsersInsights=UsersInsights\n    | where isnotempty(UserPrincipalName) and isnotempty(UEBASourceIPLocation)\n    | extend joinkey = tolower(UserPrincipalName)\n) on joinkey\n// Create a window around the UEBA event times, check to see if the Run Command action was performed within them\n| extend UEBAWindowStart = UEBAEventTime - 1h, UEBAWindowEnd = UEBAEventTime + 6h\n| where StartTime between (UEBAWindowStart .. UEBAWindowEnd)\n| project StartTime, EndTime, Subscription, VirtualMachineName, Caller, CallerIpAddress, UEBAEventTime, UEBAActionType, UEBASourceIPLocation, UEBAActivityInsights, UEBAUsersInsights\n| extend AccountName = tostring(split(Caller, \"@\")[0]), AccountUPNSuffix = tostring(split(Caller, \"@\")[1])\n",
-        "description": "'Identifies when the Azure Run Command operation is executed by a UserPrincipalName and IP Address  \nthat has resulted in a recent user entity behaviour alert.'\n",
-        "triggerOperator": "gt",
-        "name": "Azure VM Run Command operation executed during suspicious login window",
-        "severity": "High",
-        "metadata": {
-          "author": {
-            "name": "Microsoft Security Rearch"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Platform"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          }
-        },
-        "queryFrequency": "1d",
-        "tactics": [
-          "LateralMovement",
-          "CredentialAccess"
-        ],
-        "queryPeriod": "2d",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Caller",
@@ -58,19 +30,47 @@
                 "columnName": "AccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "CallerIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ]
+        ],
+        "severity": "High",
+        "tactics": [
+          "LateralMovement",
+          "CredentialAccess"
+        ],
+        "triggerThreshold": 0,
+        "description": "'Identifies when the Azure Run Command operation is executed by a UserPrincipalName and IP Address  \nthat has resulted in a recent user entity behaviour alert.'\n",
+        "queryPeriod": "2d",
+        "name": "Azure VM Run Command operation executed during suspicious login window",
+        "triggerOperator": "gt",
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Platform"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Rearch"
+          }
+        },
+        "queryFrequency": "1d",
+        "query": "AzureActivity\n// Isolate run command actions\n| where OperationNameValue =~ \"MICROSOFT.COMPUTE/VIRTUALMACHINES/RUNCOMMAND/ACTION\"\n// Confirm that the operation impacted a virtual machine\n| where Authorization has \"virtualMachines\"\n// Each runcommand operation consists of three events when successful, Started, Accepted (or Rejected), Successful (or Failed).\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller\n// Limit to Run Command executions that Succeeded\n| where list_ActivityStatusValue has_any (\"Success\", \"Succeeded\")\n// Extract data from the Authorization field\n| extend Authorization_d = parse_json(Authorization)\n| extend Scope = Authorization_d.scope\n| extend Scope_s = split(Scope, \"/\")\n| extend Subscription = tostring(Scope_s[2])\n| extend VirtualMachineName = tostring(Scope_s[-1])\n| project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress\n// Create a join key using  the Caller (UPN)\n| extend joinkey = tolower(Caller)\n// Join the Run Command actions to UEBA data\n| join kind = inner (\n    BehaviorAnalytics\n    // We are specifically interested in unusual logins\n    | where EventSource == \"Azure AD\" and ActivityInsights.ActionUncommonlyPerformedByUser == \"True\"\n    | project UEBAEventTime=TimeGenerated, UEBAActionType=ActionType, UserPrincipalName, UEBASourceIPLocation=SourceIPLocation, UEBAActivityInsights=ActivityInsights, UEBAUsersInsights=UsersInsights\n    | where isnotempty(UserPrincipalName) and isnotempty(UEBASourceIPLocation)\n    | extend joinkey = tolower(UserPrincipalName)\n) on joinkey\n// Create a window around the UEBA event times, check to see if the Run Command action was performed within them\n| extend UEBAWindowStart = UEBAEventTime - 1h, UEBAWindowEnd = UEBAEventTime + 6h\n| where StartTime between (UEBAWindowStart .. UEBAWindowEnd)\n| project StartTime, EndTime, Subscription, VirtualMachineName, Caller, CallerIpAddress, UEBAEventTime, UEBAActionType, UEBASourceIPLocation, UEBAActivityInsights, UEBAUsersInsights\n| extend AccountName = tostring(split(Caller, \"@\")[0]), AccountUPNSuffix = tostring(split(Caller, \"@\")[1])\n"
       }
     }
   ]
