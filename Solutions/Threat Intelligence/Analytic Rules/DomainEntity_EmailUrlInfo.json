@@ -14,45 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_ = materialize(EmailUrlInfo\n| where isnotempty(UrlDomain)\n| where TimeGenerated > ago(dt_lookBack)\n| project-rename Email_Url = Url);\nlet Domains = EmailUrlInfo_\n| distinct UrlDomain\n| summarize make_list(UrlDomain);\nlet Candidates = ThreatIntelligenceIndicator\n| where isnotempty(DomainName)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_Domain = tolower(DomainName)\n| where TI_Domain in (Domains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique EmailUrlInfo_ on $left.TI_Domain == $right.UrlDomain\n| join kind=innerunique (EmailEvents | where TimeGenerated >= ago(dt_lookBack) | project-rename EmailEvents_TimeGenerated = TimeGenerated) on $left.NetworkMessageId == $right.NetworkMessageId\n| where DeliveryLocation !has \"Quarantine\"\n// Customize and uncomment the following line to remove security related mailboxes\n//| where tolower(RecipientEmailAddress) !in (\"secmailbox1@example.com\", \"secmailbox2@example.com\")\n| where EmailEvents_TimeGenerated < ExpirationDateTime\n| summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, RecipientEmailAddress;\nlet Candidate_Domains = Candidates | distinct TI_Domain | summarize make_list(TI_Domain);\nThreatIntelligenceIndicator\n| where isnotempty(Url)\n| where TimeGenerated > ago(ioc_lookBack)\n| extend Host = tostring(parse_url(Url).Host)\n| where Host in (Candidate_Domains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (Candidates | extend parsed_url = parse_url(Email_Url) | extend BaseUrl = strcat(parsed_url.Scheme, \"://\", parsed_url.Host, parsed_url.Path)) on $left.Url == $right.BaseUrl\n| where DeliveryAction !has \"Blocked\"\n| project EmailEvents_TimeGenerated, RecipientEmailAddress, IndicatorId, TI_Domain, ConfidenceScore, Description, Tags, TrafficLightProtocolLevel, Url = Email_Url, DeliveryAction, DeliveryLocation, EmailDirection, NetworkMessageId, AuthenticationDetails, SenderFromAddress, SenderIPv4, Subject\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n| extend timestamp = EmailEvents_TimeGenerated\n",
+        "name": "TI map Domain entity to EmailUrlInfo",
         "description": "'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'\n",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "RecipientEmailAddress",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "Url",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
         "queryFrequency": "1h",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "tactics": [
           "Impact"
         ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_ = materialize(EmailUrlInfo\n| where isnotempty(UrlDomain)\n| where TimeGenerated > ago(dt_lookBack)\n| project-rename Email_Url = Url);\nlet Domains = EmailUrlInfo_\n| distinct UrlDomain\n| summarize make_list(UrlDomain);\nlet Candidates = ThreatIntelligenceIndicator\n| where isnotempty(DomainName)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_Domain = tolower(DomainName)\n| where TI_Domain in (Domains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique EmailUrlInfo_ on $left.TI_Domain == $right.UrlDomain\n| join kind=innerunique (EmailEvents | where TimeGenerated >= ago(dt_lookBack) | project-rename EmailEvents_TimeGenerated = TimeGenerated) on $left.NetworkMessageId == $right.NetworkMessageId\n| where DeliveryLocation !has \"Quarantine\"\n// Customize and uncomment the following line to remove security related mailboxes\n//| where tolower(RecipientEmailAddress) !in (\"secmailbox1@example.com\", \"secmailbox2@example.com\")\n| where EmailEvents_TimeGenerated < ExpirationDateTime\n| summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, RecipientEmailAddress;\nlet Candidate_Domains = Candidates | distinct TI_Domain | summarize make_list(TI_Domain);\nThreatIntelligenceIndicator\n| where isnotempty(Url)\n| where TimeGenerated > ago(ioc_lookBack)\n| extend Host = tostring(parse_url(Url).Host)\n| where Host in (Candidate_Domains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (Candidates | extend parsed_url = parse_url(Email_Url) | extend BaseUrl = strcat(parsed_url.Scheme, \"://\", parsed_url.Host, parsed_url.Path)) on $left.Url == $right.BaseUrl\n| where DeliveryAction !has \"Blocked\"\n| project EmailEvents_TimeGenerated, RecipientEmailAddress, IndicatorId, TI_Domain, ConfidenceScore, Description, Tags, TrafficLightProtocolLevel, Url = Email_Url, DeliveryAction, DeliveryLocation, EmailDirection, NetworkMessageId, AuthenticationDetails, SenderFromAddress, SenderIPv4, Subject\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n| extend timestamp = EmailEvents_TimeGenerated\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "RecipientEmailAddress"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "Name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
-        "severity": "Medium",
-        "queryPeriod": "14d",
-        "name": "TI map Domain entity to EmailUrlInfo",
-        "triggerThreshold": 0
+        "queryPeriod": "14d"
       }
     }
   ]
