@@ -14,13 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
+        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash=FileHashValue, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
+        "triggerOperator": "gt",
+        "name": "RecordedFuture Threat Hunting Hash All Actors",
+        "queryFrequency": "15m",
         "triggerThreshold": 0,
+        "severity": "Medium",
         "customDetails": {
           "ActorInformation": "RecordedFuturePortalLink"
         },
-        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
         "entityMappings": [
           {
+            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "identifier": "Value",
@@ -30,38 +36,32 @@
                 "identifier": "Algorithm",
                 "columnName": "HashType"
               }
-            ],
-            "entityType": "FileHash"
+            ]
           }
         ],
-        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash=FileHashValue, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
-        "severity": "Medium",
         "queryPeriod": "1d",
-        "queryFrequency": "15m",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "1h"
-          }
-        },
-        "name": "RecordedFuture Threat Hunting Hash All Actors",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "1h",
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          }
+        },
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n",
-          "alertDisplayNameFormat": "{{Description}}",
           "alertDynamicProperties": [
             {
               "value": "RecordedFuturePortalLink",
               "alertProperty": "AlertLink"
             }
-          ]
-        },
-        "triggerOperator": "gt"
+          ],
+          "alertDisplayNameFormat": "{{Description}}",
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n"
+        }
       }
     }
   ]

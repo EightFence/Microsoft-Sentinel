@@ -14,10 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
         "description": "'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP (may indicate a malicious attempt at password guessing with known account). UEBA added for context.'\n",
+        "status": "Available",
+        "query": "let riskScoreCutoff = 20; //Adjust this based on volume of results\nlet logonDiff = 10m; let aadFunc = (tableName:string){ table(tableName)\n| where ResultType == \"0\"\n| where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\") // To remove false-positives, add more Apps to this array\n// ---------- Fix for SuccessBlock to also consider IPv6\n| extend SuccessIPv6Block = strcat(split(IPAddress, \":\")[0], \":\", split(IPAddress, \":\")[1], \":\", split(IPAddress, \":\")[2], \":\", split(IPAddress, \":\")[3])\n| extend SuccessIPv4Block = strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1])\n// ------------------\n| project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, SuccessLocation = Location, AppDisplayName, SuccessIPBlock = iff(IPAddress contains \":\", strcat(split(IPAddress, \":\")[0], \":\", split(IPAddress, \":\")[1]), strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1])), Type\n| join kind= inner (\n    table(tableName)\n    | where ResultType !in (\"0\", \"50140\")\n    | where ResultDescription !~ \"Other\"\n    | where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\")\n    | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, FailedLocation = Location, AppDisplayName, ResultType, ResultDescription, Type \n) on UserPrincipalName, AppDisplayName\n| where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock\n| summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, SuccessLocation, AppDisplayName, FailedIPAddress, FailedLocation, ResultType, ResultDescription, Type\n| extend timestamp = SuccessLogonTime\n| extend UserPrincipalName = tolower(UserPrincipalName)};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n// UEBA context below - make sure you have these 2 datatypes, otherwise the query will not work. If so, comment all that is below.\n| join kind=leftouter (\n    IdentityInfo\n    | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN\n    | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled\n    | summarize\n        Tags = make_set(Tags, 1000),\n        GroupMembership = make_set(GroupMembership, 1000),\n        AssignedRoles = make_set(AssignedRoles, 1000),\n        UserType = make_set(UserType, 1000),\n        UserAccountControl = make_set(UserType, 1000)\n    by AccountUPN\n    | extend UserPrincipalName=tolower(AccountUPN)\n) on UserPrincipalName\n| join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where isnotempty(SourceIPAddress)\n    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress\n    | project-rename FailedIPAddress = SourceIPAddress\n    | summarize\n        UsersInsights = make_set(UsersInsights, 1000),\n        DevicesInsights = make_set(DevicesInsights, 1000),\n        IPInvestigationPriority = sum(InvestigationPriority)\n    by FailedIPAddress)\non FailedIPAddress\n| extend UEBARiskScore = IPInvestigationPriority\n| where  UEBARiskScore > riskScoreCutoff\n| sort by UEBARiskScore desc \n",
+        "triggerOperator": "gt",
+        "name": "Successful logon from IP and failure from a different IP",
+        "tactics": [
+          "CredentialAccess",
+          "InitialAccess"
+        ],
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -31,39 +43,27 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SuccessIPAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "FailedIPAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ],
-        "query": "let riskScoreCutoff = 20; //Adjust this based on volume of results\nlet logonDiff = 10m; let aadFunc = (tableName:string){ table(tableName)\n| where ResultType == \"0\"\n| where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\") // To remove false-positives, add more Apps to this array\n// ---------- Fix for SuccessBlock to also consider IPv6\n| extend SuccessIPv6Block = strcat(split(IPAddress, \":\")[0], \":\", split(IPAddress, \":\")[1], \":\", split(IPAddress, \":\")[2], \":\", split(IPAddress, \":\")[3])\n| extend SuccessIPv4Block = strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1])\n// ------------------\n| project SuccessLogonTime = TimeGenerated, UserPrincipalName, SuccessIPAddress = IPAddress, SuccessLocation = Location, AppDisplayName, SuccessIPBlock = iff(IPAddress contains \":\", strcat(split(IPAddress, \":\")[0], \":\", split(IPAddress, \":\")[1]), strcat(split(IPAddress, \".\")[0], \".\", split(IPAddress, \".\")[1])), Type\n| join kind= inner (\n    table(tableName)\n    | where ResultType !in (\"0\", \"50140\")\n    | where ResultDescription !~ \"Other\"\n    | where AppDisplayName !in (\"Office 365 Exchange Online\", \"Skype for Business Online\")\n    | project FailedLogonTime = TimeGenerated, UserPrincipalName, FailedIPAddress = IPAddress, FailedLocation = Location, AppDisplayName, ResultType, ResultDescription, Type \n) on UserPrincipalName, AppDisplayName\n| where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and FailedIPAddress !startswith SuccessIPBlock\n| summarize FailedLogonTime = max(FailedLogonTime), SuccessLogonTime = max(SuccessLogonTime) by UserPrincipalName, SuccessIPAddress, SuccessLocation, AppDisplayName, FailedIPAddress, FailedLocation, ResultType, ResultDescription, Type\n| extend timestamp = SuccessLogonTime\n| extend UserPrincipalName = tolower(UserPrincipalName)};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n// UEBA context below - make sure you have these 2 datatypes, otherwise the query will not work. If so, comment all that is below.\n| join kind=leftouter (\n    IdentityInfo\n    | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN\n    | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled\n    | summarize\n        Tags = make_set(Tags, 1000),\n        GroupMembership = make_set(GroupMembership, 1000),\n        AssignedRoles = make_set(AssignedRoles, 1000),\n        UserType = make_set(UserType, 1000),\n        UserAccountControl = make_set(UserType, 1000)\n    by AccountUPN\n    | extend UserPrincipalName=tolower(AccountUPN)\n) on UserPrincipalName\n| join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where isnotempty(SourceIPAddress)\n    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress\n    | project-rename FailedIPAddress = SourceIPAddress\n    | summarize\n        UsersInsights = make_set(UsersInsights, 1000),\n        DevicesInsights = make_set(DevicesInsights, 1000),\n        IPInvestigationPriority = sum(InvestigationPriority)\n    by FailedIPAddress)\non FailedIPAddress\n| extend UEBARiskScore = IPInvestigationPriority\n| where  UEBARiskScore > riskScoreCutoff\n| sort by UEBARiskScore desc \n",
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "status": "Available",
-        "name": "Successful logon from IP and failure from a different IP",
-        "tactics": [
-          "CredentialAccess",
-          "InitialAccess"
-        ],
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]
