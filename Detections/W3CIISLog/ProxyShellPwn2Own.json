@@ -14,28 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'This query looks for suspicious request patterns to Exchange servers that fit patterns recently\nblogged about by PeterJson. This exploitation chain utilises an SSRF vulnerability in Exchange\nwhich eventually allows the attacker to execute arbitrary Powershell on the server. In the example\npowershell can be used to write an email to disk with an encoded attachment containing a shell.\nReference: https://peterjson.medium.com/reproducing-the-proxyshell-pwn2own-exploit-49743a4ea9a1'\n",
+        "severity": "High",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "queryPeriod": "12h",
         "metadata": {
+          "author": {
+            "name": "Thomas McElroy"
+          },
           "categories": {
             "domains": [
               "Security - Others"
             ]
           },
-          "author": {
-            "name": "Thomas McElroy"
+          "source": {
+            "kind": "Community"
           },
           "support": {
             "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
           }
         },
-        "tactics": [
-          "InitialAccess"
-        ],
-        "triggerOperator": "gt",
         "triggerThreshold": 0,
+        "query": "let successCodes = dynamic([200, 302, 401]);\nW3CIISLog\n| where scStatus has_any (successCodes)\n| where ipv4_is_private(cIP) == False\n| where csUriStem hasprefix \"/autodiscover/autodiscover.json\"\n| project TimeGenerated, cIP, sIP, sSiteName, csUriStem, csUriQuery, Computer, csUserName, _ResourceId, FileUri\n| where (csUriQuery !has \"Protocol\" and isnotempty(csUriQuery))\nor (csUriQuery has_any(\"/mapi/\", \"powershell\"))\nor (csUriQuery contains \"@\" and csUriQuery matches regex @\"\\.[a-zA-Z]{2,4}?(?:[a-zA-Z]{2,4}\\/)\")\nor (csUriQuery contains \":\" and csUriQuery matches regex @\"\\:[0-9]{2,4}\\/\")\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(csUserName, \"@\")[0]), AccountUPNSuffix = tostring(split(csUserName, \"@\")[1])\n",
+        "queryFrequency": "12h",
+        "description": "'This query looks for suspicious request patterns to Exchange servers that fit patterns recently\nblogged about by PeterJson. This exploitation chain utilises an SSRF vulnerability in Exchange\nwhich eventually allows the attacker to execute arbitrary Powershell on the server. In the example\npowershell can be used to write an email to disk with an encoded attachment containing a shell.\nReference: https://peterjson.medium.com/reproducing-the-proxyshell-pwn2own-exploit-49743a4ea9a1'\n",
+        "name": "Exchange SSRF Autodiscover ProxyShell - Detection",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -81,12 +86,7 @@
             ],
             "entityType": "AzureResource"
           }
-        ],
-        "queryFrequency": "12h",
-        "name": "Exchange SSRF Autodiscover ProxyShell - Detection",
-        "query": "let successCodes = dynamic([200, 302, 401]);\nW3CIISLog\n| where scStatus has_any (successCodes)\n| where ipv4_is_private(cIP) == False\n| where csUriStem hasprefix \"/autodiscover/autodiscover.json\"\n| project TimeGenerated, cIP, sIP, sSiteName, csUriStem, csUriQuery, Computer, csUserName, _ResourceId, FileUri\n| where (csUriQuery !has \"Protocol\" and isnotempty(csUriQuery))\nor (csUriQuery has_any(\"/mapi/\", \"powershell\"))\nor (csUriQuery contains \"@\" and csUriQuery matches regex @\"\\.[a-zA-Z]{2,4}?(?:[a-zA-Z]{2,4}\\/)\")\nor (csUriQuery contains \":\" and csUriQuery matches regex @\"\\:[0-9]{2,4}\\/\")\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(csUserName, \"@\")[0]), AccountUPNSuffix = tostring(split(csUserName, \"@\")[1])\n",
-        "queryPeriod": "12h",
-        "severity": "High"
+        ]
       }
     }
   ]

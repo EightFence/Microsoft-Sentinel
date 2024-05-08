@@ -14,25 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which\nresults in an \"ApplicationProtocol = incomplete\" designation. The server resets coupled with an \"Incomplete\" ApplicationProtocol designation can be an indication\nof internal to external port scanning or probing attack.\nReferences: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and\nhttps://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'\n",
-        "status": "Available",
-        "query": "CommonSecurityLog\n| where isnotempty(DestinationPort) and DeviceAction !in (\"reset-both\", \"deny\")\n// filter out common usage ports. Add ports that are legitimate for your environment\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where ApplicationProtocol == \"incomplete\"\n// filter out IANA ephemeral or negotiated ports as per https://en.wikipedia.org/wiki/Ephemeral_port\n| where DestinationPort !between (toint(49512) .. toint(65535))\n| where Computer != \"\"\n| where ipv4_is_private(DestinationIP) == false\n| extend Reason = coalesce(\n                              column_ifexists(\"Reason\", \"\"),\n                              extract(\"reason=(.+?)(;|$)\", 1, AdditionalExtensions),\n                              \"\"\n                          )\n// Filter out any graceful reset reasons of AGED OUT which occurs when a TCP session closes with a FIN due to aging out.\n| where Reason !has \"aged-out\"\n// Filter out any TCP FIN which occurs when a TCP FIN is used to gracefully close half or both sides of a connection.\n| where Reason !has \"tcp-fin\"\n// Uncomment one of the following where clauses to trigger on specific TCP reset reasons\n// See Palo Alto article for details - https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK\n// TCP RST-server - Occurs when the server sends a TCP reset to the client\n// | where AdditionalExtensions has \"reason=tcp-rst-from-server\"\n// TCP RST-client - Occurs when the client sends a TCP reset to the server\n// | where AdditionalExtensions has \"reason=tcp-rst-from-client\"\n// Already performed\n//| extend reason = tostring(split(AdditionalExtensions, \";\")[3])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction, DestinationIP\n| where count_ >= 10\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(DestinationIP), totalcount = sum(count_) by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction\n| extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName\n",
-        "triggerOperator": "gt",
-        "name": "Palo Alto - possible internal to external port scanning",
-        "tactics": [
-          "Discovery"
-        ],
-        "triggerThreshold": 0,
-        "severity": "Low",
-        "queryPeriod": "1h",
         "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
               }
             ]
           },
@@ -40,8 +29,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostCustomEntity"
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
               }
             ]
           },
@@ -49,12 +38,23 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ]
           }
-        ]
+        ],
+        "severity": "Low",
+        "queryPeriod": "1h",
+        "name": "Palo Alto - possible internal to external port scanning",
+        "status": "Available",
+        "tactics": [
+          "Discovery"
+        ],
+        "query": "CommonSecurityLog\n| where isnotempty(DestinationPort) and DeviceAction !in (\"reset-both\", \"deny\")\n// filter out common usage ports. Add ports that are legitimate for your environment\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where ApplicationProtocol == \"incomplete\"\n// filter out IANA ephemeral or negotiated ports as per https://en.wikipedia.org/wiki/Ephemeral_port\n| where DestinationPort !between (toint(49512) .. toint(65535))\n| where Computer != \"\"\n| where ipv4_is_private(DestinationIP) == false\n| extend Reason = coalesce(\n                              column_ifexists(\"Reason\", \"\"),\n                              extract(\"reason=(.+?)(;|$)\", 1, AdditionalExtensions),\n                              \"\"\n                          )\n// Filter out any graceful reset reasons of AGED OUT which occurs when a TCP session closes with a FIN due to aging out.\n| where Reason !has \"aged-out\"\n// Filter out any TCP FIN which occurs when a TCP FIN is used to gracefully close half or both sides of a connection.\n| where Reason !has \"tcp-fin\"\n// Uncomment one of the following where clauses to trigger on specific TCP reset reasons\n// See Palo Alto article for details - https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK\n// TCP RST-server - Occurs when the server sends a TCP reset to the client\n// | where AdditionalExtensions has \"reason=tcp-rst-from-server\"\n// TCP RST-client - Occurs when the client sends a TCP reset to the server\n// | where AdditionalExtensions has \"reason=tcp-rst-from-client\"\n// Already performed\n//| extend reason = tostring(split(AdditionalExtensions, \";\")[3])\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction, DestinationIP\n| where count_ >= 10\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(DestinationIP), totalcount = sum(count_) by DeviceName, SourceUserID, SourceIP, ApplicationProtocol, Reason, DestinationPort, Protocol, DeviceVendor, DeviceProduct, DeviceAction\n| extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, AccountCustomEntity = SourceUserID, HostCustomEntity = DeviceName\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which\nresults in an \"ApplicationProtocol = incomplete\" designation. The server resets coupled with an \"Incomplete\" ApplicationProtocol designation can be an indication\nof internal to external port scanning or probing attack.\nReferences: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and\nhttps://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'\n"
       }
     }
   ]
