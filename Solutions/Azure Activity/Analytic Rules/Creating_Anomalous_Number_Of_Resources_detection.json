@@ -14,32 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "tactics": [
-          "Impact"
-        ],
-        "name": "Suspicious number of resource creation or deployment activities",
         "query": "let szOperationNames = dynamic([\"microsoft.compute/virtualMachines/write\", \"microsoft.resources/deployments/write\"]);\nlet starttime = 7d;\nlet endtime = 1d;\nlet timeframe = 1d;\nlet TimeSeriesData =\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime)) .. startofday(now()))\n| where OperationNameValue in~ (szOperationNames)\n| project TimeGenerated, Caller \n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by Caller; \nTimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit')\n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) \n| where TimeGenerated >= startofday(ago(endtime))\n| where anomalies > 0 and baseline > 0\n| project Caller, TimeGenerated, Total, baseline, anomalies, score\n| join (AzureActivity\n| where TimeGenerated > startofday(ago(endtime)) \n| where OperationNameValue in~ (szOperationNames)\n| summarize make_set(OperationNameValue,100), make_set(_ResourceId,100), make_set(CallerIpAddress,100) by bin(TimeGenerated, timeframe), Caller\n) on TimeGenerated, Caller\n| mv-expand CallerIpAddress=set_CallerIpAddress\n| project-away Caller1\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
         "queryPeriod": "7d",
+        "triggerThreshold": 0,
         "description": "'Indicates when an anomalous number of VM creations or deployment activities occur in Azure via the AzureActivity log. This query generates the baseline pattern of cloud resource creation by an individual and generates an anomaly when any unusual spike is detected. These anomalies from unusual or privileged users could be an indication of a cloud infrastructure takedown by an adversary.'\n",
-        "severity": "Medium",
-        "status": "Available",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Caller"
+                "columnName": "Caller",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -47,8 +41,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "AadUserId"
+                "columnName": "AadUserId",
+                "identifier": "AadUserId"
               }
             ]
           },
@@ -56,13 +50,19 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "triggerThreshold": 0
+        "status": "Available",
+        "severity": "Medium",
+        "tactics": [
+          "Impact"
+        ],
+        "name": "Suspicious number of resource creation or deployment activities",
+        "queryFrequency": "1d"
       }
     }
   ]
