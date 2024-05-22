@@ -15,21 +15,12 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'This query over Microsoft Entra ID sign-in considers all user sign-ins for each Microsoft Entra ID application and picks out the most anomalous change in location profile for a user within an individual application.\n",
-        "name": "Anomalous sign-in location by user account and authenticating application",
-        "severity": "Medium",
-        "status": "Available",
-        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "queryFrequency": "1d",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "query": "// Adjust this figure to adjust how sensitive this detection is\nlet sensitivity = 2.5;\nlet AuthEvents = materialize(\nunion isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs\n| where TimeGenerated > ago(7d)\n| where ResultType == 0\n| extend LocationDetails = LocationDetails_dynamic\n| extend Location = strcat(LocationDetails.countryOrRegion, \"-\", LocationDetails.state,\"-\", LocationDetails.city)\n| where Location != \"--\");\nAuthEvents\n| summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)\n| where dcount_Location > 2\n| make-series CountOfLocations = sum(dcount_Location) on TimeGenerated  step 1d by AppId, UserId\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')\n| mv-expand CountOfLocations to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0 and Baseline > 0\n| join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated)) on UserId, AppId\n| extend SignInDetails = bag_pack(\"TimeGenerated\", TimeGenerated1, \"Location\", Location, \"Source\", IPAddress, \"Device\", DeviceDetail_dynamic)\n| summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeGenerated, AppId, AppDisplayName\n| extend Name = split(UserPrincipalName, \"@\")[0], UPNSuffix = split(UserPrincipalName, \"@\")[1]\n",
+        "severity": "Medium",
+        "name": "Anomalous sign-in location by user account and authenticating application",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserPrincipalName",
@@ -43,27 +34,36 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserId",
                 "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "queryPeriod": "7d",
         "customDetails": {
           "Application": "AppDisplayName"
         },
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "This query over Microsoft Entra ID sign-in considers all user sign-ins for each Microsoft Entra ID application and picks out the most anomalous change in location profile for a user within an\nindividual application. This has detected {{UserPrincipalName}} signing into {{AppDisplayName}} from {{CountOfLocations}} \ndifferent locations.\n",
           "alertDisplayNameFormat": "Anomalous sign-in location by {{UserPrincipalName}} to {{AppDisplayName}}"
-        }
+        },
+        "query": "// Adjust this figure to adjust how sensitive this detection is\nlet sensitivity = 2.5;\nlet AuthEvents = materialize(\nunion isfuzzy=True SigninLogs, AADNonInteractiveUserSignInLogs\n| where TimeGenerated > ago(7d)\n| where ResultType == 0\n| extend LocationDetails = LocationDetails_dynamic\n| extend Location = strcat(LocationDetails.countryOrRegion, \"-\", LocationDetails.state,\"-\", LocationDetails.city)\n| where Location != \"--\");\nAuthEvents\n| summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)\n| where dcount_Location > 2\n| make-series CountOfLocations = sum(dcount_Location) on TimeGenerated  step 1d by AppId, UserId\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')\n| mv-expand CountOfLocations to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0 and Baseline > 0\n| join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated)) on UserId, AppId\n| extend SignInDetails = bag_pack(\"TimeGenerated\", TimeGenerated1, \"Location\", Location, \"Source\", IPAddress, \"Device\", DeviceDetail_dynamic)\n| summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeGenerated, AppId, AppDisplayName\n| extend Name = split(UserPrincipalName, \"@\")[0], UPNSuffix = split(UserPrincipalName, \"@\")[1]\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "status": "Available",
+        "queryPeriod": "7d",
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]
