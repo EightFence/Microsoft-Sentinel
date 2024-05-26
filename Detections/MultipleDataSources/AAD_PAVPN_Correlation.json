@@ -14,9 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "This query creates a list of IP addresses with the number of failed login attempts to Entra ID \nabove a set threshold ( default of 5 ).  It then looks for any successful Palo Alto VPN logins from any of these IPs within the same timeframe.\n",
-        "severity": "Medium",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "query": "//Set a threshold of failed AAD signins from an IP address within 1 day above which we want to deem those logins suspicious.\nlet signin_threshold = 5; \n//Make a list of IPs with AAD signin failures above our threshold.\nlet aadFunc = (tableName:string){\nlet suspicious_signins = \n    table(tableName)\n    //Looking for logon failure results\n    | where ResultType !in (\"0\", \"50125\", \"50140\")\n    //Exclude localhost addresses to reduce the chance of FPs\n    | where IPAddress !in (\"127.0.0.1\", \"::1\")\n    | summarize count() by IPAddress\n    | where count_ >  signin_threshold\n    | summarize make_set(IPAddress);\n    suspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet suspicious_signins = \nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into PA VPNs during the same timeperiod\nCommonSecurityLog\n    //Select only PA VPN sucessful logons\n    | where DeviceVendor == \"Palo Alto Networks\" and DeviceEventClassID == \"globalprotect\"\n    | where Message has \"GlobalProtect gateway user authentication succeeded\"\n    //Parse out the logon source IP from the Message field to match on\n    | extend SourceIP = extract(\"Login from: ([^,]+)\", 1, Message) \n    | where SourceIP in (suspicious_signins)\n    | extend Reason = \"Multiple failed AAD logins from SourceIP\"\n    //Parse out other useful information from Message field\n    | extend User = extract('User name: ([^,]+)', 1, Message) \n    | extend ClientOS = extract('Client OS version: ([^,\\\"]+)', 1, Message)\n    | extend Location = extract('Source region: ([^,]{2})',1, Message)\n    | project TimeGenerated, Reason, SourceIP, User, ClientOS, Location, Message, DeviceName, ReceiptTime, DeviceVendor, DeviceEventClassID, Computer, FileName\n    | extend timestamp = TimeGenerated\n",
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess"
+        ],
         "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          },
           "categories": {
             "domains": [
               "Security - Others",
@@ -25,17 +36,9 @@
           },
           "author": {
             "name": "Microsoft Security Research"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
           }
         },
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -65,13 +68,10 @@
             "entityType": "IP"
           }
         ],
+        "triggerOperator": "gt",
         "name": "IP with multiple failed Microsoft Entra ID logins successfully logs in to Palo Alto VPN",
-        "queryPeriod": "1d",
-        "query": "//Set a threshold of failed AAD signins from an IP address within 1 day above which we want to deem those logins suspicious.\nlet signin_threshold = 5; \n//Make a list of IPs with AAD signin failures above our threshold.\nlet aadFunc = (tableName:string){\nlet suspicious_signins = \n    table(tableName)\n    //Looking for logon failure results\n    | where ResultType !in (\"0\", \"50125\", \"50140\")\n    //Exclude localhost addresses to reduce the chance of FPs\n    | where IPAddress !in (\"127.0.0.1\", \"::1\")\n    | summarize count() by IPAddress\n    | where count_ >  signin_threshold\n    | summarize make_set(IPAddress);\n    suspicious_signins\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet suspicious_signins = \nunion isfuzzy=true aadSignin, aadNonInt\n| summarize make_set(set_IPAddress);\n//See if any of those IPs have sucessfully logged into PA VPNs during the same timeperiod\nCommonSecurityLog\n    //Select only PA VPN sucessful logons\n    | where DeviceVendor == \"Palo Alto Networks\" and DeviceEventClassID == \"globalprotect\"\n    | where Message has \"GlobalProtect gateway user authentication succeeded\"\n    //Parse out the logon source IP from the Message field to match on\n    | extend SourceIP = extract(\"Login from: ([^,]+)\", 1, Message) \n    | where SourceIP in (suspicious_signins)\n    | extend Reason = \"Multiple failed AAD logins from SourceIP\"\n    //Parse out other useful information from Message field\n    | extend User = extract('User name: ([^,]+)', 1, Message) \n    | extend ClientOS = extract('Client OS version: ([^,\\\"]+)', 1, Message)\n    | extend Location = extract('Source region: ([^,]{2})',1, Message)\n    | project TimeGenerated, Reason, SourceIP, User, ClientOS, Location, Message, DeviceName, ReceiptTime, DeviceVendor, DeviceEventClassID, Computer, FileName\n    | extend timestamp = TimeGenerated\n",
-        "tactics": [
-          "InitialAccess",
-          "CredentialAccess"
-        ]
+        "description": "This query creates a list of IP addresses with the number of failed login attempts to Entra ID \nabove a set threshold ( default of 5 ).  It then looks for any successful Palo Alto VPN logins from any of these IPs within the same timeframe.\n",
+        "severity": "Medium"
       }
     }
   ]
