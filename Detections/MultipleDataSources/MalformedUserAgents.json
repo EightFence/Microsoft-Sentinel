@@ -14,31 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "query": "(union isfuzzy=true\n(OfficeActivity | where UserAgent != \"\"),\n(OfficeActivity\n| where RecordType in (\"AzureActiveDirectory\", \"AzureActiveDirectoryStsLogon\")\n| extend OperationName = Operation\n| parse ExtendedProperties with * 'User-Agent\\\\\":\\\\\"' UserAgent2 '\\\\' *\n| parse ExtendedProperties with * 'UserAgent\",      \"Value\": \"' UserAgent1 '\"' *\n| where isnotempty(UserAgent1) or isnotempty(UserAgent2)\n| extend UserAgent = iff( RecordType == 'AzureActiveDirectoryStsLogon', UserAgent1, UserAgent2)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation\n),\n(AzureDiagnostics\n| where ResourceType =~ \"APPLICATIONGATEWAYS\"\n| where OperationName =~ \"ApplicationGatewayAccess\"\n| extend ClientIP = columnifexists(\"clientIP_s\", \"None\"), UserAgent = columnifexists(\"userAgent_s\", \"None\")\n| where UserAgent != '-'\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP,  requestUri_s, httpMethod_s, host_s, requestQuery_s, Type\n),\n(\nW3CIISLog\n| where isnotempty(csUserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem\n),\n(\nAWSCloudTrail\n| where isnotempty(UserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName\n),\n(SigninLogs\n| where isnotempty(UserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed\n),\n(AADNonInteractiveUserSignInLogs\n| where isnotempty(UserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed\n)\n)\n// Likely artefact of hardcoding\n| where UserAgent startswith \"User\" or UserAgent startswith '\\\"'\n// Incorrect casing\nor (UserAgent startswith \"Mozilla\" and not(UserAgent contains_cs \"Mozilla\"))\n// Incorrect casing\nor UserAgent contains_cs  \"(Compatible;\"\n// Missing MSIE version\nor UserAgent matches regex @\"MSIE\\s?;\"\n// Incorrect spacing around MSIE version\nor UserAgent matches regex  @\"MSIE(?:\\d|.{1,5}?\\d\\s;)\"\n| extend AccountName = split(Account, \"@\")[0], UPNSuffix = split(Account, \"@\")[1]\n",
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl",
-          "Execution"
-        ],
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Threat Protection"
-            ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          }
-        },
-        "queryPeriod": "1d",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -67,10 +45,32 @@
             "entityType": "IP"
           }
         ],
-        "triggerOperator": "gt",
-        "name": "Malformed user agent",
         "description": "'Malware authors will sometimes hardcode user agent string values when writing the network communication component of their malware. Malformed user agents can be an indication of such malware.'\n",
-        "severity": "Medium"
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl",
+          "Execution"
+        ],
+        "triggerThreshold": 0,
+        "metadata": {
+          "categories": {
+            "domains": [
+              "Security - Threat Protection"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          }
+        },
+        "queryFrequency": "1d",
+        "name": "Malformed user agent",
+        "queryPeriod": "1d"
       }
     }
   ]
