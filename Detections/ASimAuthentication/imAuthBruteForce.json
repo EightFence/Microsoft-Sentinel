@@ -14,11 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "query": "let failureCountThreshold = 10;\nlet successCountThreshold = 1;\n// let authenticationWindow = 20m; // Implicit in the analytic rule query period \nimAuthentication\n| where TargetUserType != \"NonInteractive\"\n| summarize \n      StartTime = min(TimeGenerated), \n      EndTime = max(TimeGenerated), \n      IpAddresses = make_set (SrcDvcIpAddr, 100),\n      ReportedBy = make_set (strcat (EventVendor, \"/\", EventProduct), 100),\n      FailureCount = countif(EventResult=='Failure'),\n      SuccessCount = countif(EventResult=='Success')\n  by \n      TargetUserId, TargetUsername, TargetUserType \n| where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n| extend\n      IpAddresses = strcat_array(IpAddresses, \", \"), \n      ReportedBy = strcat_array(ReportedBy, \", \")\n| extend\n  Name = iif(\n      TargetUsername contains \"@\"\n          , tostring(split(TargetUsername, '@', 0)[0])\n          , TargetUsername\n      ),\n  UPNSuffix = iif(\n      TargetUsername contains \"@\"\n      , tostring(split(TargetUsername, '@', 1)[0])\n      , \"\"\n  )\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "20m",
+        "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window.\nNote that the query does not enforce any sequence, and does not require the successful authentication to occur last.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.\nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/ASimAuthentication)'\n",
+        "queryPeriod": "20m",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "TargetUserName",
@@ -32,19 +34,20 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window.\nNote that the query does not enforce any sequence, and does not require the successful authentication to occur last.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.\nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/ASimAuthentication)'\n",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "name": "Brute force attack against user credentials (Uses Authentication Normalization)",
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "customDetails": {
           "IpAddresses": "IpAddresses",
           "ReportedBy": "ReportedBy"
         },
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "triggerThreshold": 0,
+        "query": "let failureCountThreshold = 10;\nlet successCountThreshold = 1;\n// let authenticationWindow = 20m; // Implicit in the analytic rule query period \nimAuthentication\n| where TargetUserType != \"NonInteractive\"\n| summarize \n      StartTime = min(TimeGenerated), \n      EndTime = max(TimeGenerated), \n      IpAddresses = make_set (SrcDvcIpAddr, 100),\n      ReportedBy = make_set (strcat (EventVendor, \"/\", EventProduct), 100),\n      FailureCount = countif(EventResult=='Failure'),\n      SuccessCount = countif(EventResult=='Success')\n  by \n      TargetUserId, TargetUsername, TargetUserType \n| where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n| extend\n      IpAddresses = strcat_array(IpAddresses, \", \"), \n      ReportedBy = strcat_array(ReportedBy, \", \")\n| extend\n  Name = iif(\n      TargetUsername contains \"@\"\n          , tostring(split(TargetUsername, '@', 0)[0])\n          , TargetUsername\n      ),\n  UPNSuffix = iif(\n      TargetUsername contains \"@\"\n      , tostring(split(TargetUsername, '@', 1)[0])\n      , \"\"\n  )\n",
         "metadata": {
           "categories": {
             "domains": [
@@ -61,10 +64,7 @@
           "author": {
             "name": "Ofer Shezaf"
           }
-        },
-        "queryFrequency": "20m",
-        "name": "Brute force attack against user credentials (Uses Authentication Normalization)",
-        "queryPeriod": "20m"
+        }
       }
     }
   ]

@@ -14,46 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "TI map Domain entity to SecurityAlert",
+        "queryFrequency": "1h",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IP_addr",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "Url",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
         "queryPeriod": "14d",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet SecurityAlerts = SecurityAlert\n| where TimeGenerated > ago(dt_lookBack)\n| extend domain = todynamic(dynamic_to_json(extract_all(@\"(((xn--)?[a-z0-9\\-]+\\.)+([a-z]+|(xn--[a-z0-9]+)))\", dynamic([1]), tolower(Entities))))\n| where isnotempty(domain)\n| mv-expand domain\n| extend domain = tostring(domain)\n| extend EntitiesDynamicArray = parse_json(Entities)\n| mv-apply EntitiesDynamicArray on\n    (summarize\n        HostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == \"host\"),\n        IP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == \"ip\")\n    )\n| extend Alert_TimeGenerated = TimeGenerated\n| extend Alert_Description = Description;\nlet AlertDomains = SecurityAlerts\n| distinct domain\n| summarize make_list(domain);\nlet Domain_Indicators = materialize(ThreatIntelligenceIndicator\n| where isnotempty(DomainName)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_DomainEntity = tolower(DomainName)\n| where TI_DomainEntity in (AlertDomains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\");\nDomain_Indicators\n// Using innerunique to keep performance fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (SecurityAlerts) on $left.TI_DomainEntity == $right.domain\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName\n| project Alert_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type, TI_DomainEntity\n| extend timestamp = Alert_TimeGenerated\n",
         "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
+        "name": "TI map Domain entity to SecurityAlert",
+        "description": "'Identifies a match in SecurityAlert table from any Domain IOC from TI'\n",
         "tactics": [
           "Impact"
-        ],
-        "description": "'Identifies a match in SecurityAlert table from any Domain IOC from TI'\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IP_addr"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
-        "severity": "Medium"
+        ]
       }
     }
   ]
