@@ -14,16 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies SFTP File Transfers with distinct folder count above certain threshold in a 15min time period.\n It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
-        "queryFrequency": "15m",
         "severity": "Medium",
-        "queryPeriod": "15m",
+        "queryFrequency": "15m",
+        "name": "SFTP File transfer folder count above threshold",
+        "query": "let threshold = 10;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| parse kind=regex filepath with dirpath:string \"/\" filename:string\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_dirpath=dcount(dirpath), dirlist=make_set(dirpath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_dirpath >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "username"
+                "columnName": "username",
+                "identifier": "Name"
               }
             ],
             "entityType": "Account"
@@ -31,8 +31,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "src_ip"
+                "columnName": "src_ip",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -40,8 +40,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "HostName"
               }
             ],
             "entityType": "Host"
@@ -49,39 +49,39 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "DirSample"
+                "columnName": "DirSample",
+                "identifier": "Name"
               }
             ],
             "entityType": "File"
           }
         ],
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByAlertDetails": [],
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "groupByCustomDetails": [],
-            "matchingMethod": "Selected",
-            "lookbackDuration": "5h",
-            "groupByEntities": [
-              "Account",
-              "Host"
-            ]
-          }
-        },
-        "query": "let threshold = 10;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| parse kind=regex filepath with dirpath:string \"/\" filename:string\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_dirpath=dcount(dirpath), dirlist=make_set(dirpath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_dirpath >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n",
         "triggerOperator": "gt",
-        "triggerThreshold": 0,
+        "description": "'Identifies SFTP File Transfers with distinct folder count above certain threshold in a 15min time period.\n It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
         "customDetails": {
-          "TransferCount": "count_distinct_dirpath",
-          "FilesList": "dirlist"
+          "FilesList": "dirlist",
+          "TransferCount": "count_distinct_dirpath"
         },
         "tactics": [
           "Exfiltration"
         ],
-        "name": "SFTP File transfer folder count above threshold"
+        "queryPeriod": "15m",
+        "triggerThreshold": 0,
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "5h",
+            "groupByEntities": [
+              "Account",
+              "Host"
+            ],
+            "groupByCustomDetails": [],
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [],
+            "enabled": true,
+            "matchingMethod": "Selected"
+          },
+          "createIncident": true
+        }
       }
     }
   ]

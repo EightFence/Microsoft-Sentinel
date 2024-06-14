@@ -14,23 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'This rule is designed to flag web requests that contain a user agent header that is recognized as malicious. It relies on a predefined list of known user agents, which is referenced from a specific CSV file'\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "5m",
         "severity": "Medium",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been observed using User Agent categorized as '{{UserAgentCategory}}'",
-          "alertDescriptionFormat": "User accessed this URL '{{Url}}' using User Agent '{{HttpUserAgent}}'. Perform a thorough analysis of the requests associated with this user agent header"
-        },
-        "queryPeriod": "5m",
+        "status": "Available",
+        "queryFrequency": "5m",
+        "name": "Detect known risky user agents (ASIM Web Session)",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ],
             "entityType": "URL"
@@ -38,8 +31,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -47,8 +40,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "DstIpAddr"
+                "columnName": "DstIpAddr",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -56,12 +49,12 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -69,29 +62,36 @@
           {
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "SrcHostname"
+                "columnName": "SrcHostname",
+                "identifier": "HostName"
               }
             ],
             "entityType": "Host"
           }
         ],
-        "query": "let lookback = 5m;\nlet knownUserAgentsIndicators = materialize(externaldata(UserAgent: string, UserAgentCategory: string)\n  [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv\"] \n  with(format=\"csv\", ignoreFirstRecord=True)\n  | extend joiner = 1);\nlet CustomUserAgentIndicators = (_ASIM_GetWatchlistRaw(\"UnusualUserAgents\") // Create new Watchlist and add your custom indicators(Optional)\n  | extend\n      UserAgent = tostring(WatchlistItem[\"UserAgent\"]),\n      UserAgentCategory = tostring(WatchlistItem[\"UserAgentCategory\"])\n  | project UserAgent, UserAgentCategory, joiner = 1\n  | where isnotempty(UserAgent) and isnotempty(UserAgentCategory));\nlet CombinedUAList = union knownUserAgentsIndicators, CustomUserAgentIndicators;\nlet knownUserAgents=toscalar(CombinedUAList\n  | where isnotempty(UserAgent)\n  | summarize make_list(UserAgent, 1000));\n_Im_WebSession (starttime=ago(lookback), httpuseragent_has_any=knownUserAgents)\n| project SrcIpAddr, SrcUsername, SrcHostname, HttpUserAgent, Url, DstIpAddr, DstPortNumber, TimeGenerated\n| extend joiner = 1\n| join kind=inner CombinedUAList on joiner\n| where HttpUserAgent has UserAgent\n| summarize\n  EventCount=count(),\n  EventStartTime = min(TimeGenerated),\n  EventEndTime=max(TimeGenerated)\n  by SrcIpAddr, SrcUsername, SrcHostname, Url, HttpUserAgent, DstIpAddr, DstPortNumber, UserAgentCategory\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n",
-        "status": "Available",
         "triggerOperator": "gt",
-        "triggerThreshold": 0,
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been observed using User Agent categorized as '{{UserAgentCategory}}'",
+          "alertDescriptionFormat": "User accessed this URL '{{Url}}' using User Agent '{{HttpUserAgent}}'. Perform a thorough analysis of the requests associated with this user agent header"
+        },
+        "description": "'This rule is designed to flag web requests that contain a user agent header that is recognized as malicious. It relies on a predefined list of known user agents, which is referenced from a specific CSV file'\n",
         "customDetails": {
-          "EventEndTime": "EventEndTime",
           "EventCount": "EventCount",
-          "HttpUserAgent": "HttpUserAgent",
           "UserAgentCategory": "UserAgentCategory",
-          "EventStartTime": "EventStartTime"
+          "EventEndTime": "EventEndTime",
+          "EventStartTime": "EventStartTime",
+          "HttpUserAgent": "HttpUserAgent"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
         "tactics": [
           "InitialAccess",
           "CommandAndControl"
         ],
-        "name": "Detect known risky user agents (ASIM Web Session)"
+        "queryPeriod": "5m",
+        "triggerThreshold": 0,
+        "query": "let lookback = 5m;\nlet knownUserAgentsIndicators = materialize(externaldata(UserAgent: string, UserAgentCategory: string)\n  [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/UnusualUserAgents.csv\"] \n  with(format=\"csv\", ignoreFirstRecord=True)\n  | extend joiner = 1);\nlet CustomUserAgentIndicators = (_ASIM_GetWatchlistRaw(\"UnusualUserAgents\") // Create new Watchlist and add your custom indicators(Optional)\n  | extend\n      UserAgent = tostring(WatchlistItem[\"UserAgent\"]),\n      UserAgentCategory = tostring(WatchlistItem[\"UserAgentCategory\"])\n  | project UserAgent, UserAgentCategory, joiner = 1\n  | where isnotempty(UserAgent) and isnotempty(UserAgentCategory));\nlet CombinedUAList = union knownUserAgentsIndicators, CustomUserAgentIndicators;\nlet knownUserAgents=toscalar(CombinedUAList\n  | where isnotempty(UserAgent)\n  | summarize make_list(UserAgent, 1000));\n_Im_WebSession (starttime=ago(lookback), httpuseragent_has_any=knownUserAgents)\n| project SrcIpAddr, SrcUsername, SrcHostname, HttpUserAgent, Url, DstIpAddr, DstPortNumber, TimeGenerated\n| extend joiner = 1\n| join kind=inner CombinedUAList on joiner\n| where HttpUserAgent has UserAgent\n| summarize\n  EventCount=count(),\n  EventStartTime = min(TimeGenerated),\n  EventEndTime=max(TimeGenerated)\n  by SrcIpAddr, SrcUsername, SrcHostname, Url, HttpUserAgent, DstIpAddr, DstPortNumber, UserAgentCategory\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n"
       }
     }
   ]
