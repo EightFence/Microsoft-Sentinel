@@ -14,28 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Pete Bryan"
-          },
-          "categories": {
-            "domains": [
-              "Security - Threat Protection"
-            ]
-          }
-        },
         "name": "NRT Multiple users email forwarded to same destination",
-        "tactics": [
-          "Collection",
-          "Exfiltration"
-        ],
         "entityMappings": [
           {
             "entityType": "Account",
@@ -56,8 +35,29 @@
             ]
           }
         ],
+        "severity": "Medium",
         "query": "OfficeActivity\n| where OfficeWorkload =~ \"Exchange\"\n| where Parameters has_any (\"ForwardTo\", \"RedirectTo\", \"ForwardingSmtpAddress\")\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\n| evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')\n| extend DestinationMailAddress = tolower(case(\n    isnotempty(column_ifexists(\"ForwardTo\", \"\")), column_ifexists(\"ForwardTo\", \"\"),\n    isnotempty(column_ifexists(\"RedirectTo\", \"\")), column_ifexists(\"RedirectTo\", \"\"),\n    isnotempty(column_ifexists(\"ForwardingSmtpAddress\", \"\")), trim_start(@\"smtp:\", column_ifexists(\"ForwardingSmtpAddress\", \"\")),\n    \"\"))\n| where isnotempty(DestinationMailAddress)\n| mv-expand split(DestinationMailAddress, \";\")\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n| extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId, 250), Ports = make_set(Port, 250), EventCount = count() by tostring(DestinationMailAddress), ClientIP\n| where DistinctUserCount > 1\n| mv-expand UserId to typeof(string)\n",
-        "description": "'Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination.\nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.'\n"
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Pete Bryan"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection"
+            ]
+          }
+        },
+        "description": "'Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination.\nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.'\n",
+        "tactics": [
+          "Collection",
+          "Exfiltration"
+        ]
       }
     }
   ]
