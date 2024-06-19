@@ -14,19 +14,27 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies a match in SigninLogs table from any Email IOC from ThreatConnect TI'\n",
         "triggerThreshold": 0,
+        "tactics": [
+          "Impact"
+        ],
+        "severity": "Medium",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "description": "'Identifies a match in SigninLogs table from any Email IOC from ThreatConnect TI'\n",
+        "queryFrequency": "1h",
+        "name": "ThreatConnect TI map Email entity to SigninLogs",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -34,8 +42,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
             ]
           },
@@ -43,21 +51,13 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ]
           }
         ],
-        "tactics": [
-          "Impact"
-        ],
-        "name": "ThreatConnect TI map Email entity to SigninLogs",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet aadFunc = (tableName:string){\nThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where ExpirationDateTime > now() and Active == true\n// Filter out non ThreatConnect TI Sources\n| where SourceSystem startswith \"ThreatConnect-\"\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    table(tableName) | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserPrincipalName)\n    //Normalizing the column to lower case for exact match with EmailSenderAddress column\n    | extend UserPrincipalName = tolower(UserPrincipalName)\n    | where UserPrincipalName matches regex emailregex\n    | extend Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n    | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n    | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n    // renaming timestamp column so it is clear the log this came from SigninLogs table\n    | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type\n)\non $left.EmailSenderAddress == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nEmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName,\nStatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryPeriod": "14d",
-        "queryFrequency": "1h"
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet aadFunc = (tableName:string){\nThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where ExpirationDateTime > now() and Active == true\n// Filter out non ThreatConnect TI Sources\n| where SourceSystem startswith \"ThreatConnect-\"\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    table(tableName) | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserPrincipalName)\n    //Normalizing the column to lower case for exact match with EmailSenderAddress column\n    | extend UserPrincipalName = tolower(UserPrincipalName)\n    | where UserPrincipalName matches regex emailregex\n    | extend Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n    | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n    | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n    // renaming timestamp column so it is clear the log this came from SigninLogs table\n    | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type\n)\non $left.EmailSenderAddress == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nEmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName,\nStatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n"
       }
     }
   ]
