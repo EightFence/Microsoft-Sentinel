@@ -15,42 +15,38 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "name": "AWS Guard Duty Alert",
-        "severity": "Medium",
-        "queryPeriod": "5h",
-        "description": "Amazon GuardDuty is a threat detection service that continuously monitors your AWS accounts and workloads for malicious activity and delivers detailed security findings for visibility and remediation. This templates create an alert for each Amazon GuardDuty finding.",
-        "customDetails": {
-          "Artifact": "Artifact",
-          "DetectionMechanism": "DetectionMechanism",
-          "ResourceTypeAffected": "ResourceTypeAffected",
-          "ThreatFamilyName": "ThreatFamilyName",
-          "ThreatPurpose": "ThreatPurpose"
-        },
+        "status": "Available",
         "alertDetailsOverride": {
+          "alertTacticsColumnName": "ThreatPurpose",
           "alertDisplayNameFormat": "{{Title}}",
-          "alertDescriptionFormat": "{{Description}}",
           "alertSeverityColumnName": "Severity",
-          "alertTacticsColumnName": "ThreatPurpose"
+          "alertDescriptionFormat": "{{Description}}"
         },
         "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "status": "Available",
         "queryFrequency": "5h",
+        "customDetails": {
+          "DetectionMechanism": "DetectionMechanism",
+          "ThreatPurpose": "ThreatPurpose",
+          "ResourceTypeAffected": "ResourceTypeAffected",
+          "Artifact": "Artifact",
+          "ThreatFamilyName": "ThreatFamilyName"
+        },
         "tactics": [],
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               },
               {
-                "columnName": "RemoteAWSAccountId",
-                "identifier": "ObjectGuid"
+                "identifier": "ObjectGuid",
+                "columnName": "RemoteAWSAccountId"
               }
             ]
           },
@@ -58,8 +54,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "RemoteIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "RemoteIpAddress"
               }
             ]
           },
@@ -67,8 +63,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "LocalIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "LocalIpAddress"
               }
             ]
           },
@@ -76,13 +72,17 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "FindingLink",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "FindingLink"
               }
             ]
           }
         ],
-        "query": "// https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings.html \nAWSGuardDuty \n// Parse the finding\n// https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-format.html \n// Example: \"ThreatPurpose:ResourceTypeAffected/ThreatFamilyName.DetectionMechanism!Artifact\"\n| extend findingTokens = split(ActivityType, \":\")\n| extend ThreatPurpose=findingTokens[0], findingTokens=split(findingTokens[1], \"/\")\n| extend ResourceTypeAffected=findingTokens[0], findingTokens= split(findingTokens[1], \".\")\n| extend ThreatFamilyName=findingTokens[0], findingTokens=split(findingTokens[1], \"!\")\n| extend DetectionMechanism=findingTokens[0], Artifact=findingTokens[1]\n// Assign severity level\n// https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings.html#guardduty_findings-severity\n| extend Severity = \n    case (\n      Severity >= 7.0, \"High\",\n      Severity between (4.0 .. 6.9), \"Medium\",\n      Severity between (1.0 .. 3.9), \"Low\",\n      \"Unknown\"\n    )\n// Pull out any available resource details we can extract entities from. These may not exist in the alert.\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_Resource.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AccessKeyDetails.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RdsDbUserDetails.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_KubernetesDetails.html \n| extend AccessKeyDetails=ResourceDetails.accessKeyDetails\n| extend RdsDbUserDetails=ResourceDetails.rdsDbUserDetails\n| extend KubernetesDetails=ResourceDetails.kubernetesDetails\n// Pull out any available action details we can extract entities from. These may not exist in the alert.\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_Action.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AwsApiCallAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_KubernetesApiCallAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_NetworkConnectionAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RdsLoginAttemptAction.html \n| extend ServiceAction = \n    case(\n      isnotempty(ServiceDetails.action.awsApiCallAction), ServiceDetails.action.awsApiCallAction,\n      isnotempty(ServiceDetails.action.kubernetesApiCallAction), ServiceDetails.action.kubernetesApiCallAction,\n      isnotempty(ServiceDetails.action.networkConnectionAction), ServiceDetails.action.networkConnectionAction,\n      isnotempty(ServiceDetails.action.rdsLoginAttemptAction), ServiceDetails.action.rdsLoginAttemptAction,\n      dynamic(null)\n    )\n// The IPv4 remote address of the connection\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RemoteIpDetails.html \n// or\n// The IP of the Kubernetes API caller and the IPs of any proxies or load balancers between the caller and the API endpoint \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_KubernetesApiCallAction.html \n| extend RemoteIpAddress = \n    coalesce(\n      tostring(ServiceAction.remoteIpDetails.ipAddressV4),\n      tostring(parse_json(ServiceAction.sourceIPs)[0])\n    )\n// The IPv4 local address of the connection\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_LocalIpDetails.html \n| extend LocalIpAddress = ServiceAction.localIpDetails.ipAddressV4\n// The AWS account ID of the remote API caller.\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AwsApiCallAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RemoteAccountDetails.html \n| extend RemoteAWSAccountId = ServiceAction.remoteAccountDetails.accountId\n// The IAM access key details (user information) of a user that engaged in the activity that prompted GuardDuty to generate a finding\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AccessKeyDetails.html \n| extend AccountUpn = \n    case(\n      AccessKeyDetails.userType == \"IAMUser\", AccessKeyDetails.userName,\n      AccessKeyDetails.userType == \"AssumedRole\", split(AccessKeyDetails.principalId, \":\", 1)[0],\n      isnotempty(RdsDbUserDetails.user), RdsDbUserDetails.user,\n      isnotempty(KubernetesDetails.kubernetesUserDetails.username), KubernetesDetails.kubernetesUserDetails.username,\n      \"\"\n    )\n| extend AccountName = split(AccountUpn, \"@\", 0)[0]\n| extend UPNSuffix = split(AccountUpn, \"@\", 1)[0]\n// Clean up the output\n| extend GuardDutyDetails =\n    bag_pack( \n      \"DetectorId\", ServiceDetails.detectorId,\n      \"Partition\", Partition,\n      \"Region\", Region\n    )\n| extend FindingLink = \n    iff(\n      isnotempty(Region) and isnotempty(Id),\n      strcat(\"https://\", Region, \".console.aws.amazon.com/guardduty/home?region=\", Region, \"#/findings?fId=\", Id),\n      \"\"\n    )\n| extend FindingLinkDescription = \n    iff(\n      isnotempty(FindingLink),\n      strcat(\"Link to GuardDuty finding (AWS): \", FindingLink),\n      \"\"\n    )\n| project-rename \n    FindingArn=Arn,\n    FindingId=Id,\n    AWSAccountId=AccountId\n| project-away \n    ActivityType, \n    findingTokens,\n    Partition,\n    Region, \n    SchemaVersion,\n    TimeGenerated,\n    Type\n"
+        "query": "// https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings.html \nAWSGuardDuty \n// Parse the finding\n// https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-format.html \n// Example: \"ThreatPurpose:ResourceTypeAffected/ThreatFamilyName.DetectionMechanism!Artifact\"\n| extend findingTokens = split(ActivityType, \":\")\n| extend ThreatPurpose=findingTokens[0], findingTokens=split(findingTokens[1], \"/\")\n| extend ResourceTypeAffected=findingTokens[0], findingTokens= split(findingTokens[1], \".\")\n| extend ThreatFamilyName=findingTokens[0], findingTokens=split(findingTokens[1], \"!\")\n| extend DetectionMechanism=findingTokens[0], Artifact=findingTokens[1]\n// Assign severity level\n// https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_findings.html#guardduty_findings-severity\n| extend Severity = \n    case (\n      Severity >= 7.0, \"High\",\n      Severity between (4.0 .. 6.9), \"Medium\",\n      Severity between (1.0 .. 3.9), \"Low\",\n      \"Unknown\"\n    )\n// Pull out any available resource details we can extract entities from. These may not exist in the alert.\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_Resource.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AccessKeyDetails.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RdsDbUserDetails.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_KubernetesDetails.html \n| extend AccessKeyDetails=ResourceDetails.accessKeyDetails\n| extend RdsDbUserDetails=ResourceDetails.rdsDbUserDetails\n| extend KubernetesDetails=ResourceDetails.kubernetesDetails\n// Pull out any available action details we can extract entities from. These may not exist in the alert.\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_Action.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AwsApiCallAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_KubernetesApiCallAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_NetworkConnectionAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RdsLoginAttemptAction.html \n| extend ServiceAction = \n    case(\n      isnotempty(ServiceDetails.action.awsApiCallAction), ServiceDetails.action.awsApiCallAction,\n      isnotempty(ServiceDetails.action.kubernetesApiCallAction), ServiceDetails.action.kubernetesApiCallAction,\n      isnotempty(ServiceDetails.action.networkConnectionAction), ServiceDetails.action.networkConnectionAction,\n      isnotempty(ServiceDetails.action.rdsLoginAttemptAction), ServiceDetails.action.rdsLoginAttemptAction,\n      dynamic(null)\n    )\n// The IPv4 remote address of the connection\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RemoteIpDetails.html \n// or\n// The IP of the Kubernetes API caller and the IPs of any proxies or load balancers between the caller and the API endpoint \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_KubernetesApiCallAction.html \n| extend RemoteIpAddress = \n    coalesce(\n      tostring(ServiceAction.remoteIpDetails.ipAddressV4),\n      tostring(parse_json(ServiceAction.sourceIPs)[0])\n    )\n// The IPv4 local address of the connection\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_LocalIpDetails.html \n| extend LocalIpAddress = ServiceAction.localIpDetails.ipAddressV4\n// The AWS account ID of the remote API caller.\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AwsApiCallAction.html \n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_RemoteAccountDetails.html \n| extend RemoteAWSAccountId = ServiceAction.remoteAccountDetails.accountId\n// The IAM access key details (user information) of a user that engaged in the activity that prompted GuardDuty to generate a finding\n// https://docs.aws.amazon.com/guardduty/latest/APIReference/API_AccessKeyDetails.html \n| extend AccountUpn = \n    case(\n      AccessKeyDetails.userType == \"IAMUser\", AccessKeyDetails.userName,\n      AccessKeyDetails.userType == \"AssumedRole\", split(AccessKeyDetails.principalId, \":\", 1)[0],\n      isnotempty(RdsDbUserDetails.user), RdsDbUserDetails.user,\n      isnotempty(KubernetesDetails.kubernetesUserDetails.username), KubernetesDetails.kubernetesUserDetails.username,\n      \"\"\n    )\n| extend AccountName = split(AccountUpn, \"@\", 0)[0]\n| extend UPNSuffix = split(AccountUpn, \"@\", 1)[0]\n// Clean up the output\n| extend GuardDutyDetails =\n    bag_pack( \n      \"DetectorId\", ServiceDetails.detectorId,\n      \"Partition\", Partition,\n      \"Region\", Region\n    )\n| extend FindingLink = \n    iff(\n      isnotempty(Region) and isnotempty(Id),\n      strcat(\"https://\", Region, \".console.aws.amazon.com/guardduty/home?region=\", Region, \"#/findings?fId=\", Id),\n      \"\"\n    )\n| extend FindingLinkDescription = \n    iff(\n      isnotempty(FindingLink),\n      strcat(\"Link to GuardDuty finding (AWS): \", FindingLink),\n      \"\"\n    )\n| project-rename \n    FindingArn=Arn,\n    FindingId=Id,\n    AWSAccountId=AccountId\n| project-away \n    ActivityType, \n    findingTokens,\n    Partition,\n    Region, \n    SchemaVersion,\n    TimeGenerated,\n    Type\n",
+        "severity": "Medium",
+        "description": "Amazon GuardDuty is a threat detection service that continuously monitors your AWS accounts and workloads for malicious activity and delivers detailed security findings for visibility and remediation. This templates create an alert for each Amazon GuardDuty finding.",
+        "triggerOperator": "gt",
+        "queryPeriod": "5h"
       }
     }
   ]

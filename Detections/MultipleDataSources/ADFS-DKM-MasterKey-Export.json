@@ -14,10 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "ADFS DKM Master Key Export",
         "queryPeriod": "1d",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          }
+        },
+        "tactics": [
+          "Collection"
+        ],
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "name": "ADFS DKM Master Key Export",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -31,54 +54,31 @@
                 "identifier": "NTDomain",
                 "columnName": "AccountDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "DeviceName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "AzureResource",
             "fieldMappings": [
               {
                 "identifier": "ResourceId",
                 "columnName": "_ResourceId"
               }
-            ],
-            "entityType": "AzureResource"
+            ]
           }
         ],
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          }
-        },
-        "description": "'Identifies an export of the ADFS DKM Master Key from Active Directory.\nReferences: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/, \nhttps://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html?1\nTo understand further the details behind this detection, please review the details in the original PR and subequent PR update to this:\nhttps://github.com/Azure/Azure-Sentinel/pull/1562#issue-551542469\nhttps://github.com/Azure/Azure-Sentinel/pull/1512#issue-543053339\n'\n",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
         "triggerOperator": "gt",
         "query": "(union isfuzzy=true \n(SecurityEvent \n| where EventID == 4662 // You need to create a SACL on the ADFS Policy Store DKM group for this event to be created. \n| where ObjectServer == 'DS'\n| where OperationType == 'Object Access'\n//| where ObjectName contains '<GUID of ADFS Policy Store DKM Group object' This is unique to the domain. Check description for more details.\n| where ObjectType contains '5cb41ed0-0e4c-11d0-a286-00aa003049e2' // Contact Class\n| where Properties contains '8d3bca50-1d7e-11d0-a081-00aa006c33ed' // Picture Attribute - Ldap-Display-Name: thumbnailPhoto\n| extend AccountName = SubjectUserName, AccountDomain = SubjectDomainName\n| extend timestamp = TimeGenerated, DeviceName = Computer\n),\n( WindowsEvent \n| where EventID == 4662 // You need to create a SACL on the ADFS Policy Store DKM group for this event to be created. \n| where EventData has_all('Object Access', '5cb41ed0-0e4c-11d0-a286-00aa003049e2','8d3bca50-1d7e-11d0-a081-00aa006c33ed') \n| extend ObjectServer = tostring(EventData.ObjectServer)\n| where ObjectServer == 'DS'\n| extend OperationType = tostring(EventData.OperationType)\n| where OperationType == 'Object Access'\n//| where ObjectName contains '<GUID of ADFS Policy Store DKM Group object' This is unique to the domain. Check description for more details.\n| extend ObjectType = tostring(EventData.ObjectType)\n| where ObjectType contains '5cb41ed0-0e4c-11d0-a286-00aa003049e2' // Contact Class\n| extend Properties = tostring(EventData.Properties)\n| where Properties contains '8d3bca50-1d7e-11d0-a081-00aa006c33ed' // Picture Attribute - Ldap-Display-Name: thumbnailPhoto\n| extend AccountName = tostring(EventData.SubjectUserName), AccountDomain = tostring(EventData.SubjectDomainName)\n| extend timestamp = TimeGenerated, DeviceName = Computer\n),\n(DeviceEvents\n| where ActionType =~ \"LdapSearch\"\n| where AdditionalFields.AttributeList contains \"thumbnailPhoto\"\n| where AdditionalFields.DistinguishedName contains \"CN=ADFS,CN=Microsoft,CN=Program Data\" // Filter results to show only hits related to the ADFS AD container\n| extend timestamp = TimeGenerated, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain\n)\n)\n| extend Account = strcat(AccountDomain, \"\\\\\", AccountName)\n",
-        "severity": "Medium",
-        "tactics": [
-          "Collection"
-        ]
+        "description": "'Identifies an export of the ADFS DKM Master Key from Active Directory.\nReferences: https://blogs.microsoft.com/on-the-issues/2020/12/13/customers-protect-nation-state-cyberattacks/, \nhttps://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html?1\nTo understand further the details behind this detection, please review the details in the original PR and subequent PR update to this:\nhttps://github.com/Azure/Azure-Sentinel/pull/1562#issue-551542469\nhttps://github.com/Azure/Azure-Sentinel/pull/1512#issue-543053339\n'\n",
+        "severity": "Medium"
       }
     }
   ]
