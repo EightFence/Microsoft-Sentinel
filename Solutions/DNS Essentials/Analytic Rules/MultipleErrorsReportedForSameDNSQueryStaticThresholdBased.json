@@ -14,45 +14,69 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'This rule creates an alert when multiple clients report errors for the same DNS query. This helps in identifying possible similar C2 communications originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'\n",
+        "severity": "Medium",
+        "status": "Available",
+        "tactics": [
+          "CommandAndControl"
+        ],
         "triggerOperator": "gt",
+        "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "customDetails": {
+          "IPCountthreshold": "IPCountthreshold",
+          "TotalIPs": "TotalIPs",
+          "SrcIPs": "SrcIPs"
+        },
+        "query": "let lookback=1h;\nlet threshold = 2;\nlet errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']); \n_Im_Dns(starttime=ago(lookback)) \n  | where EventResultDetails has_any (errors) \n  | summarize SrcIPs = make_set(SrcIpAddr, 100), Dvcs = make_set(Dvc, 100), ResourceIds = make_set(_ResourceId, 100) by DnsQuery, bin(TimeGenerated, 10min) \n  | where array_length(SrcIPs) >= threshold \n  | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = threshold \n  | extend DomainName = strcat(split(DnsQuery, \".\")[1], \".\", split(DnsQuery, \".\")[2])  \n  | mv-expand SrcIPs  \n  | extend SrcIP = tostring(SrcIPs)  \n  | mv-expand Dvcs  \n  | extend Dvc = tostring(Dvcs)  \n  | mv-expand ResourceIds  \n  | extend ResourceId = tostring(ResourceIds)  \n  | extend Dvc = strcat(split(Dvc, \".\")[0])\n  | summarize Start=min(TimeGenerated), End=max(TimeGenerated) by SrcIP, Dvc, ResourceId, DnsQuery, DomainName\n  | extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n",
+        "name": "Detect DNS queries reporting multiple errors from different clients - Static threshold based (ASIM DNS Solution)",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Multiple errors were detected on different clients for the same DNS query. These unsuccessful responses can be an indication of C2 communication. \n\nThreshold for total clients reporting errors: '{{IPCountthreshold}}'\n\nCurrent count of clients reporting errors for this DNS query: '{{TotalIPs}}'\n\nClients requesting this DNSQuery include:\n\n'{{SrcIPs}}'",
+          "alertDisplayNameFormat": "[Static threshold] Multiple errors for the same DNS query has been detected - '{{DnsQuery}}'"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "DNS",
             "fieldMappings": [
               {
                 "identifier": "DomainName",
                 "columnName": "DnsQuery"
               }
-            ],
-            "entityType": "DNS"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SrcIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "AzureResource",
             "fieldMappings": [
               {
                 "identifier": "ResourceId",
                 "columnName": "ResourceId"
               }
-            ],
-            "entityType": "AzureResource"
+            ]
           },
           {
+            "entityType": "Url",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "DnsQuery"
               }
-            ],
-            "entityType": "Url"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
@@ -62,33 +86,9 @@
                 "identifier": "NTDomain",
                 "columnName": "HostNameDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
-        ],
-        "severity": "Medium",
-        "description": "'This rule creates an alert when multiple clients report errors for the same DNS query. This helps in identifying possible similar C2 communications originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "query": "let lookback=1h;\nlet threshold = 2;\nlet errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']); \n_Im_Dns(starttime=ago(lookback)) \n  | where EventResultDetails has_any (errors) \n  | summarize SrcIPs = make_set(SrcIpAddr, 100), Dvcs = make_set(Dvc, 100), ResourceIds = make_set(_ResourceId, 100) by DnsQuery, bin(TimeGenerated, 10min) \n  | where array_length(SrcIPs) >= threshold \n  | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = threshold \n  | extend DomainName = strcat(split(DnsQuery, \".\")[1], \".\", split(DnsQuery, \".\")[2])  \n  | mv-expand SrcIPs  \n  | extend SrcIP = tostring(SrcIPs)  \n  | mv-expand Dvcs  \n  | extend Dvc = tostring(Dvcs)  \n  | mv-expand ResourceIds  \n  | extend ResourceId = tostring(ResourceIds)  \n  | extend Dvc = strcat(split(Dvc, \".\")[0])\n  | summarize Start=min(TimeGenerated), End=max(TimeGenerated) by SrcIP, Dvc, ResourceId, DnsQuery, DomainName\n  | extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Multiple errors were detected on different clients for the same DNS query. These unsuccessful responses can be an indication of C2 communication. \n\nThreshold for total clients reporting errors: '{{IPCountthreshold}}'\n\nCurrent count of clients reporting errors for this DNS query: '{{TotalIPs}}'\n\nClients requesting this DNSQuery include:\n\n'{{SrcIPs}}'",
-          "alertDisplayNameFormat": "[Static threshold] Multiple errors for the same DNS query has been detected - '{{DnsQuery}}'"
-        },
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "queryPeriod": "1h",
-        "customDetails": {
-          "SrcIPs": "SrcIPs",
-          "TotalIPs": "TotalIPs",
-          "IPCountthreshold": "IPCountthreshold"
-        },
-        "name": "Detect DNS queries reporting multiple errors from different clients - Static threshold based (ASIM DNS Solution)"
+        ]
       }
     }
   ]
