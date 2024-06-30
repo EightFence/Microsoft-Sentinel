@@ -14,46 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "queryPeriod": "14d",
+        "name": "TI Map URL Entity to PaloAlto Data",
+        "tactics": [
+          "Impact"
+        ],
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data.'\n",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(Url)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  CommonSecurityLog\n  | extend IngestionTime = ingestion_time()\n  | where IngestionTime > ago(dt_lookBack)\n  // Select on Palo Alto logs\n  | where DeviceVendor =~ \"Palo Alto Networks\"\n  | where DeviceEventClassID =~ 'url'\n  //Uncomment the line below to only alert on allowed connections\n  //| where DeviceAction !~ \"block-url\"\n  //Select logs where URL data is populated\n  | extend PA_Url = column_ifexists(\"RequestURL\", \"None\")\n  | extend PA_Url = iif(isempty(PA_Url), extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)), trim('\"', PA_Url))\n  | extend PA_Url = iif(PA_Url !startswith \"http://\" and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), iif(PA_Url !startswith \"https://\" and ApplicationProtocol =~ \"ssl\", strcat('https://', PA_Url), PA_Url))\n  | where isnotempty(PA_Url)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.Url == $right.PA_Url\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, PA_Url\n| project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, PA_Url, DeviceName\n",
-        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
                 "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIP",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "PA_Url",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "tactics": [
-          "Impact"
-        ],
-        "triggerThreshold": 0,
-        "name": "TI Map URL Entity to PaloAlto Data",
-        "queryFrequency": "1h"
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(Url)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  CommonSecurityLog\n  | extend IngestionTime = ingestion_time()\n  | where IngestionTime > ago(dt_lookBack)\n  // Select on Palo Alto logs\n  | where DeviceVendor =~ \"Palo Alto Networks\"\n  | where DeviceEventClassID =~ 'url'\n  //Uncomment the line below to only alert on allowed connections\n  //| where DeviceAction !~ \"block-url\"\n  //Select logs where URL data is populated\n  | extend PA_Url = column_ifexists(\"RequestURL\", \"None\")\n  | extend PA_Url = iif(isempty(PA_Url), extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)), trim('\"', PA_Url))\n  | extend PA_Url = iif(PA_Url !startswith \"http://\" and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), iif(PA_Url !startswith \"https://\" and ApplicationProtocol =~ \"ssl\", strcat('https://', PA_Url), PA_Url))\n  | where isnotempty(PA_Url)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.Url == $right.PA_Url\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, PA_Url\n| project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, SourceIP, PA_Url, DeviceName\n"
       }
     }
   ]

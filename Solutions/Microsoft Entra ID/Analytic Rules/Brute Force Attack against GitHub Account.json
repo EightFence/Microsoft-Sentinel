@@ -14,14 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "queryPeriod": "7d",
+        "name": "Brute Force Attack against GitHub Account",
+        "queryFrequency": "1h",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "triggerThreshold": 0,
         "description": "'Attackers who are trying to guess your users' passwords or use brute-force methods to get in. If your organization is using SSO with Microsoft Entra ID, authentication logs to GitHub.com will be generated. Using the following query can help you identify a sudden increase in failed logon attempt of users.'\n",
-        "query": "let LearningPeriod = 7d;\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet StartTime = 1h;  \nlet sensitivity = 2.5;\nlet EndRunTime = StartTime - RunTime;\nlet EndLearningTime = StartTime + LearningPeriod;\nlet aadFunc = (tableName:string){\ntable(tableName)  \n| where TimeGenerated between (ago(EndLearningTime) .. ago(EndRunTime))\n| where AppDisplayName =~ \"GitHub.com\"\n| where ResultType != 0\n| make-series FailedLogins = count() on TimeGenerated from ago(LearningPeriod) to ago(EndRunTime) step BinTime by UserPrincipalName, Type\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(FailedLogins, sensitivity, -1, 'linefit')\n| mv-expand FailedLogins to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)  \n| where TimeGenerated >= ago(RunTime)\n| where Anomalies > 0 and Baseline > 0\n| join kind=inner (\n          table(tableName)  \n          | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))\n          | where AppDisplayName =~ \"GitHub.com\"\n          | where ResultType != 0\n          | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddresses = make_set(IPAddress,100), Locations = make_set(LocationDetails,20), Devices = make_set(DeviceDetail,20) by UserPrincipalName, UserId, AppDisplayName\n      ) on UserPrincipalName\n| project-away UserPrincipalName1\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n| extend IPAddressFirst = tostring(IPAddresses[0])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "status": "Available",
-        "triggerOperator": "gt",
+        "queryPeriod": "7d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserPrincipalName",
@@ -35,34 +38,31 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserId",
                 "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IPAddressFirst",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "triggerThreshold": 0,
-        "name": "Brute Force Attack against GitHub Account",
-        "queryFrequency": "1h"
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "query": "let LearningPeriod = 7d;\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet StartTime = 1h;  \nlet sensitivity = 2.5;\nlet EndRunTime = StartTime - RunTime;\nlet EndLearningTime = StartTime + LearningPeriod;\nlet aadFunc = (tableName:string){\ntable(tableName)  \n| where TimeGenerated between (ago(EndLearningTime) .. ago(EndRunTime))\n| where AppDisplayName =~ \"GitHub.com\"\n| where ResultType != 0\n| make-series FailedLogins = count() on TimeGenerated from ago(LearningPeriod) to ago(EndRunTime) step BinTime by UserPrincipalName, Type\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(FailedLogins, sensitivity, -1, 'linefit')\n| mv-expand FailedLogins to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)  \n| where TimeGenerated >= ago(RunTime)\n| where Anomalies > 0 and Baseline > 0\n| join kind=inner (\n          table(tableName)  \n          | where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))\n          | where AppDisplayName =~ \"GitHub.com\"\n          | where ResultType != 0\n          | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddresses = make_set(IPAddress,100), Locations = make_set(LocationDetails,20), Devices = make_set(DeviceDetail,20) by UserPrincipalName, UserId, AppDisplayName\n      ) on UserPrincipalName\n| project-away UserPrincipalName1\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n| extend IPAddressFirst = tostring(IPAddresses[0])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "status": "Available"
       }
     }
   ]
