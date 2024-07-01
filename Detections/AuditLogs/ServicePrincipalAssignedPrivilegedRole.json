@@ -14,78 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "InitiatingAppName"
-              },
-              {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAppServicePrincipalId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "InitiatingUserPrincipalName"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "InitiatingAccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatingAccountUPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAadUserId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "ServicePrincipalName"
-              },
-              {
-                "identifier": "AadUserId",
-                "columnName": "ServicePrincipalId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "InitiatingIPAddress"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
+        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
         "tactics": [
           "PrivilegeEscalation"
         ],
         "metadata": {
-          "author": {
-            "name": "Microsoft Security Research"
-          },
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -93,18 +31,80 @@
               "Identity"
             ]
           },
-          "support": {
-            "tier": "Community"
+          "author": {
+            "name": "Microsoft Security Research"
           }
         },
-        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n  | extend ServicePrincipalName = tostring(TargetResources[0].displayName)\n  | extend ServicePrincipalId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where displayName == \"Role.DisplayName\" and newValue contains \"admin\"\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | extend TargetRole = newValue\n  | project-reorder TimeGenerated, ServicePrincipalName, ServicePrincipalId, InitiatedBy, TargetRole, InitiatingIPAddress\n",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "description": "'Detects a privileged role being added to a Service Principal.\n  Ensure that any assignment to a Service Principal is valid and appropriate - Service Principals should not be assigned to very highly privileged roles such as Global Admin.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
-        "triggerThreshold": 0,
         "name": "Service Principal Assigned Privileged Role",
-        "queryPeriod": "1d"
+        "query": "AuditLogs\n  | where OperationName has_all (\"member to role\", \"add\")\n  | where Result =~ \"Success\"\n  | extend type_ = tostring(TargetResources[0].type)\n  | where type_ =~ \"ServicePrincipal\"\n  | where isnotempty(TargetResources)\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n  | extend ServicePrincipalName = tostring(TargetResources[0].displayName)\n  | extend ServicePrincipalId = tostring(TargetResources[0].id)\n  | mv-expand TargetResources[0].modifiedProperties\n  | extend TargetResources_0_modifiedProperties = columnifexists(\"TargetResources_0_modifiedProperties\", '')\n  | where isnotempty(TargetResources_0_modifiedProperties)\n  | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n  | where displayName == \"Role.DisplayName\" and newValue contains \"admin\"\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | extend TargetRole = newValue\n  | project-reorder TimeGenerated, ServicePrincipalName, ServicePrincipalId, InitiatedBy, TargetRole, InitiatingIPAddress\n",
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingAppName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatingAppServicePrincipalId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingUserPrincipalName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "InitiatingAccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "InitiatingAccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingAadUserId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ServicePrincipalName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "ServicePrincipalId",
+                "identifier": "AadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "InitiatingIPAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
       }
     }
   ]
