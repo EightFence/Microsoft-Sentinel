@@ -14,22 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "1d",
         "status": "Available",
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on CloudFormation policy. Attackers could use these events for privilege escalation. Verify these actions with the user.'\n",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "name": "Privilege escalation via CloudFormation policy",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "queryFrequency": "1d",
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"cloudformation:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action contains \"cloudformation:DescribeStacks\" and Action contains \"cloudformation:CreateStack\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"cloudformation:Describe*\" and Action contains \"cloudformation:Create*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n  | extend timestamp = TimeGenerated\n",
         "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
             ],
             "entityType": "Account"
@@ -37,23 +47,13 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ],
             "entityType": "IP"
           }
-        ],
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on CloudFormation policy. Attackers could use these events for privilege escalation. Verify these actions with the user.'\n",
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"cloudformation:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action contains \"cloudformation:DescribeStacks\" and Action contains \"cloudformation:CreateStack\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"cloudformation:Describe*\" and Action contains \"cloudformation:Create*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n  | extend timestamp = TimeGenerated\n",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "name": "Privilege escalation via CloudFormation policy"
+        ]
       }
     }
   ]
