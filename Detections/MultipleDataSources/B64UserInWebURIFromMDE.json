@@ -18,18 +18,17 @@
           "Exfiltration",
           "CommandAndControl"
         ],
-        "name": "Windows host username encoded in base64 web request",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "queryPeriod": "1d",
         "description": "'This detection will identify network requests in HTTP proxy data that contains Base64 encoded usernames from machines in the DeviceEvents table.\nThis technique was seen usee by POLONIUM in their RunningRAT tool.'\n",
+        "triggerOperator": "gt",
+        "query": "let accountLookback = 3d;\nlet requestLookback = 3d;\nlet extraction_regex = @\"(?:\\?|&)[a-zA-Z0-9\\%]*=([a-zA-Z0-9\\/\\+\\=]*)\";\n// Collect account names and base64 encode them\nDeviceEvents\n| where TimeGenerated > ago(accountLookback)\n| summarize make_set(DeviceId), make_set(DeviceName) by InitiatingProcessAccountName\n| where isnotempty(InitiatingProcessAccountName)\n| extend base64_user = base64_encode_tostring(InitiatingProcessAccountName)\n| join (\n    // Collect requests and extract base64 parameters\n    CommonSecurityLog\n    | where TimeGenerated > ago(requestLookback)\n    | where isnotempty(RequestURL)\n    // Summarize early on the RequestURL\n    | summarize FirstRequest=min(TimeGenerated), LastRequest=max(TimeGenerated), NumberOfRequests=count() by RequestURL\n    | extend base64_candidate = extract_all(extraction_regex, RequestURL)\n    | mv-expand base64_candidate  to typeof(string)\n) on $left.base64_user == $right.base64_candidate\n| project FirstRequest, LastRequest, NumberOfRequests, RequestURL, DeviceIds=set_DeviceId, DeviceNames=set_DeviceName, UserName=InitiatingProcessAccountName\n",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "DeviceNames"
+                "columnName": "DeviceNames",
+                "identifier": "HostName"
               }
             ]
           },
@@ -37,8 +36,8 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "RequestURL"
+                "columnName": "RequestURL",
+                "identifier": "Url"
               }
             ]
           },
@@ -46,31 +45,32 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "UserName"
+                "columnName": "UserName",
+                "identifier": "Name"
               }
             ]
           }
         ],
-        "queryFrequency": "1d",
         "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
+          "source": {
+            "kind": "Community"
           },
           "support": {
             "tier": "Community"
           },
-          "source": {
-            "kind": "Community"
-          },
           "author": {
             "name": "Thomas McElroy"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
           }
         },
+        "triggerThreshold": 0,
         "severity": "Medium",
-        "query": "let accountLookback = 3d;\nlet requestLookback = 3d;\nlet extraction_regex = @\"(?:\\?|&)[a-zA-Z0-9\\%]*=([a-zA-Z0-9\\/\\+\\=]*)\";\n// Collect account names and base64 encode them\nDeviceEvents\n| where TimeGenerated > ago(accountLookback)\n| summarize make_set(DeviceId), make_set(DeviceName) by InitiatingProcessAccountName\n| where isnotempty(InitiatingProcessAccountName)\n| extend base64_user = base64_encode_tostring(InitiatingProcessAccountName)\n| join (\n    // Collect requests and extract base64 parameters\n    CommonSecurityLog\n    | where TimeGenerated > ago(requestLookback)\n    | where isnotempty(RequestURL)\n    // Summarize early on the RequestURL\n    | summarize FirstRequest=min(TimeGenerated), LastRequest=max(TimeGenerated), NumberOfRequests=count() by RequestURL\n    | extend base64_candidate = extract_all(extraction_regex, RequestURL)\n    | mv-expand base64_candidate  to typeof(string)\n) on $left.base64_user == $right.base64_candidate\n| project FirstRequest, LastRequest, NumberOfRequests, RequestURL, DeviceIds=set_DeviceId, DeviceNames=set_DeviceName, UserName=InitiatingProcessAccountName\n"
+        "name": "Windows host username encoded in base64 web request",
+        "queryFrequency": "1d"
       }
     }
   ]
