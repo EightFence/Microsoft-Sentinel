@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "ClientEmail"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "description": "'Email sender in TI list.'\n",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n| where isnotempty(EmailSenderAddress)\n| extend TI_emailEntity = EmailSenderAddress\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n       ProofpointPOD\n       | where TimeGenerated >= ago(dt_lookBack)\n       | where isnotempty(SrcUserUpn)\n       | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientEmail = SrcUserUpn\n)\non $left.TI_emailEntity == $right.ClientEmail\n| where ProofpointPOD_TimeGenerated < ExpirationDateTime\n| summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientEmail\n| project ProofpointPOD_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, ClientEmail\n| extend timestamp = ProofpointPOD_TimeGenerated\n",
+        "triggerThreshold": 0,
         "tactics": [
           "Exfiltration",
           "InitialAccess"
         ],
-        "triggerOperator": "gt",
-        "queryPeriod": "14d",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n| where isnotempty(EmailSenderAddress)\n| extend TI_emailEntity = EmailSenderAddress\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n       ProofpointPOD\n       | where TimeGenerated >= ago(dt_lookBack)\n       | where isnotempty(SrcUserUpn)\n       | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientEmail = SrcUserUpn\n)\non $left.TI_emailEntity == $right.ClientEmail\n| where ProofpointPOD_TimeGenerated < ExpirationDateTime\n| summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientEmail\n| project ProofpointPOD_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, ClientEmail\n| extend timestamp = ProofpointPOD_TimeGenerated\n",
         "name": "ProofpointPOD - Email sender in TI list",
+        "description": "'Email sender in TI list.'\n",
         "queryFrequency": "1d",
-        "severity": "Medium"
+        "queryPeriod": "14d"
       }
     }
   ]
