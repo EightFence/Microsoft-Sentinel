@@ -14,25 +14,41 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let threshold = 50;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_filepath=dcount(filepath), fileslist=make_set(filepath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_filepath >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n",
-        "customDetails": {
-          "FilesList": "fileslist",
-          "TransferCount": "count_distinct_filepath"
-        },
-        "severity": "Medium",
-        "alertDetailsOverride": null,
         "description": "'Identifies SFTP File Transfers above certain threshold in a 15min time period. It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
         "name": "SFTP File transfer above threshold",
+        "triggerOperator": "gt",
+        "query": "let threshold = 50;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_filepath=dcount(filepath), fileslist=make_set(filepath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_filepath >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n",
         "tactics": [
           "Exfiltration"
         ],
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "lookbackDuration": "5h",
+            "groupByEntities": [
+              "Account",
+              "Host"
+            ],
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": []
+          }
+        },
+        "queryPeriod": "15m",
+        "customDetails": {
+          "TransferCount": "count_distinct_filepath",
+          "FilesList": "fileslist"
+        },
+        "queryFrequency": "15m",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "username",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "username"
               }
             ]
           },
@@ -40,8 +56,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "src_ip",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "src_ip"
               }
             ]
           },
@@ -49,8 +65,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "Computer"
               }
             ]
           },
@@ -58,31 +74,15 @@
             "entityType": "File",
             "fieldMappings": [
               {
-                "columnName": "FileSample",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "FileSample"
               }
             ]
           }
         ],
+        "severity": "Medium",
         "triggerThreshold": 0,
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "groupByCustomDetails": [],
-            "groupByEntities": [
-              "Account",
-              "Host"
-            ],
-            "groupByAlertDetails": [],
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "lookbackDuration": "5h"
-          },
-          "createIncident": true
-        },
-        "triggerOperator": "gt",
-        "queryFrequency": "15m",
-        "queryPeriod": "15m"
+        "alertDetailsOverride": null
       }
     }
   ]

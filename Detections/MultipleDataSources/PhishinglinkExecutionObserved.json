@@ -14,23 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
         "queryFrequency": "1d",
+        "query": "//Finding MDO Security alerts and extracting the Entities user, Domain, Ip, and URL.\nlet Alert_List= dynamic([\n\"Phishing link click observed in Network Traffic\",\n\"Phish delivered due to an IP allow policy\",\n\"A potentially malicious URL click was detected\",\n\"High Risk Sign-in Observed in Network Traffic\",\n\"A user clicked through to a potentially malicious URL\",\n\"Suspicious network connection to AitM phishing site\",\n\"Messages containing malicious entity not removed after delivery\",\n\"Email messages containing malicious URL removed after delivery\",\n\"Email reported by user as malware or phish\",\n\"Phish delivered due to an ETR override\",\n\"Phish not zapped because ZAP is disabled\"]);\nSecurityAlert\n|where ProviderName in~ (\"Office 365 Advanced Threat Protection\", \"OATP\")\n| where AlertName in~ (Alert_List)\n//extracting Alert Entities\n | extend Entities = parse_json(Entities)\n| mv-apply Entity = Entities on\n(\nwhere Entity.Type == 'account'\n| extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, \"@\", tostring (Entity.UPNSuffix))), tostring(Entity.UserPrincipalName))\n)\n| mv-apply Entity = Entities on\n(\nwhere Entity.Type == 'url'\n| extend EntityUrl = tostring(Entity.Url)\n)\n| summarize AccountUpn=tolower(tostring(take_any(EntityUPN))),Url=tostring(tolower(take_any(EntityUrl))),AlertTime= min(TimeGenerated)by SystemAlertId, ProductName\n// filtering 3pnetwork devices\n| join kind= inner (CommonSecurityLog\n| where DeviceVendor has_any  (\"Palo Alto Networks\", \"Fortinet\", \"Check Point\", \"Zscaler\")\n| where DeviceAction != \"Block\"\n| where DeviceProduct startswith \"FortiGate\" or DeviceProduct startswith  \"PAN\" or DeviceProduct startswith  \"VPN\" or DeviceProduct startswith \"FireWall\" or DeviceProduct startswith  \"NSSWeblog\" or DeviceProduct startswith \"URL\"\n| where isnotempty(RequestURL)\n| where isnotempty(SourceUserName)\n| extend SourceUserName = tolower(SourceUserName)\n| project\n3plogTime=TimeGenerated,\nDeviceVendor,\nDeviceProduct,\nActivity,\nDestinationHostName,\nDestinationIP,\nRequestURL=tostring(tolower(RequestURL)),\nMaliciousIP,\nName = tostring(split(SourceUserName,\"@\")[0]),\nUPNSuffix =tostring(split(SourceUserName,\"@\")[1]),\nSourceUserName,\nIndicatorThreatType,\nThreatSeverity,AdditionalExtensions,\nThreatConfidence)on $left.Url == $right.RequestURL and $left.AccountUpn == $right.SourceUserName\n// Applied the condition where alert trigger 1st and then the 3p Network activity execution\n| where AlertTime between ((3plogTime - 1h) .. (3plogTime + 1h))\n",
+        "name": "Phishing link click observed in Network Traffic",
+        "triggerThreshold": 0,
+        "metadata": {
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          }
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "severity": "Medium",
+        "description": "'The purpose of this content is to identify successful phishing links accessed by users. Once a user clicks on a phishing link, we observe successful network activity originating from non-Microsoft network devices. These devices may include Palo Alto Networks, Fortinet, Check Point, and Zscaler devices.'\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "SourceUserName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "SourceUserName"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -38,8 +61,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "DestinationIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "DestinationIP"
               }
             ]
           },
@@ -47,37 +70,14 @@
             "entityType": "DNS",
             "fieldMappings": [
               {
-                "columnName": "DestinationHostName",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "DestinationHostName"
               }
             ]
           }
         ],
-        "queryPeriod": "1d",
-        "tactics": [
-          "InitialAccess"
-        ],
         "triggerOperator": "gt",
-        "name": "Phishing link click observed in Network Traffic",
-        "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Threat Protection"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "source": {
-            "kind": "Community"
-          }
-        },
-        "description": "'The purpose of this content is to identify successful phishing links accessed by users. Once a user clicks on a phishing link, we observe successful network activity originating from non-Microsoft network devices. These devices may include Palo Alto Networks, Fortinet, Check Point, and Zscaler devices.'\n",
-        "query": "//Finding MDO Security alerts and extracting the Entities user, Domain, Ip, and URL.\nlet Alert_List= dynamic([\n\"Phishing link click observed in Network Traffic\",\n\"Phish delivered due to an IP allow policy\",\n\"A potentially malicious URL click was detected\",\n\"High Risk Sign-in Observed in Network Traffic\",\n\"A user clicked through to a potentially malicious URL\",\n\"Suspicious network connection to AitM phishing site\",\n\"Messages containing malicious entity not removed after delivery\",\n\"Email messages containing malicious URL removed after delivery\",\n\"Email reported by user as malware or phish\",\n\"Phish delivered due to an ETR override\",\n\"Phish not zapped because ZAP is disabled\"]);\nSecurityAlert\n|where ProviderName in~ (\"Office 365 Advanced Threat Protection\", \"OATP\")\n| where AlertName in~ (Alert_List)\n//extracting Alert Entities\n | extend Entities = parse_json(Entities)\n| mv-apply Entity = Entities on\n(\nwhere Entity.Type == 'account'\n| extend EntityUPN = iff(isempty(Entity.UserPrincipalName), tostring(strcat(Entity.Name, \"@\", tostring (Entity.UPNSuffix))), tostring(Entity.UserPrincipalName))\n)\n| mv-apply Entity = Entities on\n(\nwhere Entity.Type == 'url'\n| extend EntityUrl = tostring(Entity.Url)\n)\n| summarize AccountUpn=tolower(tostring(take_any(EntityUPN))),Url=tostring(tolower(take_any(EntityUrl))),AlertTime= min(TimeGenerated)by SystemAlertId, ProductName\n// filtering 3pnetwork devices\n| join kind= inner (CommonSecurityLog\n| where DeviceVendor has_any  (\"Palo Alto Networks\", \"Fortinet\", \"Check Point\", \"Zscaler\")\n| where DeviceAction != \"Block\"\n| where DeviceProduct startswith \"FortiGate\" or DeviceProduct startswith  \"PAN\" or DeviceProduct startswith  \"VPN\" or DeviceProduct startswith \"FireWall\" or DeviceProduct startswith  \"NSSWeblog\" or DeviceProduct startswith \"URL\"\n| where isnotempty(RequestURL)\n| where isnotempty(SourceUserName)\n| extend SourceUserName = tolower(SourceUserName)\n| project\n3plogTime=TimeGenerated,\nDeviceVendor,\nDeviceProduct,\nActivity,\nDestinationHostName,\nDestinationIP,\nRequestURL=tostring(tolower(RequestURL)),\nMaliciousIP,\nName = tostring(split(SourceUserName,\"@\")[0]),\nUPNSuffix =tostring(split(SourceUserName,\"@\")[1]),\nSourceUserName,\nIndicatorThreatType,\nThreatSeverity,AdditionalExtensions,\nThreatConfidence)on $left.Url == $right.RequestURL and $left.AccountUpn == $right.SourceUserName\n// Applied the condition where alert trigger 1st and then the 3p Network activity execution\n| where AlertTime between ((3plogTime - 1h) .. (3plogTime + 1h))\n",
-        "severity": "Medium"
+        "queryPeriod": "1d"
       }
     }
   ]
