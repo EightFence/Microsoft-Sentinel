@@ -14,11 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "External Upstream Source Added to Azure DevOps Feed",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
         "query": "// Add any known allowed sources and source locations to the filter below (the NuGet Gallery has been added here as an example).\nlet allowed_sources = dynamic([\"NuGet Gallery\"]);\nlet allowed_locations = dynamic([\"https://api.nuget.org/v3/index.json\"]);\nAzureDevOpsAuditing\n// Look for feeds created or modified at either the organization or project level\n| where OperationName matches regex \"Artifacts.Feed.(Org|Project).Modify\"\n| where Details has \"UpstreamSources, added\"\n| extend FeedName = tostring(Data.FeedName)\n| extend FeedId = tostring(Data.FeedId)\n| extend UpstreamsAdded = Data.UpstreamsAdded\n// As multiple feeds may be added expand these out\n| mv-expand UpstreamsAdded\n// Only focus on external feeds\n| where UpstreamsAdded.UpstreamSourceType !~ \"internal\"\n| extend SourceLocation = tostring(UpstreamsAdded.Location)\n| extend SourceName = tostring(UpstreamsAdded.Name)\n// Exclude sources and locations in the allow list\n| where SourceLocation !in (allowed_locations) and SourceName !in (allowed_sources)\n| extend SourceProtocol = tostring(UpstreamsAdded.Protocol)\n| extend SourceStatus = tostring(UpstreamsAdded.Status)\n| project-reorder TimeGenerated, OperationName, ScopeDisplayName, ProjectName, FeedName, SourceName, SourceLocation, SourceProtocol, ActorUPN, UserAgent, IpAddress\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
-        "queryPeriod": "1d",
-        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "ActorUPN",
@@ -32,28 +38,22 @@
                 "columnName": "AccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "tactics": [
-          "InitialAccess"
-        ],
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
         "description": "'The detection looks for new external sources added to an Azure DevOps feed. An allow list can be customized to explicitly allow known good sources. \nAn attacker could look to add a malicious feed in order to inject malicious packages into a build pipeline.'\n",
         "severity": "Medium",
-        "triggerOperator": "gt",
-        "name": "External Upstream Source Added to Azure DevOps Feed"
+        "queryPeriod": "1d",
+        "status": "Available"
       }
     }
   ]
