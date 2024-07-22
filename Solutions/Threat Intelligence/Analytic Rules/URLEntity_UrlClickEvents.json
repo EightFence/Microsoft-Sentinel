@@ -14,8 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1h",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -29,27 +31,25 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "queryFrequency": "1h",
-        "severity": "Medium",
         "queryPeriod": "14d",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in UrlClickEvents.'\n",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet UrlClickEvents_ = materialize(UrlClickEvents\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend UrlClickEvents_TimeGenerated = TimeGenerated);\nlet ChainReportID = UrlClickEvents_\n    | mv-expand todynamic(UrlChain)\n    | extend UrlChain = tolower(UrlChain)\n    | project ReportId, Url, UrlChain;\n// Url is not always in UrlChain, so we need to check both\nlet ClickedUrls = \n  (union isfuzzy=false (ChainReportID), (ChainReportID | project Url = UrlChain))\n  | distinct Url\n  | summarize make_list(Url);\nlet TI = materialize(ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where isnotempty(Url) and tolower(Url) in (ClickedUrls)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | project-rename TI_Url = Url, TI_Type = Type\n  );\n(union isfuzzy=false (TI | join kind=innerunique (ChainReportID) on $left.TI_Url == $right.UrlChain),\n  (TI | join kind=innerunique (ChainReportID) on $left.TI_Url == $right.Url))\n| project-away UrlChain\n| join kind=innerunique (UrlClickEvents_) on ReportId\n| where UrlClickEvents_TimeGenerated < ExpirationDateTime\n| summarize UrlClickEvents_TimeGenerated = arg_max(UrlClickEvents_TimeGenerated, *) by IndicatorId\n| project UrlClickEvents_TimeGenerated, AccountUpn, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, NetworkMessageId\n| extend timestamp = UrlClickEvents_TimeGenerated\n| extend timestamp = UrlClickEvents_TimeGenerated, Name = tostring(split(AccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(AccountUpn, '@', 1)[0])\n",
+        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in UrlClickEvents.'\n",
+        "severity": "Medium",
+        "triggerThreshold": 0,
         "name": "TI Map URL Entity to UrlClickEvents",
+        "triggerOperator": "gt",
         "tactics": [
           "CommandAndControl"
         ]
