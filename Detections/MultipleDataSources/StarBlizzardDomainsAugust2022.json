@@ -14,45 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "High",
+        "queryPeriod": "1d",
         "tactics": [
           "InitialAccess"
         ],
-        "metadata": {
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Threat Intelligence"
-            ]
-          }
-        },
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
-        "severity": "High",
+        "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/SEABORGIUMIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet DomainNames = (iocs | where Type =~ \"domainname\"| project IoC);\n(union isfuzzy=true\n(CommonSecurityLog\n| parse Message with * '(' DNSName ')' *\n| where DNSName in~ (DomainNames)\n| extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP\n),\n(_Im_Dns (domain_has_any=DomainNames)\n| extend DNSName = DnsQuery\n| extend IPAddress =  SrcIpAddr, Computer = Dvc\n),\n(_Im_WebSession (url_has_any=DomainNames)\n| extend DNSName = tostring(parse_url(Url)[\"Host\"])\n| extend IPAddress =  SrcIpAddr, Computer = Dvc\n),\n(VMConnection\n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| where DNSName  in~ (DomainNames)\n| extend IPAddress = RemoteIp\n),\n(DeviceNetworkEvents\n| where RemoteUrl  has_any (DomainNames)\n| extend IPAddress = RemoteIP\n| extend Computer = DeviceName\n),\n(EmailUrlInfo\n| where Url has_any (DomainNames)\n| join (EmailEvents\n| where EmailDirection == \"Inbound\" ) on NetworkMessageId\n| extend IPAddress = SenderIPv4\n| extend Account = RecipientEmailAddress\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (DomainNames)\n| extend DNSName = DestinationHost\n| extend IPAddress = SourceHost\n)\n)\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
+        "triggerThreshold": 0,
         "name": "Star Blizzard C2 Domains August 2022",
-        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "description": "'Identifies a match across various data feeds for domains related to an actor tracked by Microsoft as Star Blizzard.'\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Account"
+                "columnName": "Account",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -60,16 +47,16 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "NTDomain"
               }
             ]
           },
@@ -77,15 +64,28 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "description": "'Identifies a match across various data feeds for domains related to an actor tracked by Microsoft as Star Blizzard.'\n",
-        "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/SEABORGIUMIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet DomainNames = (iocs | where Type =~ \"domainname\"| project IoC);\n(union isfuzzy=true\n(CommonSecurityLog\n| parse Message with * '(' DNSName ')' *\n| where DNSName in~ (DomainNames)\n| extend Account = SourceUserID, Computer = DeviceName, IPAddress =  DestinationIP\n),\n(_Im_Dns (domain_has_any=DomainNames)\n| extend DNSName = DnsQuery\n| extend IPAddress =  SrcIpAddr, Computer = Dvc\n),\n(_Im_WebSession (url_has_any=DomainNames)\n| extend DNSName = tostring(parse_url(Url)[\"Host\"])\n| extend IPAddress =  SrcIpAddr, Computer = Dvc\n),\n(VMConnection\n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| where DNSName  in~ (DomainNames)\n| extend IPAddress = RemoteIp\n),\n(DeviceNetworkEvents\n| where RemoteUrl  has_any (DomainNames)\n| extend IPAddress = RemoteIP\n| extend Computer = DeviceName\n),\n(EmailUrlInfo\n| where Url has_any (DomainNames)\n| join (EmailEvents\n| where EmailDirection == \"Inbound\" ) on NetworkMessageId\n| extend IPAddress = SenderIPv4\n| extend Account = RecipientEmailAddress\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (DomainNames)\n| extend DNSName = DestinationHost\n| extend IPAddress = SourceHost\n)\n)\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
-        "triggerThreshold": 0
+        "metadata": {
+          "categories": {
+            "domains": [
+              "Security - Threat Intelligence"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
+          }
+        }
       }
     }
   ]
