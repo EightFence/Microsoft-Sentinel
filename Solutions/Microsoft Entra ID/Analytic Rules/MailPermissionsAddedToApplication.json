@@ -14,11 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "AuditLogs\n| where Category =~ \"ApplicationManagement\"\n| where ActivityDisplayName has_any (\"Add delegated permission grant\",\"Add app role assignment to service principal\")  \n| where Result =~ \"success\"\n| where tostring(InitiatedBy.user.userPrincipalName) has \"@\" or tostring(InitiatedBy.app.displayName) has \"@\"\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)\n      | extend props = TargetResource.modifiedProperties,\n               Type = tostring(TargetResource.type),\n               PermissionsAddedTo = tostring(TargetResource.displayName)\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"DelegatedPermissionGrant.Scope\"\n      | extend DisplayName = tostring(Property.displayName), Permissions = trim('\"',tostring(Property.newValue))\n  )\n| where Permissions has_any (\"Mail.Read\", \"Mail.ReadWrite\")\n| mv-apply AdditionalDetail = AdditionalDetails on \n  (\n      where AdditionalDetail.key =~ \"User-Agent\"\n      | extend InitiatingUserAgent = tostring(AdditionalDetail.value)\n  )\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| project-away props, TargetResource, AdditionalDetail, Property\n| join kind=leftouter(\n  AuditLogs\n  | where ActivityDisplayName has \"Consent to application\"\n  | mv-apply TargetResource = TargetResources on \n      (\n          where TargetResource.type =~ \"ServicePrincipal\"\n          | extend AppName = tostring(TargetResource.displayName),\n                   AppId = tostring(TargetResource.id)\n      )\n| project AppName, AppId, CorrelationId) on CorrelationId\n| project-away CorrelationId1\n| project-reorder TimeGenerated, OperationName, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserAgent, PermissionsAddedTo, Permissions, AppName, AppId, CorrelationId\n| extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
-        "name": "Mail.Read Permissions Granted to Application",
+        "description": "'This query look for applications that have been granted (Delegated or App/Role) permissions to Read Mail (Permissions field has Mail.Read) and subsequently has been consented to. This can help identify applications that have been abused to gain access to mailboxes.'\n",
         "queryPeriod": "1d",
+        "query": "AuditLogs\n| where Category =~ \"ApplicationManagement\"\n| where ActivityDisplayName has_any (\"Add delegated permission grant\",\"Add app role assignment to service principal\")  \n| where Result =~ \"success\"\n| where tostring(InitiatedBy.user.userPrincipalName) has \"@\" or tostring(InitiatedBy.app.displayName) has \"@\"\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)\n      | extend props = TargetResource.modifiedProperties,\n               Type = tostring(TargetResource.type),\n               PermissionsAddedTo = tostring(TargetResource.displayName)\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"DelegatedPermissionGrant.Scope\"\n      | extend DisplayName = tostring(Property.displayName), Permissions = trim('\"',tostring(Property.newValue))\n  )\n| where Permissions has_any (\"Mail.Read\", \"Mail.ReadWrite\")\n| mv-apply AdditionalDetail = AdditionalDetails on \n  (\n      where AdditionalDetail.key =~ \"User-Agent\"\n      | extend InitiatingUserAgent = tostring(AdditionalDetail.value)\n  )\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| project-away props, TargetResource, AdditionalDetail, Property\n| join kind=leftouter(\n  AuditLogs\n  | where ActivityDisplayName has \"Consent to application\"\n  | mv-apply TargetResource = TargetResources on \n      (\n          where TargetResource.type =~ \"ServicePrincipal\"\n          | extend AppName = tostring(TargetResource.displayName),\n                   AppId = tostring(TargetResource.id)\n      )\n| project AppName, AppId, CorrelationId) on CorrelationId\n| project-away CorrelationId1\n| project-reorder TimeGenerated, OperationName, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserAgent, PermissionsAddedTo, Permissions, AppName, AppId, CorrelationId\n| extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -32,46 +37,41 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAppServicePrincipalId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "InitiatingIpAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "triggerOperator": "gt",
-        "description": "'This query look for applications that have been granted (Delegated or App/Role) permissions to Read Mail (Permissions field has Mail.Read) and subsequently has been consented to. This can help identify applications that have been abused to gain access to mailboxes.'\n",
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryFrequency": "1d",
         "tactics": [
           "Persistence"
         ],
-        "status": "Available"
+        "name": "Mail.Read Permissions Granted to Application",
+        "queryFrequency": "1d"
       }
     }
   ]
