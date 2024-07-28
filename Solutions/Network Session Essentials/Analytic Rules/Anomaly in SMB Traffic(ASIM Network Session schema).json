@@ -18,28 +18,28 @@
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "queryPeriod": "14d",
+        "queryFrequency": "1d",
         "query": "// Define the threshold for deviation\nlet threshold = 50;\n// Define the time range for the baseline data\nlet starttime = 14d;\nlet endtime = 1d;\n// Define the SMB ports to monitor\nlet SMBPorts = dynamic([\"139\", \"445\"]);\n// Get the baseline data for user network sessions and Filter for the defined time range\nlet userBaseline = _Im_NetworkSession(starttime=ago(starttime), endtime=ago(endtime))\n  | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports\n  | summarize Count = count() by SrcIpAddr, DstPortNumber // Group by source IP and destination port\n  | summarize AvgCount = avg(Count) by SrcIpAddr, DstPortNumber; // Calculate the average count\n// Get the recent user activity data and Filter for recent activity\nlet recentUserActivity = _Im_NetworkSession(starttime=ago(endtime))\n  | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports\n  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by SrcIpAddr, DstPortNumber; // Group by source IP and destination port\n// Join the baseline and recent activity data\nlet UserBehaviorAnalysis = userBaseline\n  | join kind=inner (recentUserActivity) on SrcIpAddr, DstPortNumber\n  | extend Deviation = abs(RecentCount - AvgCount) / AvgCount; // Calculate the deviation\n// Filter for deviations greater than the threshold\nUserBehaviorAnalysis\n  | where Deviation > threshold\n  | project SrcIpAddr, DstPortNumber, Deviation, Count = RecentCount; // Project the required columns\n",
         "triggerOperator": "gt",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "Medium",
+        "name": "Anomaly in SMB Traffic(ASIM Network Session schema)",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "tactics": [
           "LateralMovement"
         ],
-        "name": "Anomaly in SMB Traffic(ASIM Network Session schema)",
-        "queryFrequency": "1d"
+        "triggerThreshold": 0,
+        "status": "Available",
+        "queryPeriod": "14d",
+        "severity": "Medium"
       }
     }
   ]

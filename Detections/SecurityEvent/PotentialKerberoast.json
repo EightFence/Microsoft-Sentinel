@@ -14,28 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "name": "Potential Kerberoasting",
-        "description": "'A service principal name (SPN) is used to uniquely identify a service instance in a Windows environment.\nEach SPN is usually associated with a service account. Organizations may have used service accounts with weak passwords in their environment.\nAn attacker can try requesting Kerberos ticket-granting service (TGS) service tickets for any SPN from a domain controller (DC) which contains a hash of the Service account. This can then be used for offline cracking.\nThis hunting query looks for accounts that are generating excessive requests to different resources within the last hour compared with the previous 24 hours.  Normal users would not make an unusually large number of request within a small time window. This is based on 4769 events which can be very noisy so environment based tweaking might be needed.'\n",
         "tactics": [
           "CredentialAccess"
         ],
-        "queryFrequency": "1h",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "TargetAccount"
+                "columnName": "TargetAccount",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "TargetUserName"
+                "columnName": "TargetUserName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "TargetDomainName"
+                "columnName": "TargetDomainName",
+                "identifier": "NTDomain"
               }
             ],
             "entityType": "Account"
@@ -43,16 +39,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
               }
             ],
             "entityType": "Host"
@@ -60,22 +56,27 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ClientIPAddress"
+                "columnName": "ClientIPAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
+        "queryFrequency": "1h",
+        "description": "'A service principal name (SPN) is used to uniquely identify a service instance in a Windows environment.\nEach SPN is usually associated with a service account. Organizations may have used service accounts with weak passwords in their environment.\nAn attacker can try requesting Kerberos ticket-granting service (TGS) service tickets for any SPN from a domain controller (DC) which contains a hash of the Service account. This can then be used for offline cracking.\nThis hunting query looks for accounts that are generating excessive requests to different resources within the last hour compared with the previous 24 hours.  Normal users would not make an unusually large number of request within a small time window. This is based on 4769 events which can be very noisy so environment based tweaking might be needed.'\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
           "author": {
             "name": "Microsoft Security Research"
           },
           "source": {
             "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -85,8 +86,7 @@
           }
         },
         "query": "let starttime = 1d;\nlet endtime = 1h;\nlet prev23hThreshold = 4;\nlet prev1hThreshold = 15;\nlet Kerbevent = (union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated >= ago(starttime)\n| where EventID == 4769\n| parse EventData with * 'TicketEncryptionType\">' TicketEncryptionType \"<\" *\n| where TicketEncryptionType == '0x17'\n| parse EventData with * 'TicketOptions\">' TicketOptions \"<\" *\n| where TicketOptions == '0x40810000'\n| parse EventData with * 'Status\">' Status \"<\" *\n| where Status == '0x0'\n| parse EventData with * 'ServiceName\">' ServiceName \"<\" *\n| where ServiceName !contains \"$\" and ServiceName !contains \"krbtgt\"\n| parse EventData with * 'TargetUserName\">' TargetUserName \"<\" *\n| where TargetUserName !contains \"$@\" and TargetUserName !contains ServiceName\n| parse EventData with * 'IpAddress\">::ffff:' ClientIPAddress \"<\" *\n),\n(\nWindowsEvent\n| where TimeGenerated >= ago(starttime)\n| where EventID == 4769 and EventData has '0x17' and EventData has '0x40810000' and EventData has 'krbtgt'\n| extend TicketEncryptionType = tostring(EventData.TicketEncryptionType)\n| where TicketEncryptionType == '0x17'\n| extend TicketOptions = tostring(EventData.TicketOptions)\n| where TicketOptions == '0x40810000'\n| extend Status = tostring(EventData.Status)\n| where Status == '0x0'\n| extend ServiceName = tostring(EventData.ServiceName)\n| where ServiceName !contains \"$\" and ServiceName !contains \"krbtgt\"\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| where TargetUserName !contains \"$@\" and TargetUserName !contains ServiceName\n| extend ClientIPAddress = tostring(EventData.IpAddress)\n));\nlet Kerbevent23h = Kerbevent\n| where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)\n| summarize ServiceNameCountPrev23h = dcount(ServiceName), ServiceNameSet23h = makeset(ServiceName)\nby Computer, TargetUserName,TargetDomainName, ClientIPAddress, TicketOptions, TicketEncryptionType, Status\n| where ServiceNameCountPrev23h < prev23hThreshold;\nlet Kerbevent1h =\nKerbevent\n| where TimeGenerated >= ago(endtime)\n| summarize min(TimeGenerated), max(TimeGenerated), ServiceNameCountPrev1h = dcount(ServiceName), ServiceNameSet1h = makeset(ServiceName)\nby Computer, TargetUserName, TargetDomainName, ClientIPAddress, TicketOptions, TicketEncryptionType, Status;\nKerbevent1h\n| join kind=leftanti\n(\nKerbevent23h\n) on TargetUserName, TargetDomainName\n// Threshold value set above is based on testing, this value may need to be changed for your environment.\n| where ServiceNameCountPrev1h > prev1hThreshold\n| project StartTime = min_TimeGenerated, EndTime = max_TimeGenerated, TargetUserName, Computer, ClientIPAddress, TicketOptions,\nTicketEncryptionType, Status, ServiceNameCountPrev1h, ServiceNameSet1h, TargetDomainName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend TargetAccount = strcat(TargetDomainName,  \"\\\\\", TargetUserName)\n| project-away DomainIndex\n",
-        "queryPeriod": "1d",
-        "triggerOperator": "gt"
+        "name": "Potential Kerberoasting"
       }
     }
   ]
