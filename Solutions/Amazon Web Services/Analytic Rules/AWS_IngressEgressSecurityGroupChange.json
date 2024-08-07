@@ -14,19 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "Changes to AWS Security Group ingress and egress settings",
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "status": "Available",
         "description": "'A Security Group acts as a virtual firewall of an instance to control inbound and outbound traffic.\n Hence, ingress and egress settings changes to AWS Security Group should be monitored as these can expose the enviornment to new attack vectors.\nMore information: https://medium.com/@GorillaStack/the-most-important-aws-cloudtrail-security-events-to-track-a5b9873f8255. '\n",
-        "name": "Changes to AWS Security Group ingress and egress settings",
+        "severity": "Low",
+        "queryPeriod": "1d",
         "tactics": [
           "Persistence"
         ],
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
         "query": "let EventNameList = dynamic([ \"AuthorizeSecurityGroupEgress\", \"AuthorizeSecurityGroupIngress\", \"RevokeSecurityGroupEgress\", \"RevokeSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)\nby EventSource, EventName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,\nAdditionalEventData, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements\n| extend timestamp = StartTimeUtc\n",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -40,20 +41,19 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
-        ],
-        "queryPeriod": "1d",
-        "severity": "Low"
+        ]
       }
     }
   ]

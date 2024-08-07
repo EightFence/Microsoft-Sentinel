@@ -14,27 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "Semperis DSP RBAC Changes",
+        "queryFrequency": "30m",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "status": "Available",
         "description": "'Alerts when there are RBAC changes in the DSP system.'\n",
-        "name": "Semperis DSP RBAC Changes",
+        "severity": "Medium",
+        "queryPeriod": "30m",
         "tactics": [
           "PrivilegeEscalation",
           "Persistence"
         ],
-        "triggerOperator": "gt",
-        "queryFrequency": "30m",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "RBAC Change -- Alert from Semperis Directory Services Protector",
-          "alertDescriptionFormat": "A RBAC change was detected in the DSP system."
+          "alertDescriptionFormat": "A RBAC change was detected in the DSP system.",
+          "alertDisplayNameFormat": "RBAC Change -- Alert from Semperis Directory Services Protector"
         },
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
         "query": "Event \n| where Source == 'Semperis-Operation-Log' and EventID == 20012 \n| order by TimeGenerated desc\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')\n| extend det = column_ifexists('details', '')\n| parse det with \"Occured at (UTC): \" OccurredAt \"Session ID: \" SessionID \"Trustee Name: \" TrusteeName \"Correlation ID: \" CorrelationID \"Source: \" Source \"WebSite Target: \" WebSiteTarget \"Product: \" Product \"Component: \" Component \"AD Information: \" ADInformation \"Object GUID: \" ObjectGUID \"Attribute: \" Attribute \"Distinguished Name: \" DistinguishedName \"Additional Information: \"AdditionalInformation \"Operation Detail: \" OperationDetail \"operationName: \" operationName \"trustee: \" trustee \"personas: \" personas \"Status: \" status \"Granted: \" Granted \"Result: \" Result\n| extend _AccessGranted = iif(operationName contains \"CreateRbacIdentity\", \"Added\", \"Removed\")\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", trustee, tostring(substring(trustee, 1, strlen(trustee))))\n| extend _Identity = iif(operationName contains \"CreateRbacIdentity\", _Identity, replace_string(_Identity, \"'\", \"\"))\n| extend add_personas = replace_string(replace_string(replace_string(personas, \"{ Name = \", \"\"), \" }\", \"\"), \";\", \",\")\n| extend remove_personas = replace_string(personas, \";\", \",\")\n| extend grid_personas = iif(operationName contains \"CreateRbacIdentity\", add_personas, remove_personas)\n| extend date_to_sort = format_datetime(TimeGenerated, \"yyyy-mm-dd   HH:mm:ss\")\n| order by date_to_sort desc\n| extend NTDomain = tostring(split(UserName, '\\\\', 0)[0]), LoginUser = tostring(split(UserName, '\\\\', 1)[0])\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "LoginUser",
@@ -44,10 +45,10 @@
                 "columnName": "NTDomain",
                 "identifier": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "HostName",
@@ -57,11 +58,10 @@
                 "columnName": "DnsDomain",
                 "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
-        ],
-        "queryPeriod": "30m",
-        "severity": "Medium"
+        ]
       }
     }
   ]
