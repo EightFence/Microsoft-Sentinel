@@ -14,25 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "description": "'This detection mechanism identifies instances where requests are made to Discord CDN addresses for file extensions that are considered risky.\n  It triggers when a callout is made to a Discord server that has only been encountered once in your environment. The uniqueness of Discord servers is determined based on the server ID present in the request URL (DiscordServerId in the query).\n  Discord CDN has been utilized in numerous campaigns to download additional payloads, highlighting the importance of monitoring such activities.\n  The query includes a sample set of popular web script extensions (scriptExtensions), which should be customized to align with the specific requirements of your environment'\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "User '{{SrcUsername}}' with the IP address '{{SrcIpAddr}}' has been detected downloading potentially risky files from the Discord CDN",
-          "alertDescriptionFormat": " Client requested for URL '{{Url}}' that contains a files hosted on a recognized Discord Content Delivery Network (CDN) which are considered to be potentially risky. It is essential to investigate further to determine the nature of the files being requested and the intent of the users involved"
-        },
-        "name": "The download of potentially risky files from the Discord Content Delivery Network (CDN) (ASIM Web Session)",
         "triggerThreshold": 0,
+        "query": "let lookback = 1d;\nlet connectionThreshold = 1;\nlet RiskyFileExtensions = materialize(externaldata(Extensions: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw(\"Web_RiskyFileExtensions\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Extensions = tostring(WatchlistItem[\"Extensions\"])\n    | project Extensions\n    | where isnotempty(Extensions));\nlet CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;\nlet knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions\n    | where isnotempty(Extensions)\n    | summarize make_set(Extensions, 1000));\nlet discord=dynamic([\"cdn.discordapp.com\", \"media.discordapp.com\"]);\nlet WebData = _Im_WebSession(starttime=ago(lookback), url_has_any=discord, eventresult='Success')\n    | where isnotempty(Url)\n    | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname\n    | where Url has \"attachments\"\n    | extend DiscordServerId = extract(@\"\\/attachments\\/([0-9]+)\\/\", 1, Url);\nWebData\n| summarize\n    dcount(Url),\n    min(TimeGenerated),\n    max(TimeGenerated)\n    by DiscordServerId\n| join kind=inner (WebData) on DiscordServerId\n| where dcount_Url <= connectionThreshold and Url has_any (knownRiskyFileExtensions)\n| summarize EventCount = count()\n    by\n    EventStartTime=min_TimeGenerated,\n    EventEndTime=max_TimeGenerated,\n    SrcUsername,\n    SrcHostname,\n    SrcIpAddr,\n    Url\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n",
         "severity": "Medium",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
+        "name": "The download of potentially risky files from the Discord Content Delivery Network (CDN) (ASIM Web Session)",
+        "status": "Available",
         "tactics": [
           "CommandAndControl"
         ],
+        "description": "'This detection mechanism identifies instances where requests are made to Discord CDN addresses for file extensions that are considered risky.\n  It triggers when a callout is made to a Discord server that has only been encountered once in your environment. The uniqueness of Discord servers is determined based on the server ID present in the request URL (DiscordServerId in the query).\n  Discord CDN has been utilized in numerous campaigns to download additional payloads, highlighting the importance of monitoring such activities.\n  The query includes a sample set of popular web script extensions (scriptExtensions), which should be customized to align with the specific requirements of your environment'\n",
+        "customDetails": {
+          "EventStartTime": "EventStartTime",
+          "EventEndTime": "EventEndTime"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": " Client requested for URL '{{Url}}' that contains a files hosted on a recognized Discord Content Delivery Network (CDN) which are considered to be potentially risky. It is essential to investigate further to determine the nature of the files being requested and the intent of the users involved",
+          "alertDisplayNameFormat": "User '{{SrcUsername}}' with the IP address '{{SrcIpAddr}}' has been detected downloading potentially risky files from the Discord CDN"
+        },
+        "queryFrequency": "1d",
         "triggerOperator": "gt",
+        "queryPeriod": "1d",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "query": "let lookback = 1d;\nlet connectionThreshold = 1;\nlet RiskyFileExtensions = materialize(externaldata(Extensions: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw(\"Web_RiskyFileExtensions\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Extensions = tostring(WatchlistItem[\"Extensions\"])\n    | project Extensions\n    | where isnotempty(Extensions));\nlet CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;\nlet knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions\n    | where isnotempty(Extensions)\n    | summarize make_set(Extensions, 1000));\nlet discord=dynamic([\"cdn.discordapp.com\", \"media.discordapp.com\"]);\nlet WebData = _Im_WebSession(starttime=ago(lookback), url_has_any=discord, eventresult='Success')\n    | where isnotempty(Url)\n    | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname\n    | where Url has \"attachments\"\n    | extend DiscordServerId = extract(@\"\\/attachments\\/([0-9]+)\\/\", 1, Url);\nWebData\n| summarize\n    dcount(Url),\n    min(TimeGenerated),\n    max(TimeGenerated)\n    by DiscordServerId\n| join kind=inner (WebData) on DiscordServerId\n| where dcount_Url <= connectionThreshold and Url has_any (knownRiskyFileExtensions)\n| summarize EventCount = count()\n    by\n    EventStartTime=min_TimeGenerated,\n    EventEndTime=max_TimeGenerated,\n    SrcUsername,\n    SrcHostname,\n    SrcIpAddr,\n    Url\n| extend\n    Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),\n    UPNSuffix = iif(SrcUsername contains \"@\", tostring(split(SrcUsername, '@', 1)[0]), \"\")\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -74,11 +78,7 @@
             ],
             "entityType": "Host"
           }
-        ],
-        "customDetails": {
-          "EventEndTime": "EventEndTime",
-          "EventStartTime": "EventStartTime"
-        }
+        ]
       }
     }
   ]
