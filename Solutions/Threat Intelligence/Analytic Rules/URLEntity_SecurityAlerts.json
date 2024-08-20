@@ -14,37 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet URLRegex = \"((https?|ftp|ldap|wss?|file):\\\\/\\\\/(([\\\\:\\\\%\\\\w\\\\_\\\\-]+(\\\\.|@))*((xn--)?[a-zA-Z0-9\\\\-]+\\\\.)+(xn--[a-z0-9]+|[A-Za-z]+)|\\\\d{1,3}\\\\.\\\\d{1,3}\\\\.\\\\d{1,3}\\\\.\\\\d{0,3})[.,:\\\\w@?^=%&\\\\/~+#-]*[\\\\w@?^=%&\\\\/~+#-])\";\nlet SecurityEvents = materialize(SecurityAlert\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\" and ProductName == 'Azure Sentinel', true, false)\n  | where MSTI == false\n  // Extract URL from JSON data\n  | mv-expand parse_json(Entities)\n  | where isnotempty(Entities.Url) or isnotempty(Entities.Urls)\n  | extend Url = coalesce(Entities.Url, Entities.Urls)\n  | mv-expand Url\n  | extend Url = tolower(Url)\n  // Extract hostname from JSON data for entity mapping\n  | extend Compromised_Host = tostring(parse_json(ExtendedProperties).[\"Compromised Host\"])\n  | extend Alert_TimeGenerated = TimeGenerated);\nlet EventUrls = materialize(SecurityEvents | distinct Url | summarize make_list(Url));\nThreatIntelligenceIndicator\n| where isnotempty(Url)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend Url = tolower(Url)\n| where tolower(Url) in (EventUrls)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\" \n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (SecurityEvents) on Url\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName\n| project timestamp = Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host\n",
         "queryPeriod": "14d",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerOperator": "gt",
         "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in SecurityAlert data.'\n",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet URLRegex = \"((https?|ftp|ldap|wss?|file):\\\\/\\\\/(([\\\\:\\\\%\\\\w\\\\_\\\\-]+(\\\\.|@))*((xn--)?[a-zA-Z0-9\\\\-]+\\\\.)+(xn--[a-z0-9]+|[A-Za-z]+)|\\\\d{1,3}\\\\.\\\\d{1,3}\\\\.\\\\d{1,3}\\\\.\\\\d{0,3})[.,:\\\\w@?^=%&\\\\/~+#-]*[\\\\w@?^=%&\\\\/~+#-])\";\nlet SecurityEvents = materialize(SecurityAlert\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend MSTI = case(AlertName has \"TI map\" and VendorName == \"Microsoft\" and ProductName == 'Azure Sentinel', true, false)\n  | where MSTI == false\n  // Extract URL from JSON data\n  | mv-expand parse_json(Entities)\n  | where isnotempty(Entities.Url) or isnotempty(Entities.Urls)\n  | extend Url = coalesce(Entities.Url, Entities.Urls)\n  | mv-expand Url\n  | extend Url = tolower(Url)\n  // Extract hostname from JSON data for entity mapping\n  | extend Compromised_Host = tostring(parse_json(ExtendedProperties).[\"Compromised Host\"])\n  | extend Alert_TimeGenerated = TimeGenerated);\nlet EventUrls = materialize(SecurityEvents | distinct Url | summarize make_list(Url));\nThreatIntelligenceIndicator\n| where isnotempty(Url)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend Url = tolower(Url)\n| where tolower(Url) in (EventUrls)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\" \n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (SecurityEvents) on Url\n| where Alert_TimeGenerated < ExpirationDateTime\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName\n| project timestamp = Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host\n",
+        "name": "TI Map URL Entity to SecurityAlert Data",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Compromised_Host",
                 "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "name": "TI Map URL Entity to SecurityAlert Data",
-        "severity": "Medium"
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryFrequency": "1h"
       }
     }
   ]
