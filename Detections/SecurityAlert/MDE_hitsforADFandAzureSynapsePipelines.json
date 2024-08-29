@@ -14,20 +14,51 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "High",
-        "description": "'This query looks for Microsoft Defender for Endpoint detections related to the remote command execution attempts on Azure IR with Managed VNet or SHIR. \nIn Microsoft Sentinel, the SecurityAlerts table includes the name of the impacted device. Additionally, this query joins the DeviceInfo table to connect other information such as device group, IP address, signed in users, and others allowing analysts using Microsoft Sentinel to have more context related to the alert. \nReference: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-29972 , \nhttps://msrc-blog.microsoft.com/2022/05/09/vulnerability-mitigated-in-the-third-party-data-connector-used-in-azure-synapse-pipelines-and-azure-data-factory-cve-2022-29972'\n",
         "triggerThreshold": 0,
-        "queryFrequency": "1d",
+        "severity": "High",
         "tactics": [
           "InitialAccess"
         ],
         "queryPeriod": "1d",
-        "metadata": {
-          "support": {
-            "tier": "Community"
+        "description": "'This query looks for Microsoft Defender for Endpoint detections related to the remote command execution attempts on Azure IR with Managed VNet or SHIR. \nIn Microsoft Sentinel, the SecurityAlerts table includes the name of the impacted device. Additionally, this query joins the DeviceInfo table to connect other information such as device group, IP address, signed in users, and others allowing analysts using Microsoft Sentinel to have more context related to the alert. \nReference: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2022-29972 , \nhttps://msrc-blog.microsoft.com/2022/05/09/vulnerability-mitigated-in-the-third-party-data-connector-used-in-azure-synapse-pipelines-and-azure-data-factory-cve-2022-29972'\n",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "CompromisedEntity",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
+              }
+            ]
           },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "PublicIP",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerOperator": "gt",
+        "query": "let mde_threats = dynamic([\"Behavior:Win32/SuspAzureRequest.A\", \"Behavior:Win32/SuspAzureRequest.B\", \"Behavior:Win32/SuspAzureRequest.C\", \"Behavior:Win32/LaunchingSuspCMD.B\"]);\nDeviceInfo\n| extend DeviceName = tolower(DeviceName)\n| join kind=inner ( SecurityAlert\n| where ProviderName == \"MDATP\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)\n| where ThreatName in~ (mde_threats) or ThreatFamilyName in~ (mde_threats)\n| extend CompromisedEntity = tolower(CompromisedEntity)\n) on $left.DeviceName == $right.CompromisedEntity\n| summarize by bin(TimeGenerated, 1d), DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId, CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities\n| extend HostName = tostring(split(CompromisedEntity, \".\")[0]), DomainIndex = toint(indexof(CompromisedEntity, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(CompromisedEntity, DomainIndex + 1), CompromisedEntity)\n| project-away DomainIndex\n",
+        "name": "Microsoft Defender for Endpoint (MDE) signatures for Azure Synapse pipelines and Azure Data Factory",
+        "queryFrequency": "1d",
+        "metadata": {
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           },
           "author": {
             "name": "Microsoft Security Research"
@@ -37,38 +68,7 @@
               "Security - Threat Protection"
             ]
           }
-        },
-        "query": "let mde_threats = dynamic([\"Behavior:Win32/SuspAzureRequest.A\", \"Behavior:Win32/SuspAzureRequest.B\", \"Behavior:Win32/SuspAzureRequest.C\", \"Behavior:Win32/LaunchingSuspCMD.B\"]);\nDeviceInfo\n| extend DeviceName = tolower(DeviceName)\n| join kind=inner ( SecurityAlert\n| where ProviderName == \"MDATP\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)\n| where ThreatName in~ (mde_threats) or ThreatFamilyName in~ (mde_threats)\n| extend CompromisedEntity = tolower(CompromisedEntity)\n) on $left.DeviceName == $right.CompromisedEntity\n| summarize by bin(TimeGenerated, 1d), DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId, CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities\n| extend HostName = tostring(split(CompromisedEntity, \".\")[0]), DomainIndex = toint(indexof(CompromisedEntity, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(CompromisedEntity, DomainIndex + 1), CompromisedEntity)\n| project-away DomainIndex\n",
-        "triggerOperator": "gt",
-        "name": "Microsoft Defender for Endpoint (MDE) signatures for Azure Synapse pipelines and Azure Data Factory",
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "CompromisedEntity"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "PublicIP"
-              }
-            ]
-          }
-        ]
+        }
       }
     }
   ]
