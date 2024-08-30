@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bfe81463-814b-4fa5-9885-c95a579f1957')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bfe81463-814b-4fa5-9885-c95a579f1957')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "Exfiltration"
+        ],
+        "customDetails": {
+          "FilesList": "dirlist",
+          "TransferCount": "count_distinct_ObjectId"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserId",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "ClientIp",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "columnName": "DirSample",
+                "identifier": "Name"
+              }
+            ]
+          }
+        ],
+        "query": "let threshold = 500;\nEnrichedMicrosoft365AuditLogs\n| where Workload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any(\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| extend EventSource = tostring(parse_json(tostring(AdditionalProperties)).EventSource)\n| extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)\n| summarize count_distinct_ObjectId = dcount(ObjectId), dirlist = make_set(ObjectId, 10000) by UserId, ClientIp, UserAgent, bin(TimeGenerated, 15m)\n| where count_distinct_ObjectId >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "queryFrequency": "15m",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [],
+            "matchingMethod": "Selected",
+            "lookbackDuration": "5h",
+            "enabled": true,
+            "groupByEntities": [
+              "Account"
+            ],
+            "groupByCustomDetails": []
+          },
+          "createIncident": true
+        },
+        "queryPeriod": "15m",
+        "description": "Identifies Office365 Sharepoint File Transfers with a distinct folder count above a certain threshold in a 15-minute time period.\nPlease note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.\n",
+        "name": "Office365 Sharepoint File Transfer Above Threshold"
+      }
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/194dd92e-d6e7-4249-85a5-273350a7f5ce')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/194dd92e-d6e7-4249-85a5-273350a7f5ce')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserId",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountNTDomain",
+                "identifier": "Name"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "ClientIP",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "query": "EnrichedMicrosoft365AuditLogs\n| where Workload =~ \"Exchange\"\n| where UserType in~ (\"Admin\", \"DcAdmin\")\n| where Operation =~ \"Set-AdminAuditLogConfig\"\n| extend AdminAuditLogEnabledValue = tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(tostring(AdditionalProperties.Parameters)), 3, 3)))[0])).Value)\n| where AdminAuditLogEnabledValue =~ \"False\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = SourceIp, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters), AdminAuditLogEnabledValue\n| extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)\n| extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')\n| extend AccountName = iff(UserId contains '\\\\', tostring(split(UserId, '\\\\')[1]), AccountName)\n| extend AccountNTDomain = iff(UserId contains '\\\\', tostring(split(UserId, '\\\\')[0]), '')\n",
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "severity": "Medium",
+        "queryPeriod": "1d",
+        "description": "'Identifies when the exchange audit logging has been disabled which may be an adversary attempt to evade detection or avoid other defenses.'\n",
+        "name": "Exchange AuditLog Disabled",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}

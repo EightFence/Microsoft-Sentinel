@@ -1,0 +1,94 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bff093b2-500e-4ae5-bb49-a5b1423cbd5b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bff093b2-500e-4ae5-bb49-a5b1423cbd5b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "Persistence"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "MemberAdded_Removed",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "MemberAdded_RemovedAccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "MemberAddedAccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserWhoAdded",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "UserWhoAddedAccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UserWhoAddedAccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserWhoDeleted",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "UserWhoDeletedAccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UserWhoDeletedAccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "ClientIp",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "query": "let TeamsAddDel = (Op:string){\nEnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(AdditionalProperties.TeamName), ClientIP = SourceIp\n};\nlet TeamsAdd = TeamsAddDel(\"MemberAdded\")\n| project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDel = TeamsAddDel(\"MemberRemoved\")\n| project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nTeamsAdd\n| join kind = inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "severity": "Low",
+        "queryPeriod": "1h",
+        "description": "This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.\n",
+        "name": "External User Added and Removed in Short Timeframe",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f6a8d6a5-3e9f-47c8-a8d5-1b2b9d3b7d6a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f6a8d6a5-3e9f-47c8-a8d5-1b2b9d3b7d6a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "DefenseEvasion",
+          "Exfiltration",
+          "CommandAndControl"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "FqdnCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "query": "let LearningPeriod = 7d;\nlet RunTime = 1d;\nlet StartLearningPeriod = ago(LearningPeriod + RunTime);\nlet EndRunTime = ago(RunTime);\nlet LearningPortToProtocol = \n  NetworkAccessTraffic\n  | where TimeGenerated between (StartLearningPeriod .. EndRunTime)\n  | where isnotempty(DestinationPort)\n  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;\nlet AlertTimePortToProtocol = \n  NetworkAccessTraffic\n  | where TimeGenerated between (EndRunTime .. now())\n  | where isnotempty(DestinationPort)\n  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;\nAlertTimePortToProtocol\n  | join kind=leftouter (LearningPortToProtocol) on $left.AlertTimeDstPort == $right.LearningTimeDstPort and $left.SourceIp == $right.SourceIp and $left.DestinationFqdn == $right.DestinationFqdn\n  | where isnull(LearningTimeProtocol) or LearningTimeProtocol != AlertTimeProtocol\n  | project AlertTimeDstPort, AlertTimeProtocol, LearningTimeProtocol, SourceIp, DestinationFqdn\n  | extend IPCustomEntity = SourceIp, FqdnCustomEntity = DestinationFqdn\n",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "severity": "Medium",
+        "queryPeriod": "8d",
+        "description": "Identifies changes in the protocol used for specific destination ports, comparing the current runtime with a learned baseline. This can indicate potential protocol misuse or configuration changes.\n",
+        "name": "Detect Protocol Changes for Destination Ports",
+        "Configurable Parameters": [
+          "Learning period - the time range to establish the baseline. Default is set to 7 days.",
+          "Run time - the time range for current analysis. Default is set to 1 day."
+        ],
+        "triggerThreshold": 1
+      }
+    }
+  ]
+}
