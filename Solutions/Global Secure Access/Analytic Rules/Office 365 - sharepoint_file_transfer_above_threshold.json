@@ -18,6 +18,9 @@
           "FilesList": "fileslist",
           "TransferCount": "count_distinct_ObjectId"
         },
+        "query": "let threshold = 5000;\nEnrichedMicrosoft365AuditLogs\n| where Workload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any(\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_ObjectId=dcount(ObjectId), fileslist=make_set(ObjectId, 10000) by UserId, ClientIp, bin(TimeGenerated, 15m)\n| where count_distinct_ObjectId >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "description": "Identifies Office365 Sharepoint File Transfers above a certain threshold in a 15-minute time period.\nPlease note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.\n",
+        "name": "Office365 Sharepoint File Transfer Above Threshold",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -55,31 +58,28 @@
             ]
           }
         ],
-        "triggerOperator": "gt",
-        "queryPeriod": "15m",
-        "severity": "Medium",
-        "description": "Identifies Office365 Sharepoint File Transfers above a certain threshold in a 15-minute time period.\nPlease note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.\n",
-        "triggerThreshold": 0,
         "tactics": [
           "Exfiltration"
         ],
-        "query": "let threshold = 5000;\nEnrichedMicrosoft365AuditLogs\n| where Workload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any(\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_ObjectId=dcount(ObjectId), fileslist=make_set(ObjectId, 10000) by UserId, ClientIp, bin(TimeGenerated, 15m)\n| where count_distinct_ObjectId >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "severity": "Medium",
         "queryFrequency": "15m",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
             "enabled": true,
-            "groupByAlertDetails": [],
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "5h",
             "groupByEntities": [
               "Account"
             ],
-            "lookbackDuration": "5h",
             "groupByCustomDetails": [],
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
+            "groupByAlertDetails": []
+          }
         },
-        "name": "Office365 Sharepoint File Transfer Above Threshold"
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "queryPeriod": "15m"
       }
     }
   ]
