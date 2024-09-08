@@ -14,28 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess"
+        ],
+        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "severity": "Medium",
         "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Resarch"
+          },
           "categories": {
             "domains": [
               "Security - Network"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
           "support": {
             "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Resarch"
           }
         },
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
+        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect and could indicate credential compromise for the user account.'\n",
         "queryPeriod": "1d",
+        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserPrincipalName",
@@ -49,26 +56,19 @@
                 "columnName": "AccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIP",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect and could indicate credential compromise for the user account.'\n",
-        "severity": "Medium",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
-        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n"
+        "triggerThreshold": 0
       }
     }
   ]

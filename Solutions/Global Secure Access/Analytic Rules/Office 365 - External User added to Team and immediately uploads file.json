@@ -14,14 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
-        "name": "Accessed files shared by temporary external user",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -35,10 +30,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "MemberAddedAccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -52,10 +47,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UserWhoAddedAccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -69,25 +64,30 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UserWhoDeletedAccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "query": "let fileAccessThreshold = 10;\nEnrichedMicrosoft365AuditLogs\n| where Workload =~ \"MicrosoftTeams\"\n| where Operation =~ \"MemberAdded\"\n| extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)\n| where MemberAdded contains \"#EXT#\"\n| project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n| join kind=inner (\n    EnrichedMicrosoft365AuditLogs\n    | where Workload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"MemberRemoved\"\n    | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)\n    | where MemberAdded contains \"#EXT#\"\n    | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n) on MemberAdded, TeamName\n| where TimeDeleted > TimeAdded\n| join kind=inner (\n    EnrichedMicrosoft365AuditLogs\n    | where RecordType == \"SharePointFileOperation\"\n    | where Operation == \"FileUploaded\"\n    | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n    | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n    | join kind=inner (\n        EnrichedMicrosoft365AuditLogs\n        | where RecordType == \"SharePointFileOperation\"\n        | where Operation == \"FileAccessed\"\n        | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n        | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n        | summarize FileAccessCount = count() by ObjectId, TeamName\n        | where FileAccessCount > fileAccessThreshold\n    ) on ObjectId, TeamName\n) on MemberAdded, TeamName\n| project-away MemberAdded1, MemberAdded2, ObjectId1, Operation1, Operation2\n| extend MemberAddedAccountName = tostring(split(MemberAdded, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
+        "status": "Available",
+        "queryPeriod": "1h",
         "tactics": [
           "InitialAccess"
         ],
+        "name": "Accessed files shared by temporary external user",
+        "description": "'This detection identifies when an external user is added to a Team or Teams chat and shares a file which is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of suspicious activity.'\n",
         "severity": "Low",
-        "description": "'This detection identifies when an external user is added to a Team or Teams chat and shares a file which is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of suspicious activity.'\n"
+        "query": "let fileAccessThreshold = 10;\nEnrichedMicrosoft365AuditLogs\n| where Workload =~ \"MicrosoftTeams\"\n| where Operation =~ \"MemberAdded\"\n| extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)\n| where MemberAdded contains \"#EXT#\"\n| project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n| join kind=inner (\n    EnrichedMicrosoft365AuditLogs\n    | where Workload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"MemberRemoved\"\n    | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)\n    | where MemberAdded contains \"#EXT#\"\n    | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n) on MemberAdded, TeamName\n| where TimeDeleted > TimeAdded\n| join kind=inner (\n    EnrichedMicrosoft365AuditLogs\n    | where RecordType == \"SharePointFileOperation\"\n    | where Operation == \"FileUploaded\"\n    | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n    | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n    | join kind=inner (\n        EnrichedMicrosoft365AuditLogs\n        | where RecordType == \"SharePointFileOperation\"\n        | where Operation == \"FileAccessed\"\n        | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n        | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n        | summarize FileAccessCount = count() by ObjectId, TeamName\n        | where FileAccessCount > fileAccessThreshold\n    ) on ObjectId, TeamName\n) on MemberAdded, TeamName\n| project-away MemberAdded1, MemberAdded2, ObjectId1, Operation1, Operation2\n| extend MemberAddedAccountName = tostring(split(MemberAdded, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h"
       }
     }
   ]
