@@ -14,33 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "tactics": [
-          "Exfiltration"
-        ],
-        "name": "SharePointFileOperation via previously unseen IPs",
-        "status": "Available",
-        "description": "'Identifies anomalies using user behavior by setting a threshold for significant changes in file upload/download activities from new IP addresses. It establishes a baseline of typical behavior, compares it to recent activity, and flags deviations exceeding a default threshold of 25.'\n",
-        "queryFrequency": "1d",
-        "severity": "Medium",
         "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "query": "// Define a threshold for significant deviations\nlet threshold = 25;\n// Define the name for the SharePoint File Operation record type\nlet szSharePointFileOperation = \"SharePointFileOperation\";\n// Define an array of SharePoint operations of interest\nlet szOperations = dynamic([\"FileDownloaded\", \"FileUploaded\"]);\n// Define the start and end time for the analysis period\nlet starttime = 14d;\nlet endtime = 1d;\n// Define a baseline of normal user behavior\nlet userBaseline = OfficeActivity\n| where TimeGenerated between(ago(starttime)..ago(endtime))\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| where isnotempty(UserAgent)\n| summarize Count = count() by UserId, Operation, Site_Url, ClientIP\n| summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;\n// Get recent user activity\nlet recentUserActivity = OfficeActivity\n| where TimeGenerated > ago(endtime)\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| where isnotempty(UserAgent)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;\n// Join the baseline and recent activity, and calculate the deviation\nlet UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIP\n| extend Deviation = abs(RecentCount - AvgCount) / AvgCount;\n// Filter for significant deviations\nUserBehaviorAnalysis\n| where Deviation > threshold\n| project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount\n| order by Count desc, ClientIP asc, Operation asc, UserId asc\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserId",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserId"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               }
             ]
           },
@@ -48,8 +37,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ClientIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIP"
               }
             ]
           },
@@ -57,12 +46,23 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Site_Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Site_Url"
               }
             ]
           }
-        ]
+        ],
+        "queryFrequency": "1d",
+        "severity": "Medium",
+        "query": "// Define a threshold for significant deviations\nlet threshold = 25;\n// Define the name for the SharePoint File Operation record type\nlet szSharePointFileOperation = \"SharePointFileOperation\";\n// Define an array of SharePoint operations of interest\nlet szOperations = dynamic([\"FileDownloaded\", \"FileUploaded\"]);\n// Define the start and end time for the analysis period\nlet starttime = 14d;\nlet endtime = 1d;\n// Define a baseline of normal user behavior\nlet userBaseline = OfficeActivity\n| where TimeGenerated between(ago(starttime)..ago(endtime))\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| where isnotempty(UserAgent)\n| summarize Count = count() by UserId, Operation, Site_Url, ClientIP\n| summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIP;\n// Get recent user activity\nlet recentUserActivity = OfficeActivity\n| where TimeGenerated > ago(endtime)\n| where RecordType =~ szSharePointFileOperation\n| where Operation in~ (szOperations)\n| where isnotempty(UserAgent)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIP, OfficeObjectId, OfficeWorkload, UserAgent;\n// Join the baseline and recent activity, and calculate the deviation\nlet UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIP\n| extend Deviation = abs(RecentCount - AvgCount) / AvgCount;\n// Filter for significant deviations\nUserBehaviorAnalysis\n| where Deviation > threshold\n| project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIP, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount\n| order by Count desc, ClientIP asc, Operation asc, UserId asc\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "description": "'Identifies anomalies using user behavior by setting a threshold for significant changes in file upload/download activities from new IP addresses. It establishes a baseline of typical behavior, compares it to recent activity, and flags deviations exceeding a default threshold of 25.'\n",
+        "name": "SharePointFileOperation via previously unseen IPs",
+        "tactics": [
+          "Exfiltration"
+        ],
+        "queryPeriod": "14d"
       }
     }
   ]
