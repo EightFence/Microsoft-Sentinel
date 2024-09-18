@@ -14,6 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "IP",
@@ -34,17 +35,16 @@
             ]
           }
         ],
+        "description": "'This hunting queries identify an unusual increase of repo deletion activities adversaries may want to disrupt availability or compromise integrity by deleting business data.'\n",
+        "queryPeriod": "1d",
+        "name": "GitLab - Abnormal number of repositories deleted",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryFrequency": "1h",
         "tactics": [
           "Impact"
         ],
-        "description": "'This hunting queries identify an unusual increase of repo deletion activities adversaries may want to disrupt availability or compromise integrity by deleting business data.'\n",
-        "name": "GitLab - Abnormal number of repositories deleted",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
         "status": "Available",
-        "queryPeriod": "1d",
         "query": "let LearningPeriod = 7d;\nlet BinTime = 1h;\nlet RunTime = 1h;\nlet StartTime = 1h;\nlet NumberOfStds = 3;\nlet MinThreshold = 10.0;\nlet EndRunTime = StartTime - RunTime;\nlet EndLearningTime = StartTime + LearningPeriod;\nlet GitLabRepositoryDestroyEvents = (GitLabAudit\n| where RemoveAction == \"project\" or RemoveAction == \"repository\");\nGitLabRepositoryDestroyEvents\n| where TimeGenerated between (ago(EndLearningTime) .. ago(StartTime))\n| summarize count() by bin(TimeGenerated, BinTime)\n| summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)\n| extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)\n| extend Dummy = 1\n| join kind=innerunique (GitLabRepositoryDestroyEvents\n| where TimeGenerated between (ago(StartTime) .. ago(EndRunTime))\n| summarize CountInRunTime = count() by bin(TimeGenerated, BinTime)\n| extend Dummy = 1) on Dummy\n| project-away Dummy\n| where CountInRunTime > LearningThreshold\n"
       }
     }
