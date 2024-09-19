@@ -14,22 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "name": "Attempt to bypass conditional access rule in Microsoft Entra ID",
+        "triggerOperator": "gt",
+        "query": "let threshold = 1; // Modify this threshold value to reduce false positives based on your environment\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ \"failure\"\n| mv-apply CAP = parse_json(ConditionalAccessPolicies) on (\n  project ConditionalAccessPoliciesName = CAP.displayName, result = CAP.result\n  | where result =~ \"failure\"\n)\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend Status = strcat(StatusCode, \": \", ResultDescription)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status,10), StatusDetails = make_list(StatusDetails,50), IPAddresses = make_list(IPAddress,100), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId,100), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName,100)\nby UserPrincipalName, UserId, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type\n| where IPAddressCount > threshold and StatusDetails !has \"MFA successfully completed\"\n| mv-expand IPAddresses, Status, StatusDetails, CorrelationIds\n| extend Status = strcat(Status, \" \", StatusDetails)\n| summarize IPAddresses = make_set(IPAddresses,100), Status = make_set(Status,10), CorrelationIds = make_set(CorrelationIds,100), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName,100)\nby StartTime, EndTime, UserPrincipalName, UserId, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type\n| extend IPAddressFirst = tostring(IPAddresses[0]), Name = tostring(split(UserPrincipalName, \"@\")[0]), UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -37,8 +39,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "UserId"
+                "columnName": "UserId",
+                "identifier": "AadUserId"
               }
             ]
           },
@@ -46,24 +48,22 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddressFirst"
+                "columnName": "IPAddressFirst",
+                "identifier": "Address"
               }
             ]
           }
         ],
         "description": "'Identifies an attempt to Bypass conditional access rule(s) in Microsoft Entra ID.\nThe ConditionalAccessStatus column value details if there was an attempt to bypass Conditional Access or if the Conditional access rule was not satisfied (ConditionalAccessStatus == 1).\nReferences:\nhttps://docs.microsoft.com/azure/active-directory/conditional-access/overview\nhttps://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins\nhttps://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\nConditionalAccessStatus == 0 // Success\nConditionalAccessStatus == 1 // Failure\nConditionalAccessStatus == 2 // Not Applied\nConditionalAccessStatus == 3 // unknown'\n",
-        "severity": "Low",
-        "name": "Attempt to bypass conditional access rule in Microsoft Entra ID",
-        "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "query": "let threshold = 1; // Modify this threshold value to reduce false positives based on your environment\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where ConditionalAccessStatus == 1 or ConditionalAccessStatus =~ \"failure\"\n| mv-apply CAP = parse_json(ConditionalAccessPolicies) on (\n  project ConditionalAccessPoliciesName = CAP.displayName, result = CAP.result\n  | where result =~ \"failure\"\n)\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend Status = strcat(StatusCode, \": \", ResultDescription)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status,10), StatusDetails = make_list(StatusDetails,50), IPAddresses = make_list(IPAddress,100), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId,100), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName,100)\nby UserPrincipalName, UserId, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type\n| where IPAddressCount > threshold and StatusDetails !has \"MFA successfully completed\"\n| mv-expand IPAddresses, Status, StatusDetails, CorrelationIds\n| extend Status = strcat(Status, \" \", StatusDetails)\n| summarize IPAddresses = make_set(IPAddresses,100), Status = make_set(Status,10), CorrelationIds = make_set(CorrelationIds,100), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName,100)\nby StartTime, EndTime, UserPrincipalName, UserId, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type\n| extend IPAddressFirst = tostring(IPAddresses[0]), Name = tostring(split(UserPrincipalName, \"@\")[0]), UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "queryFrequency": "1d",
+        "triggerThreshold": 0,
         "tactics": [
           "InitialAccess",
           "Persistence"
         ],
-        "status": "Available"
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "status": "Available",
+        "severity": "Low"
       }
     }
   ]
