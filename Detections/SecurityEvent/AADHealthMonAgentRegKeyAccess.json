@@ -14,9 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "severity": "Medium",
+        "queryFrequency": "1d",
         "triggerOperator": "gt",
+        "tactics": [
+          "Collection"
+        ],
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
         "metadata": {
           "categories": {
             "domains": [
@@ -24,60 +28,56 @@
               "Identity"
             ]
           },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
           "source": {
             "kind": "Community"
           },
           "support": {
             "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
           }
         },
-        "tactics": [
-          "Collection"
-        ],
-        "name": "Microsoft Entra ID Health Monitoring Agent Registry Keys Access",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Account"
+                "columnName": "Account",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "NTDomain"
+                "columnName": "NTDomain",
+                "identifier": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
+        "severity": "Medium",
+        "query": "// ADHealth Monitoring Agent Registry Key\nlet aadHealthMonAgentRegKey = \"\\\\REGISTRY\\\\MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Microsoft Online\\\\Reporting\\\\MonitoringAgent\";\n// Filter out known processes\nlet aadConnectHealthProcs = dynamic ([\n    'Microsoft.Identity.Health.Adfs.DiagnosticsAgent.exe',\n    'Microsoft.Identity.Health.Adfs.InsightsService.exe',\n    'Microsoft.Identity.Health.Adfs.MonitoringAgent.Startup.exe',\n    'Microsoft.Identity.Health.Adfs.PshSurrogate.exe',\n    'Microsoft.Identity.Health.Common.Clients.ResourceMonitor.exe',\n    'Microsoft.Identity.Health.AadSync.MonitoringAgent.Startup.exe',\n    'Microsoft.Identity.AadConnect.Health.AadSync.Host.exe',\n    'Microsoft.Azure.ActiveDirectory.Synchronization.Upgrader.exe',\n    'miiserver.exe'\n]);\n(union isfuzzy=true\n(\nSecurityEvent\n| where EventID == '4656'\n| where EventData has aadHealthMonAgentRegKey\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)\n| extend ObjectName = column_ifexists(\"ObjectName\", \"\"),\n    ObjectType = column_ifexists(\"ObjectType\", \"\")\n| where ObjectType == 'Key'\n| where ObjectName == aadHealthMonAgentRegKey\n| extend SubjectUserName = column_ifexists(\"SubjectUserName\", \"\"),\n    SubjectDomainName = column_ifexists(\"SubjectDomainName\", \"\"),\n    ProcessName = column_ifexists(\"ProcessName\", \"\")\n| extend Process = split(ProcessName, '\\\\', -1)[-1],\n    Account = strcat(SubjectDomainName, \"\\\\\", SubjectUserName)\n| where Process !in (aadConnectHealthProcs)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n),\n(\nWindowsEvent\n| where EventID == '4656' and EventData has aadHealthMonAgentRegKey\n| extend ObjectType = tostring(EventData.ObjectType)\n| where ObjectType == 'Key'\n| extend ObjectName = tostring(EventData.ObjectName)\n| where ObjectName == aadHealthMonAgentRegKey\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend Process = tostring(split(ProcessName, '\\\\')[-1])\n| where Process !in (aadConnectHealthProcs)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n),\n(\nSecurityEvent\n| where EventID == '4663'\n| where ObjectType == 'Key'\n| where ObjectName == aadHealthMonAgentRegKey\n| extend Process = tostring(split(ProcessName, '\\\\', -1)[-1])\n| where Process !in (aadConnectHealthProcs)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n),\n  (\nWindowsEvent\n| where EventID == '4663' and EventData has aadHealthMonAgentRegKey\n| extend ObjectType = tostring(EventData.ObjectType)\n| where ObjectType == 'Key'\n| extend ObjectName = tostring(EventData.ObjectName)\n| where ObjectName == aadHealthMonAgentRegKey\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend Process = tostring(split(ProcessName, '\\\\')[-1])\n| where Process !in (aadConnectHealthProcs)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n)\n)\n// You can filter out potential machine accounts\n//| where AccountType != 'Machine'\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend Name = tostring(split(Account, \"\\\\\")[1]), NTDomain = tostring(split(Account, \"\\\\\")[0])\n| project-away DomainIndex\n",
         "description": "'This detection uses Windows security events to detect suspicious access attempts to the registry key of Microsoft Entra ID Health monitoring agent.\nThis detection requires an access control entry (ACE) on the system access control list (SACL) of the following securable object HKLM\\SOFTWARE\\Microsoft\\Microsoft Online\\Reporting\\MonitoringAgent.\nYou can find more information in here https://github.com/OTRF/Set-AuditRule/blob/master/rules/registry/aad_connect_health_monitoring_agent.yml\n'\n",
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "query": "// ADHealth Monitoring Agent Registry Key\nlet aadHealthMonAgentRegKey = \"\\\\REGISTRY\\\\MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Microsoft Online\\\\Reporting\\\\MonitoringAgent\";\n// Filter out known processes\nlet aadConnectHealthProcs = dynamic ([\n    'Microsoft.Identity.Health.Adfs.DiagnosticsAgent.exe',\n    'Microsoft.Identity.Health.Adfs.InsightsService.exe',\n    'Microsoft.Identity.Health.Adfs.MonitoringAgent.Startup.exe',\n    'Microsoft.Identity.Health.Adfs.PshSurrogate.exe',\n    'Microsoft.Identity.Health.Common.Clients.ResourceMonitor.exe',\n    'Microsoft.Identity.Health.AadSync.MonitoringAgent.Startup.exe',\n    'Microsoft.Identity.AadConnect.Health.AadSync.Host.exe',\n    'Microsoft.Azure.ActiveDirectory.Synchronization.Upgrader.exe',\n    'miiserver.exe'\n]);\n(union isfuzzy=true\n(\nSecurityEvent\n| where EventID == '4656'\n| where EventData has aadHealthMonAgentRegKey\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)\n| extend ObjectName = column_ifexists(\"ObjectName\", \"\"),\n    ObjectType = column_ifexists(\"ObjectType\", \"\")\n| where ObjectType == 'Key'\n| where ObjectName == aadHealthMonAgentRegKey\n| extend SubjectUserName = column_ifexists(\"SubjectUserName\", \"\"),\n    SubjectDomainName = column_ifexists(\"SubjectDomainName\", \"\"),\n    ProcessName = column_ifexists(\"ProcessName\", \"\")\n| extend Process = split(ProcessName, '\\\\', -1)[-1],\n    Account = strcat(SubjectDomainName, \"\\\\\", SubjectUserName)\n| where Process !in (aadConnectHealthProcs)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n),\n(\nWindowsEvent\n| where EventID == '4656' and EventData has aadHealthMonAgentRegKey\n| extend ObjectType = tostring(EventData.ObjectType)\n| where ObjectType == 'Key'\n| extend ObjectName = tostring(EventData.ObjectName)\n| where ObjectName == aadHealthMonAgentRegKey\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend Process = tostring(split(ProcessName, '\\\\')[-1])\n| where Process !in (aadConnectHealthProcs)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n),\n(\nSecurityEvent\n| where EventID == '4663'\n| where ObjectType == 'Key'\n| where ObjectName == aadHealthMonAgentRegKey\n| extend Process = tostring(split(ProcessName, '\\\\', -1)[-1])\n| where Process !in (aadConnectHealthProcs)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n),\n  (\nWindowsEvent\n| where EventID == '4663' and EventData has aadHealthMonAgentRegKey\n| extend ObjectType = tostring(EventData.ObjectType)\n| where ObjectType == 'Key'\n| extend ObjectName = tostring(EventData.ObjectName)\n| where ObjectName == aadHealthMonAgentRegKey\n| extend ProcessName = tostring(EventData.ProcessName)\n| extend Process = tostring(split(ProcessName, '\\\\')[-1])\n| where Process !in (aadConnectHealthProcs)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by EventID, Account, Computer, Process, SubjectUserName, SubjectDomainName, ObjectName, ObjectType, ProcessName\n)\n)\n// You can filter out potential machine accounts\n//| where AccountType != 'Machine'\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend Name = tostring(split(Account, \"\\\\\")[1]), NTDomain = tostring(split(Account, \"\\\\\")[0])\n| project-away DomainIndex\n"
+        "name": "Microsoft Entra ID Health Monitoring Agent Registry Keys Access"
       }
     }
   ]
