@@ -14,20 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "//Adjust this threshold to fit the environment\nlet signin_threshold = 5;\n//Make a list of all IPs with failed signins to AAD above our threshold\nlet aadFunc = (tableName:string){\nlet suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in ('127.0.0.1', '::1')\n| summarize count() by IPAddress\n| where count_ > signin_threshold\n| summarize make_set(IPAddress);\n//See if any of these IPs have sucessfully logged into *nix hosts\nlet linux_logons =\nSyslog\n| where Facility contains \"auth\" and ProcessName != \"sudo\"\n| where SyslogMessage has \"Accepted\"\n| extend SourceIP = extract(\"(([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.(([0-9]{1,3})))\",1,SyslogMessage)\n| where SourceIP in (suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| project TimeGenerated, Computer, HostIP, IpAddress = SourceIP, SyslogMessage, Facility, ProcessName, Reason;\n//See if any of these IPs have sucessfully logged into Windows hosts\nlet win_logons = (union isfuzzy=true\n(SecurityEvent\n| where EventID == 4624\n| where LogonType in (10, 7, 3)\n| where IpAddress != \"-\"\n| where IpAddress in (suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, TargetUserName, TargetDomainName, _ResourceId, Reason\n),\n(WindowsEvent\n| where EventID == 4624 and has_any_ipv4(EventData, toscalar(suspicious_signins))\n| extend LogonType = tostring(EventData.LogonType)\n| where LogonType in (10, 7, 3)\n| extend  IpAddress = tostring(EventData.IpAddress)\n| where IpAddress != \"-\"\n| where IpAddress in (suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend Activity = \"4624 - An account was successfully logged on.\"\n| extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName)\n| extend Account =  strcat(TargetDomainName,\"\\\\\", TargetUserName)\n| extend TargetUserSid = tostring(EventData.TargetUserSid)\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend AccountType =case(Account endswith \"$\" or TargetUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(TargetUserSid), \"\", \"User\")\n| extend LogonProcessName = tostring(EventData.LogonProcessName)\n| project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, TargetUserSid, TargetUserName, TargetDomainName, _ResourceId, Reason\n)\n);\nunion isfuzzy=true linux_logons,win_logons\n| extend timestamp = TimeGenerated\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex+1), Computer)\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "queryFrequency": "1d",
         "description": "'Identifies a list of IP addresses with a minimum number (default of 5) of failed logon attempts to Microsoft Entra ID.\nUses that list to identify any successful remote logons to hosts from these IPs within the same timeframe.'\n",
-        "name": "Failed AzureAD logons but success logon to host",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "tactics": [
-          "InitialAccess",
-          "CredentialAccess"
-        ],
-        "queryPeriod": "1d",
+        "query": "//Adjust this threshold to fit the environment\nlet signin_threshold = 5;\n//Make a list of all IPs with failed signins to AAD above our threshold\nlet aadFunc = (tableName:string){\nlet suspicious_signins =\ntable(tableName)\n| where ResultType !in (\"0\", \"50125\", \"50140\")\n| where IPAddress !in ('127.0.0.1', '::1')\n| summarize count() by IPAddress\n| where count_ > signin_threshold\n| summarize make_set(IPAddress);\n//See if any of these IPs have sucessfully logged into *nix hosts\nlet linux_logons =\nSyslog\n| where Facility contains \"auth\" and ProcessName != \"sudo\"\n| where SyslogMessage has \"Accepted\"\n| extend SourceIP = extract(\"(([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.(([0-9]{1,3})))\",1,SyslogMessage)\n| where SourceIP in (suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| project TimeGenerated, Computer, HostIP, IpAddress = SourceIP, SyslogMessage, Facility, ProcessName, Reason;\n//See if any of these IPs have sucessfully logged into Windows hosts\nlet win_logons = (union isfuzzy=true\n(SecurityEvent\n| where EventID == 4624\n| where LogonType in (10, 7, 3)\n| where IpAddress != \"-\"\n| where IpAddress in (suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, TargetUserName, TargetDomainName, _ResourceId, Reason\n),\n(WindowsEvent\n| where EventID == 4624 and has_any_ipv4(EventData, toscalar(suspicious_signins))\n| extend LogonType = tostring(EventData.LogonType)\n| where LogonType in (10, 7, 3)\n| extend  IpAddress = tostring(EventData.IpAddress)\n| where IpAddress != \"-\"\n| where IpAddress in (suspicious_signins)\n| extend Reason = \"Multiple failed AAD logins from IP address\"\n| extend Activity = \"4624 - An account was successfully logged on.\"\n| extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName)\n| extend Account =  strcat(TargetDomainName,\"\\\\\", TargetUserName)\n| extend TargetUserSid = tostring(EventData.TargetUserSid)\n| extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n| extend AccountType =case(Account endswith \"$\" or TargetUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(TargetUserSid), \"\", \"User\")\n| extend LogonProcessName = tostring(EventData.LogonProcessName)\n| project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, TargetUserSid, TargetUserName, TargetDomainName, _ResourceId, Reason\n)\n);\nunion isfuzzy=true linux_logons,win_logons\n| extend timestamp = TimeGenerated\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex+1), Computer)\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Account",
@@ -41,10 +33,10 @@
                 "columnName": "TargetDomainName",
                 "identifier": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Computer",
@@ -58,32 +50,30 @@
                 "columnName": "HostNameDomain",
                 "identifier": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "_ResourceId",
                 "identifier": "AzureID"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IpAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "queryFrequency": "1d",
+        "queryPeriod": "1d",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "categories": {
             "domains": [
               "Security - Others",
@@ -93,10 +83,20 @@
           "author": {
             "name": "Microsoft Security Research"
           },
+          "support": {
+            "tier": "Community"
+          },
           "source": {
             "kind": "Community"
           }
-        }
+        },
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess"
+        ],
+        "severity": "Medium",
+        "name": "Failed AzureAD logons but success logon to host",
+        "triggerOperator": "gt"
       }
     }
   ]
