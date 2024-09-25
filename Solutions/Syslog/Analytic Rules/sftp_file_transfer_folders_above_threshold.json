@@ -14,16 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "description": "'Identifies SFTP File Transfers with distinct folder count above certain threshold in a 15min time period.\n It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
+        "queryFrequency": "15m",
         "query": "let threshold = 10;\nSyslog\n| where ProcessName has \"sftp\"\n    and SyslogMessage has \"close \"\n    and SyslogMessage has \" bytes read \"\n| parse SyslogMessage with \"close \\\"\" filepath \"\\\" bytes read \" readbytes: int \" written \" writtenbytes: int\n| parse kind=regex filepath with dirpath:string \"/\" filename:string\n| join kind=leftouter (\n    Syslog\n    | where ProcessName has \"sftp\" and SyslogMessage has \"session opened for\"\n    | parse SyslogMessage with \"session opened for local user \" username: string \" from [\" src_ip \"]\"\n    | project username, src_ip, ProcessID\n    )\n    on ProcessID\n| project-away ProcessID1\n| summarize count_distinct_dirpath=dcount(dirpath), dirlist=make_set(dirpath) by Computer, username, src_ip, bin(TimeGenerated, 15m)\n| where count_distinct_dirpath >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n",
+        "queryPeriod": "15m",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "username"
+                "columnName": "username",
+                "identifier": "Name"
               }
             ]
           },
@@ -31,8 +31,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "src_ip"
+                "columnName": "src_ip",
+                "identifier": "Address"
               }
             ]
           },
@@ -40,8 +40,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "HostName"
               }
             ]
           },
@@ -49,39 +49,39 @@
             "entityType": "File",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "DirSample"
+                "columnName": "DirSample",
+                "identifier": "Name"
               }
             ]
           }
         ],
-        "queryPeriod": "15m",
         "triggerOperator": "gt",
-        "tactics": [
-          "Exfiltration"
-        ],
-        "queryFrequency": "15m",
         "triggerThreshold": 0,
-        "name": "SFTP File transfer folder count above threshold",
+        "description": "'Identifies SFTP File Transfers with distinct folder count above certain threshold in a 15min time period.\n It requires SFTP VERBOSE loglevel to be enabled.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "groupByAlertDetails": [],
-            "matchingMethod": "Selected",
             "enabled": true,
             "groupByEntities": [
               "Account",
               "Host"
             ],
-            "groupByCustomDetails": [],
             "reopenClosedIncident": false,
-            "lookbackDuration": "5h"
-          },
-          "createIncident": true
+            "groupByAlertDetails": [],
+            "lookbackDuration": "5h",
+            "groupByCustomDetails": [],
+            "matchingMethod": "Selected"
+          }
         },
+        "name": "SFTP File transfer folder count above threshold",
+        "tactics": [
+          "Exfiltration"
+        ],
         "customDetails": {
           "TransferCount": "count_distinct_dirpath",
           "FilesList": "dirlist"
-        }
+        },
+        "severity": "Medium"
       }
     }
   ]
