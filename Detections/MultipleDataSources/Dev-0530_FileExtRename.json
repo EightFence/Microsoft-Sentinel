@@ -14,67 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ActorUserName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "AccountDomain",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DeviceName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "HostName",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "HostNameDomain",
-                "identifier": "DnsDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AlgorithmCustomEntity",
-                "identifier": "Algorithm"
-              },
-              {
-                "columnName": "FileHashCustomEntity",
-                "identifier": "Value"
-              }
-            ],
-            "entityType": "FileHash"
-          }
-        ],
-        "queryFrequency": "1d",
-        "description": "'Dev-0530 actors are known to encrypt the contents of the victims device as well as renaming the file extensions. This query looks for the creation of files with .h0lyenc extension or presence of ransom note.'\n",
-        "queryPeriod": "1d",
-        "query": "union isfuzzy=true\n    (DeviceFileEvents\n    | where ActionType == \"FileCreated\"\n    | where FileName endswith \".h0lyenc\" or FolderPath == \"C:\\\\FOR_DECRYPT.html\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n        by\n        AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain,\n        DeviceName,\n        Type,\n        InitiatingProcessId,\n        FileName,\n        FolderPath,\n        EventType = ActionType,\n        Commandline = InitiatingProcessCommandLine,\n        InitiatingProcessFileName,\n        InitiatingProcessSHA256,\n        FileHashCustomEntity = SHA256,\n        AlgorithmCustomEntity = \"SHA256\"\n    | extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n    | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n    ),\n    (imFileEvent\n    | where EventType == \"FileCreated\"\n    | where TargetFilePath endswith \".h0lyenc\" or TargetFilePath == \"C:\\\\FOR_DECRYPT.html\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n        by\n        ActorUsername,\n        DvcHostname,\n        DvcDomain,\n        DvcId,\n        Type,\n        EventType,\n        FileHashCustomEntity = TargetFileSHA256,\n        Hash,\n        TargetFilePath,\n        Commandline = ActingProcessCommandLine,\n        AlgorithmCustomEntity = \"SHA256\"\n    | extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountDomain = tostring(split(ActorUsername, @'\\')[0])\n    | extend HostName = DvcHostname, HostNameDomain = DvcDomain\n    | extend DeviceName = strcat(DvcHostname, \".\", DvcDomain )\n    )\n",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Impact"
-        ],
-        "triggerOperator": "gt",
         "metadata": {
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           },
           "author": {
             "name": "Microsoft Security Research"
@@ -83,13 +28,68 @@
             "domains": [
               "Security - Others"
             ]
-          },
-          "support": {
-            "tier": "Community"
           }
         },
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
         "name": "Dev-0530 File Extension Rename",
-        "severity": "High"
+        "queryFrequency": "1d",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "ActorUserName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "AccountDomain"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "DeviceName"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "HostNameDomain"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Algorithm",
+                "columnName": "AlgorithmCustomEntity"
+              },
+              {
+                "identifier": "Value",
+                "columnName": "FileHashCustomEntity"
+              }
+            ],
+            "entityType": "FileHash"
+          }
+        ],
+        "severity": "High",
+        "tactics": [
+          "Impact"
+        ],
+        "triggerThreshold": 0,
+        "query": "union isfuzzy=true\n    (DeviceFileEvents\n    | where ActionType == \"FileCreated\"\n    | where FileName endswith \".h0lyenc\" or FolderPath == \"C:\\\\FOR_DECRYPT.html\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n        by\n        AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain,\n        DeviceName,\n        Type,\n        InitiatingProcessId,\n        FileName,\n        FolderPath,\n        EventType = ActionType,\n        Commandline = InitiatingProcessCommandLine,\n        InitiatingProcessFileName,\n        InitiatingProcessSHA256,\n        FileHashCustomEntity = SHA256,\n        AlgorithmCustomEntity = \"SHA256\"\n    | extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n    | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n    ),\n    (imFileEvent\n    | where EventType == \"FileCreated\"\n    | where TargetFilePath endswith \".h0lyenc\" or TargetFilePath == \"C:\\\\FOR_DECRYPT.html\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n        by\n        ActorUsername,\n        DvcHostname,\n        DvcDomain,\n        DvcId,\n        Type,\n        EventType,\n        FileHashCustomEntity = TargetFileSHA256,\n        Hash,\n        TargetFilePath,\n        Commandline = ActingProcessCommandLine,\n        AlgorithmCustomEntity = \"SHA256\"\n    | extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountDomain = tostring(split(ActorUsername, @'\\')[0])\n    | extend HostName = DvcHostname, HostNameDomain = DvcDomain\n    | extend DeviceName = strcat(DvcHostname, \".\", DvcDomain )\n    )\n",
+        "description": "'Dev-0530 actors are known to encrypt the contents of the victims device as well as renaming the file extensions. This query looks for the creation of files with .h0lyenc extension or presence of ransom note.'\n"
       }
     }
   ]

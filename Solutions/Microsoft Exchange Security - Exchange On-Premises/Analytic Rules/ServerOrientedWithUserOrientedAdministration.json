@@ -14,16 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1d",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "userPrincipalName",
-                "identifier": "MailboxPrimaryAddress"
+                "identifier": "MailboxPrimaryAddress",
+                "columnName": "userPrincipalName"
               },
               {
-                "columnName": "userPrincipalName",
-                "identifier": "Upn"
+                "identifier": "Upn",
+                "columnName": "userPrincipalName"
               }
             ],
             "entityType": "Mailbox"
@@ -31,8 +32,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Computer"
               }
             ],
             "entityType": "Host"
@@ -40,8 +41,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "ServerCmdletTargetObject",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "ServerCmdletTargetObject"
               }
             ],
             "entityType": "Host"
@@ -49,31 +50,30 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Caller",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Caller"
               },
               {
-                "columnName": "objectGUID",
-                "identifier": "ObjectGuid"
+                "identifier": "ObjectGuid",
+                "columnName": "objectGUID"
               }
             ],
             "entityType": "Account"
           }
         ],
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nExchangeAdminAuditLogs \n  | where TimeGenerated > ago(2 * timeframe)\n  | where isempty(UserOriented)\n  | project serverExecutedTime = TimeGenerated,\n    ServerCmdlet = CmdletName,\n    ServerCmdletParams = CmdletParameters,\n    Computer,\n    Caller,\n    ServerCmdletTargetObject = TargetObject\n  | join kind= inner (\n      ExchangeAdminAuditLogs\n      | where TimeGenerated > ago(timeframe)\n      | where UserOriented =~ 'Yes'\n      | project userExecutedTime = TimeGenerated,\n        UserCmdlet = CmdletName,\n        UserCmdletParams = CmdletParameters,\n        Computer,\n        Caller,\n        UserCmdletTargetObject = TargetObject,\n        userPrincipalName,\n        objectGUID,\n        sAMAccountName,\n        IsVIP)\n    on Computer, Caller\n  | where userExecutedTime - serverExecutedTime < spanoftime\n  | extend TimeDelta = userExecutedTime - serverExecutedTime\n  | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime\n  | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold\n",
         "tactics": [
           "Exfiltration",
           "Persistence",
           "Collection"
         ],
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt",
-        "description": "'Detect if a server oriented cmdlet and a user oriented cmdlet that are monitored are launched by the same user in the same server within a 10 minutes timeframe'\n",
         "name": "Server Oriented Cmdlet And User Oriented Cmdlet used",
-        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nExchangeAdminAuditLogs \n  | where TimeGenerated > ago(2 * timeframe)\n  | where isempty(UserOriented)\n  | project serverExecutedTime = TimeGenerated,\n    ServerCmdlet = CmdletName,\n    ServerCmdletParams = CmdletParameters,\n    Computer,\n    Caller,\n    ServerCmdletTargetObject = TargetObject\n  | join kind= inner (\n      ExchangeAdminAuditLogs\n      | where TimeGenerated > ago(timeframe)\n      | where UserOriented =~ 'Yes'\n      | project userExecutedTime = TimeGenerated,\n        UserCmdlet = CmdletName,\n        UserCmdletParams = CmdletParameters,\n        Computer,\n        Caller,\n        UserCmdletTargetObject = TargetObject,\n        userPrincipalName,\n        objectGUID,\n        sAMAccountName,\n        IsVIP)\n    on Computer, Caller\n  | where userExecutedTime - serverExecutedTime < spanoftime\n  | extend TimeDelta = userExecutedTime - serverExecutedTime\n  | extend TimeDeltaInverse = serverExecutedTime - userExecutedTime\n  | where tolong(TimeDelta) >= threshold or tolong(TimeDeltaInverse) >= threshold\n"
+        "status": "Available",
+        "description": "'Detect if a server oriented cmdlet and a user oriented cmdlet that are monitored are launched by the same user in the same server within a 10 minutes timeframe'\n",
+        "severity": "High",
+        "triggerOperator": "gt"
       }
     }
   ]
