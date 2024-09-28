@@ -8,53 +8,53 @@
   },
   "resources": [
     {
-      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fbd72eb8-087e-466b-bd54-1ca6ea08c6d3')]",
-      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fbd72eb8-087e-466b-bd54-1ca6ea08c6d3')]",
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0f1f2b17-f9d6-4d2a-a0fb-a7ae1659e3eb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0f1f2b17-f9d6-4d2a-a0fb-a7ae1659e3eb')]",
       "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "triggerThreshold": 0,
+        "description": "Identifies if any tampering is done to either audit log, ATP Safelink, SafeAttachment, AntiPhish, or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy-based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserId",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserId"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ClientIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
         "tactics": [
           "Persistence",
           "DefenseEvasion"
         ],
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "Medium",
         "queryPeriod": "1d",
+        "query": "let opList = EnrichedMicrosoft365AuditLogs \n  | summarize by Operation\n  | where Operation has_any (\"Remove\", \"Disable\")\n  | where Operation contains \"AntiPhish\" or Operation contains \"SafeAttachment\" or Operation contains \"SafeLinks\" or Operation contains \"Dlp\" or Operation contains \"Audit\"\n  | summarize make_set(Operation, 500);\nEnrichedMicrosoft365AuditLogs\n  | where RecordType == \"ExchangeAdmin\"\n  | where UserType in~ (\"Admin\", \"DcAdmin\")\n  | where Operation in~ (opList)\n  | extend ClientIPOnly = case( \n      ClientIp has \".\", tostring(split(ClientIp, \":\")[0]), \n      ClientIp has \"[\", tostring(trim_start(@'[[]', tostring(split(ClientIp, \"]\")[0]))),\n      ClientIp\n    )  \n  | extend Port = case(\n      ClientIp has \".\", tostring(split(ClientIp, \":\")[1]),\n      ClientIp has \"[\", tostring(split(ClientIp, \"]:\")[1]),\n      \"\"\n    )\n  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)\n  | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
         "queryFrequency": "1d",
         "triggerOperator": "gt",
-        "description": "Identifies if any tampering is done to either audit log, ATP Safelink, SafeAttachment, AntiPhish, or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy-based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.\n",
-        "name": "Office Policy Tampering",
-        "query": "let opList = EnrichedMicrosoft365AuditLogs \n  | summarize by Operation\n  | where Operation has_any (\"Remove\", \"Disable\")\n  | where Operation contains \"AntiPhish\" or Operation contains \"SafeAttachment\" or Operation contains \"SafeLinks\" or Operation contains \"Dlp\" or Operation contains \"Audit\"\n  | summarize make_set(Operation, 500);\nEnrichedMicrosoft365AuditLogs\n  | where RecordType == \"ExchangeAdmin\"\n  | where UserType in~ (\"Admin\", \"DcAdmin\")\n  | where Operation in~ (opList)\n  | extend ClientIPOnly = case( \n      ClientIp has \".\", tostring(split(ClientIp, \":\")[0]), \n      ClientIp has \"[\", tostring(trim_start(@'[[]', tostring(split(ClientIp, \"]\")[0]))),\n      ClientIp\n    )  \n  | extend Port = case(\n      ClientIp has \".\", tostring(split(ClientIp, \":\")[1]),\n      ClientIp has \"[\", tostring(split(ClientIp, \"]:\")[1]),\n      \"\"\n    )\n  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)\n  | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n"
+        "severity": "Medium",
+        "name": "Office 365 - Office Policy Tampering"
       }
     }
   ]
