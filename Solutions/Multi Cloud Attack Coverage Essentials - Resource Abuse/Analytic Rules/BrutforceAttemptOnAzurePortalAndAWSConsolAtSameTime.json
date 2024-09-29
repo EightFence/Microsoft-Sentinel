@@ -14,11 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "description": "'This detection focuses on identifying potential cross-cloud brute force / Password Spray attempts involving Azure and AWS platforms. It monitors sign-in activities within the Azure Portal and AWS ConsoleLogins where brute force attempts are successful on both platforms in a synchronized manner.'\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "CredentialAccess"
+        ],
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -32,33 +33,32 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "tactics": [
-          "CredentialAccess"
-        ],
+        "query": "// Materialize a table named \"Azure_Bruforce\" containing Azure Portal sign-in logs within the last 1 day\nlet Azure_Bruforce =  materialize (\n    SigninLogs\n// Filter sign-in logs related to the Azure Portal\n      | where AppDisplayName == \"Azure Portal\"\n// Exclude entries with empty OriginalRequestId\n    | where isnotempty(OriginalRequestId)\n// Summarize various counts and sets based on brute force criteria\n    | summarize \n      AzureSuccessfulEvent = countif(ResultType == 0), \n      AzureFailedEvent = countif(ResultType != 0), \n      totalAzureLoginEventId = dcount(OriginalRequestId), \n      AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), \n      AzureSuccessfuleventsCount = dcountif(OriginalRequestId, ResultType == 0),\n      AzureSetOfFailedevents = makeset(iff(ResultType != 0, OriginalRequestId, \"\"), 5), \n      AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, \"\"), 5) \n      by \n      IPAddress, \n      UserPrincipalName, \n      bin(TimeGenerated, 1min), \n      UserAgent,\n      ConditionalAccessStatus,\n      OperationName,\n      RiskDetail,\n      AuthenticationRequirement,\n      ClientAppUsed\n// Extracting the name and UPN suffix from UserPrincipalName\n    | extend\n        Name = tostring(split(UserPrincipalName, '@')[0]),\n        UPNSuffix = tostring(split(UserPrincipalName, '@')[1]));\n// Materialize a table named \"AWS_Bruforce\" containing AWS CloudTrail events related to ConsoleLogins within the last 1 day\nlet AWS_Bruforce = materialize (\n    AWSCloudTrail \n// Filter CloudTrail events related to ConsoleLogin\n    | where EventName == \"ConsoleLogin\" \n// Extract ActionType from ResponseElements JSON\n    | extend ActionType = tostring(parse_json(ResponseElements).ConsoleLogin)  \n// Summarize various counts and sets based on  brute force criteria \n    | summarize \n        AWSSuccessful=countif(ActionType == \"Success\"), \n        AWSFailed = countif(ActionType == \"Failure\"), \n        totalAwsEventId= dcount(AwsEventId), \n        AWSFailedEventsCount = dcountif(AwsEventId, ActionType == \"Failure\"), \n        AWSSuccessfuleventsCount = dcountif(AwsEventId, ActionType == \"Success\"), \n        AWSFailedevents = makeset(iff(ActionType == \"Failure\", AwsEventId, \"\"), 5), \n        AWSSuccessfulEvents = makeset(iff(ActionType == \"Success\", AwsEventId, \"\"), 5)  \n// Grouping by various attributes\n        by \n        SourceIpAddress, \n        UserIdentityUserName,\n        bin(TimeGenerated, 1min), \n        UserAgent );\n// Joining the Azure_Bruforce and AWS_Bruforce tables on matching IP addresses and UserAgents\nAzure_Bruforce\n| join kind=inner AWS_Bruforce on $left.IPAddress == $right.SourceIpAddress and $left.UserAgent == $right.UserAgent\n// Filtering based on conditions for failed and successful events\n| where (AWSFailedEventsCount >= 4 and AzureFailedEventsCount >= 5) and ((AzureSuccessfuleventsCount >= 1 and AzureFailedEvent > AzureSuccessfulEvent) or (AWSSuccessfuleventsCount >= 1 and AWSFailedEventsCount > AWSSuccessfuleventsCount))\n",
         "customDetails": {
+          "AwsUser": "UserIdentityUserName",
           "UserAgent": "UserAgent",
           "AzureClientAppUsed": "ClientAppUsed",
-          "AwsUser": "UserIdentityUserName",
           "AzureUser": "UserPrincipalName"
         },
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "query": "// Materialize a table named \"Azure_Bruforce\" containing Azure Portal sign-in logs within the last 1 day\nlet Azure_Bruforce =  materialize (\n    SigninLogs\n// Filter sign-in logs related to the Azure Portal\n      | where AppDisplayName == \"Azure Portal\"\n// Exclude entries with empty OriginalRequestId\n    | where isnotempty(OriginalRequestId)\n// Summarize various counts and sets based on brute force criteria\n    | summarize \n      AzureSuccessfulEvent = countif(ResultType == 0), \n      AzureFailedEvent = countif(ResultType != 0), \n      totalAzureLoginEventId = dcount(OriginalRequestId), \n      AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), \n      AzureSuccessfuleventsCount = dcountif(OriginalRequestId, ResultType == 0),\n      AzureSetOfFailedevents = makeset(iff(ResultType != 0, OriginalRequestId, \"\"), 5), \n      AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, \"\"), 5) \n      by \n      IPAddress, \n      UserPrincipalName, \n      bin(TimeGenerated, 1min), \n      UserAgent,\n      ConditionalAccessStatus,\n      OperationName,\n      RiskDetail,\n      AuthenticationRequirement,\n      ClientAppUsed\n// Extracting the name and UPN suffix from UserPrincipalName\n    | extend\n        Name = tostring(split(UserPrincipalName, '@')[0]),\n        UPNSuffix = tostring(split(UserPrincipalName, '@')[1]));\n// Materialize a table named \"AWS_Bruforce\" containing AWS CloudTrail events related to ConsoleLogins within the last 1 day\nlet AWS_Bruforce = materialize (\n    AWSCloudTrail \n// Filter CloudTrail events related to ConsoleLogin\n    | where EventName == \"ConsoleLogin\" \n// Extract ActionType from ResponseElements JSON\n    | extend ActionType = tostring(parse_json(ResponseElements).ConsoleLogin)  \n// Summarize various counts and sets based on  brute force criteria \n    | summarize \n        AWSSuccessful=countif(ActionType == \"Success\"), \n        AWSFailed = countif(ActionType == \"Failure\"), \n        totalAwsEventId= dcount(AwsEventId), \n        AWSFailedEventsCount = dcountif(AwsEventId, ActionType == \"Failure\"), \n        AWSSuccessfuleventsCount = dcountif(AwsEventId, ActionType == \"Success\"), \n        AWSFailedevents = makeset(iff(ActionType == \"Failure\", AwsEventId, \"\"), 5), \n        AWSSuccessfulEvents = makeset(iff(ActionType == \"Success\", AwsEventId, \"\"), 5)  \n// Grouping by various attributes\n        by \n        SourceIpAddress, \n        UserIdentityUserName,\n        bin(TimeGenerated, 1min), \n        UserAgent );\n// Joining the Azure_Bruforce and AWS_Bruforce tables on matching IP addresses and UserAgents\nAzure_Bruforce\n| join kind=inner AWS_Bruforce on $left.IPAddress == $right.SourceIpAddress and $left.UserAgent == $right.UserAgent\n// Filtering based on conditions for failed and successful events\n| where (AWSFailedEventsCount >= 4 and AzureFailedEventsCount >= 5) and ((AzureSuccessfuleventsCount >= 1 and AzureFailedEvent > AzureSuccessfulEvent) or (AWSSuccessfuleventsCount >= 1 and AWSFailedEventsCount > AWSSuccessfuleventsCount))\n",
-        "triggerOperator": "gt",
+        "name": "Cross-Cloud Password Spray detection",
         "severity": "Medium",
-        "name": "Cross-Cloud Password Spray detection"
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "description": "'This detection focuses on identifying potential cross-cloud brute force / Password Spray attempts involving Azure and AWS platforms. It monitors sign-in activities within the Azure Portal and AWS ConsoleLogins where brute force attempts are successful on both platforms in a synchronized manner.'\n",
+        "queryPeriod": "1d"
       }
     }
   ]

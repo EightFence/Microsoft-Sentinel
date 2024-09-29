@@ -14,12 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "triggerThreshold": 0,
-        "description": "'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -29,10 +29,10 @@
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAppServicePrincipalId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -46,10 +46,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "TargetUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -63,40 +63,40 @@
                 "identifier": "UPNSuffix",
                 "columnName": "InitiatingAccountUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "InitiatingIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
+        "status": "Available",
         "customDetails": {
-          "TargetUser": "TargetUserPrincipalName",
-          "InitiatedByUser": "InitiatedByUser"
+          "InitiatedByUser": "InitiatedByUser",
+          "TargetUser": "TargetUserPrincipalName"
         },
-        "queryPeriod": "2h",
-        "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(TargetUserPrincipalName) by bin(TimeGenerated, 1h)\n| where dcount_TargetUserPrincipalName > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
-        "queryFrequency": "2h",
-        "triggerOperator": "gt",
+        "name": "Bulk Changes to Privileged Account Permissions",
         "severity": "High",
-        "name": "Bulk Changes to Privileged Account Permissions"
+        "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(TargetUserPrincipalName) by bin(TimeGenerated, 1h)\n| where dcount_TargetUserPrincipalName > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "2h",
+        "description": "'Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'\n",
+        "queryPeriod": "2h"
       }
     }
   ]
