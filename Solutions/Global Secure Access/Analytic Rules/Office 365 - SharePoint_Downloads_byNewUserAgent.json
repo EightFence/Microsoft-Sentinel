@@ -14,21 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "UserId",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserId"
               },
               {
-                "columnName": "UserIdName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "UserIdName"
               },
               {
-                "columnName": "UserIdUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UserIdUPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -36,8 +35,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "ClientIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIp"
               }
             ],
             "entityType": "IP"
@@ -45,24 +44,25 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Site_Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Site_Url"
               }
             ],
             "entityType": "URL"
           }
         ],
+        "queryFrequency": "1d",
+        "queryPeriod": "14d",
+        "name": "Office 365 - SharePointFileOperation via devices with previously unseen user agents",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "tactics": [
           "Exfiltration"
         ],
-        "name": "Office 365 - SharePointFileOperation via devices with previously unseen user agents",
-        "queryPeriod": "14d",
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "description": "Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25%).\n",
         "query": "// Set threshold for the number of downloads/uploads from a new user agent\nlet threshold = 5;\n// Define constants for SharePoint file operations\nlet szSharePointFileOperation = \"SharePointFileOperation\";\nlet szOperations = dynamic([\"FileDownloaded\", \"FileUploaded\"]);\n// Define the historical activity for analysis\nlet starttime = 14d; // Define the start time for historical data (14 days ago)\nlet endtime = 1d;   // Define the end time for historical data (1 day ago)\n// Extract the base events for analysis\nlet Baseevents =\n    EnrichedMicrosoft365AuditLogs\n    | where TimeGenerated between (ago(starttime) .. ago(endtime))\n    | where RecordType == szSharePointFileOperation\n    | where Operation in (szOperations)\n    | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)\n    | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)\n    | where isnotempty(UserAgent);\n// Identify frequently occurring user agents\nlet FrequentUA = Baseevents\n    | summarize FUACount = count() by UserAgent, RecordType, Operation\n    | where FUACount >= threshold\n    | distinct UserAgent;\n// Calculate a user baseline for further analysis\nlet UserBaseLine = Baseevents\n    | summarize Count = count() by UserId, Operation, Site_Url\n    | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;\n// Extract recent activity for analysis\nlet RecentActivity = EnrichedMicrosoft365AuditLogs\n    | where TimeGenerated > ago(endtime)\n    | where RecordType == szSharePointFileOperation\n    | where Operation in (szOperations)\n    | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)\n    | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)\n    | where isnotempty(UserAgent)\n    | where UserAgent in (FrequentUA)\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ObjectIdCount = dcount(ObjectId), ObjectIdList = make_set(ObjectId), UserAgentSeenCount = count()\n    by RecordType, Operation, UserAgent, UserId, ClientIp, Site_Url;\n// Analyze user behavior based on baseline and recent activity\nlet UserBehaviorAnalysis = UserBaseLine\n    | join kind=inner (RecentActivity) on UserId, Operation, Site_Url\n    | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;\n// Filter and format results for specific user behavior analysis\nUserBehaviorAnalysis\n    | where Deviation > 0.25\n    | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])\n    | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIp, Site_Url\n    | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc\n",
-        "status": "Available",
-        "triggerThreshold": 0
+        "description": "Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25%).\n",
+        "status": "Available"
       }
     }
   ]
