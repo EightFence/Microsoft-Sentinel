@@ -14,12 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "query": "// Identify sessions\nlet sessions = \n  NetworkAccessTraffic\n  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), SourceIps = make_set(SourceIp) by DeviceId, UserPrincipalName, SessionId\n  | sort by StartTime asc;\n// Check for changed IP addresses and overlapping session times\nsessions\n  | extend PreviousSourceIps = prev(SourceIps, 1)\n  | extend PreviousEndTime = prev(EndTime, 1)\n  | extend PreviousDeviceId = prev(DeviceId, 1)\n  | extend PreviousUserPrincipalName = prev(UserPrincipalName, 1)\n  | where DeviceId == PreviousDeviceId and UserPrincipalName == PreviousUserPrincipalName\n  | where set_difference(SourceIps, PreviousSourceIps) != dynamic([]) // Check if the current and previous IP sets differ\n  | where PreviousEndTime > StartTime // Check for overlapping session times\n  | project DeviceId, UserPrincipalName, SourceIps, PreviousSourceIps, StartTime, EndTime, PreviousEndTime\n  | extend IPCustomEntity = tostring(array_slice(SourceIps, 0, 1)[0]), PreviousIPCustomEntity = tostring(array_slice(PreviousSourceIps, 0, 1)[0]), AccountCustomEntity = UserPrincipalName\n",
+        "name": "Detect IP Address Changes and Overlapping Sessions",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "queryPeriod": "24h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountCustomEntity"
+                "columnName": "AccountCustomEntity",
+                "identifier": "Name"
               }
             ],
             "entityType": "Account"
@@ -27,24 +35,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPCustomEntity"
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryFrequency": "1h",
-        "queryPeriod": "24h",
-        "name": "Detect IP Address Changes and Overlapping Sessions",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "query": "// Identify sessions\nlet sessions = \n  NetworkAccessTraffic\n  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), SourceIps = make_set(SourceIp) by DeviceId, UserPrincipalName, SessionId\n  | sort by StartTime asc;\n// Check for changed IP addresses and overlapping session times\nsessions\n  | extend PreviousSourceIps = prev(SourceIps, 1)\n  | extend PreviousEndTime = prev(EndTime, 1)\n  | extend PreviousDeviceId = prev(DeviceId, 1)\n  | extend PreviousUserPrincipalName = prev(UserPrincipalName, 1)\n  | where DeviceId == PreviousDeviceId and UserPrincipalName == PreviousUserPrincipalName\n  | where set_difference(SourceIps, PreviousSourceIps) != dynamic([]) // Check if the current and previous IP sets differ\n  | where PreviousEndTime > StartTime // Check for overlapping session times\n  | project DeviceId, UserPrincipalName, SourceIps, PreviousSourceIps, StartTime, EndTime, PreviousEndTime\n  | extend IPCustomEntity = tostring(array_slice(SourceIps, 0, 1)[0]), PreviousIPCustomEntity = tostring(array_slice(PreviousSourceIps, 0, 1)[0]), AccountCustomEntity = UserPrincipalName\n",
         "description": "This query identifies network sessions based on DeviceId and UserPrincipalName, then checks for changed IP addresses and overlapping session times.\n",
+        "severity": "High",
+        "queryFrequency": "1h",
         "status": "Available"
       }
     }
