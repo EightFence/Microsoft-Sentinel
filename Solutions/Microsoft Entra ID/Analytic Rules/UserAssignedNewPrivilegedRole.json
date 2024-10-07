@@ -14,19 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "High",
-        "description": "'Identifies when a new eligible or active privileged role is assigned to a user. Does not alert on PIM activations. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n",
-        "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\", \"CreateRequestGrantedRole\", \"CreateRequestPermanentEligibleRole\", \"CreateRequestPermanentGrantedRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResourceSubject = TargetResources on \n  (\n      where TargetResourceSubject.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResourceSubject.type =~ \"ServicePrincipal\", tostring(TargetResourceSubject.displayName), tostring(TargetResourceSubject.userPrincipalName)),\n               subjectProps = TargetResourceSubject.modifiedProperties\n  )\n| mv-apply TargetResourceRole = TargetResources on \n  (\n    // mimic modifiedProperties so we can use the same logic to get the role name regardless of where it comes from\n    where TargetResourceRole.type in~ (\"Role\")\n    | extend roleProps = pack_array(bag_pack(\"displayName\",\"Role.DisplayName\", \"newValue\", TargetResourceRole.displayName))\n  )\n| mv-apply Property = iff(array_length(subjectProps) > 0, subjectProps, roleProps) on \n  ( \n    where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)\n// Comment below to alert for PIM activations\n| where Initiator != \"MS-PIM\"\n| summarize by bin(TimeGenerated, 1h), OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
-        "triggerThreshold": 0,
-        "queryPeriod": "2h",
-        "tactics": [
-          "Persistence"
-        ],
         "queryFrequency": "2h",
-        "triggerOperator": "gt",
+        "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\", \"CreateRequestGrantedRole\", \"CreateRequestPermanentEligibleRole\", \"CreateRequestPermanentGrantedRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResourceSubject = TargetResources on \n  (\n      where TargetResourceSubject.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResourceSubject.type =~ \"ServicePrincipal\", tostring(TargetResourceSubject.displayName), tostring(TargetResourceSubject.userPrincipalName)),\n               subjectProps = TargetResourceSubject.modifiedProperties\n  )\n| mv-apply TargetResourceRole = TargetResources on \n  (\n    // mimic modifiedProperties so we can use the same logic to get the role name regardless of where it comes from\n    where TargetResourceRole.type in~ (\"Role\")\n    | extend roleProps = pack_array(bag_pack(\"displayName\",\"Role.DisplayName\", \"newValue\", TargetResourceRole.displayName))\n  )\n| mv-apply Property = iff(array_length(subjectProps) > 0, subjectProps, roleProps) on \n  ( \n    where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)\n// Comment below to alert for PIM activations\n| where Initiator != \"MS-PIM\"\n| summarize by bin(TimeGenerated, 1h), OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -40,10 +31,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "TargetUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -57,38 +48,47 @@
                 "identifier": "UPNSuffix",
                 "columnName": "InitiatorUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAppServicePrincipalId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "InitiatingIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "name": "User Assigned New Privileged Role",
+        "severity": "High",
         "status": "Available",
-        "name": "User Assigned New Privileged Role"
+        "queryPeriod": "2h",
+        "description": "'Identifies when a new eligible or active privileged role is assigned to a user. Does not alert on PIM activations. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'\n",
+        "tactics": [
+          "Persistence"
+        ]
       }
     }
   ]
