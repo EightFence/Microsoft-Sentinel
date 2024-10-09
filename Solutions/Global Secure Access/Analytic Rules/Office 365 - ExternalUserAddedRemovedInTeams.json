@@ -14,13 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
         "severity": "Low",
-        "triggerOperator": "gt",
         "tactics": [
           "Persistence"
         ],
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "name": "Office 365 - External User Added and Removed in Short Timeframe",
+        "queryPeriod": "1h",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -34,10 +39,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "MemberAddedAccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -51,10 +56,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UserWhoAddedAccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -68,26 +73,21 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UserWhoDeletedAccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
+        "triggerOperator": "gt",
         "description": "This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.\n",
-        "name": "Office 365 - External User Added and Removed in Short Timeframe",
-        "triggerThreshold": 0,
-        "query": "let TeamsAddDel = (Op:string){\nEnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(AdditionalProperties.TeamName), ClientIP = SourceIp\n};\nlet TeamsAdd = TeamsAddDel(\"MemberAdded\")\n| project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDel = TeamsAddDel(\"MemberRemoved\")\n| project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nTeamsAdd\n| join kind = inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
-        "queryPeriod": "1h",
-        "queryFrequency": "1h",
-        "status": "Available"
+        "query": "let TeamsAddDel = (Op:string){\nEnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(AdditionalProperties.TeamName), ClientIP = SourceIp\n};\nlet TeamsAdd = TeamsAddDel(\"MemberAdded\")\n| project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDel = TeamsAddDel(\"MemberRemoved\")\n| project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nTeamsAdd\n| join kind = inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n"
       }
     }
   ]
