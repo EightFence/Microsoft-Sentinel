@@ -14,15 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies a match in DeviceNetworkEvents Event data from any IP Indicator from TI.'\n",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_ = DeviceNetworkEvents\n| where isnotempty(RemoteIP)\n| where TimeGenerated > ago(dt_lookBack)\n| where ActionType !has \"ConnectionFailed\"\n| extend isPrivate = ipv4_is_private(RemoteIP)\n| where isPrivate != true;\nlet IPs = DeviceNetworkEvents_ | distinct RemoteIP | summarize make_list(RemoteIP);\nThreatIntelligenceIndicator\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_ipEntity = coalesce(NetworkIP, EmailSourceIpAddress, NetworkDestinationIP, NetworkSourceIP)\n| where TI_ipEntity in (IPs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceNetworkEvents_) on $left.TI_ipEntity == $right.RemoteIP\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by IndicatorId, TI_ipEntity, DeviceName\n// DeviceName, TI_ipEntity, RemoteUrl, InitiatingProcessAccountUpn\n| extend timestamp = TimeGenerated, Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])\n",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "triggerOperator": "gt",
-        "queryPeriod": "14d",
+        "queryFrequency": "1h",
         "severity": "Medium",
         "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -65,8 +60,13 @@
             ]
           }
         ],
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "queryPeriod": "14d",
+        "description": "'Identifies a match in DeviceNetworkEvents Event data from any IP Indicator from TI.'\n",
         "name": "TI Map IP Entity to DeviceNetworkEvents",
-        "queryFrequency": "1h"
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_ = DeviceNetworkEvents\n| where isnotempty(RemoteIP)\n| where TimeGenerated > ago(dt_lookBack)\n| where ActionType !has \"ConnectionFailed\"\n| extend isPrivate = ipv4_is_private(RemoteIP)\n| where isPrivate != true;\nlet IPs = DeviceNetworkEvents_ | distinct RemoteIP | summarize make_list(RemoteIP);\nThreatIntelligenceIndicator\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_ipEntity = coalesce(NetworkIP, EmailSourceIpAddress, NetworkDestinationIP, NetworkSourceIP)\n| where TI_ipEntity in (IPs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceNetworkEvents_) on $left.TI_ipEntity == $right.RemoteIP\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by IndicatorId, TI_ipEntity, DeviceName\n// DeviceName, TI_ipEntity, RemoteUrl, InitiatingProcessAccountUpn\n| extend timestamp = TimeGenerated, Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])\n"
       }
     }
   ]
