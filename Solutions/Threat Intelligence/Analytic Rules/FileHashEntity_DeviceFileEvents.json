@@ -14,8 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelligenceIndicator\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n| where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where TimeGenerated < ExpirationDateTime\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId\n| project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, ThreatType, FileHashValue, FileHashType, ExpirationDateTime, ConfidenceScore, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated\n",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "RequestAccountName",
@@ -29,10 +39,10 @@
                 "columnName": "RequestAccountDomain",
                 "identifier": "NTDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "FileHashValue",
@@ -42,30 +52,20 @@
                 "columnName": "FileHashType",
                 "identifier": "Algorithm"
               }
-            ],
-            "entityType": "FileHash"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
                 "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ],
-        "queryPeriod": "14d",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "description": "'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'\n",
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelligenceIndicator\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n| where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where TimeGenerated < ExpirationDateTime\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId\n| project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, ThreatType, FileHashValue, FileHashType, ExpirationDateTime, ConfidenceScore, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated\n",
-        "triggerThreshold": 0,
-        "name": "TI map File Hash to DeviceFileEvents Event"
+        "name": "TI map File Hash to DeviceFileEvents Event",
+        "description": "'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'\n"
       }
     }
   ]

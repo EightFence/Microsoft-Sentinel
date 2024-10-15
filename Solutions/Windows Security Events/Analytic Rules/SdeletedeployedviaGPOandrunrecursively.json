@@ -14,9 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "query": "SecurityEvent\n  | where EventID == 4688\n  | where Process =~ \"svchost.exe\"\n  | where CommandLine has \"-k GPSvcGroup\" or CommandLine has \"-s gpsvc\"\n  | extend timekey = bin(TimeGenerated, 1m)\n  | project timekey, NewProcessId, Computer\n  | join kind=inner (SecurityEvent\n  | where EventID == 4688\n  | where Process =~ \"sdelete.exe\" or CommandLine has \"sdelete\"\n  | where ParentProcessName endswith \"svchost.exe\"\n  | where CommandLine has_all (\"-s\", \"-r\")\n  | extend newProcess = Process\n  | extend timekey = bin(TimeGenerated, 1m)\n  ) on $left.NewProcessId == $right.ProcessId, timekey, Computer\n  | extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n  | extend AccountName = tostring(split(TargetAccount, @'\\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\\')[0])\n",
+        "tactics": [
+          "Impact"
+        ],
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "TargetAccount",
@@ -30,10 +39,10 @@
                 "columnName": "AccountNTDomain",
                 "identifier": "NTDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Computer",
@@ -47,21 +56,12 @@
                 "columnName": "HostNameDomain",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ],
-        "queryPeriod": "1d",
-        "tactics": [
-          "Impact"
-        ],
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "description": "'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.'\n",
-        "triggerOperator": "gt",
-        "query": "SecurityEvent\n  | where EventID == 4688\n  | where Process =~ \"svchost.exe\"\n  | where CommandLine has \"-k GPSvcGroup\" or CommandLine has \"-s gpsvc\"\n  | extend timekey = bin(TimeGenerated, 1m)\n  | project timekey, NewProcessId, Computer\n  | join kind=inner (SecurityEvent\n  | where EventID == 4688\n  | where Process =~ \"sdelete.exe\" or CommandLine has \"sdelete\"\n  | where ParentProcessName endswith \"svchost.exe\"\n  | where CommandLine has_all (\"-s\", \"-r\")\n  | extend newProcess = Process\n  | extend timekey = bin(TimeGenerated, 1m)\n  ) on $left.NewProcessId == $right.ProcessId, timekey, Computer\n  | extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n  | extend AccountName = tostring(split(TargetAccount, @'\\')[1]), AccountNTDomain = tostring(split(TargetAccount, @'\\')[0])\n",
-        "triggerThreshold": 0,
-        "name": "Sdelete deployed via GPO and run recursively"
+        "name": "Sdelete deployed via GPO and run recursively",
+        "status": "Available",
+        "description": "'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.'\n"
       }
     }
   ]
