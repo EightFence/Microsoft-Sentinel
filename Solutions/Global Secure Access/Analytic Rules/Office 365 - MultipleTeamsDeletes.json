@@ -14,10 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "This detection flags the occurrences of deleting multiple teams within a day.\nThis data is a part of Office 365 Connector in Microsoft Sentinel.\n",
-        "triggerOperator": "gt",
+        "queryFrequency": "1d",
         "severity": "Low",
-        "triggerThreshold": 0,
+        "description": "This detection flags the occurrences of deleting multiple teams within a day.\nThis data is a part of Office 365 Connector in Microsoft Sentinel.\n",
+        "status": "Available",
+        "name": "GSA Enriched Office 365 - Multiple Teams deleted by a single user",
+        "triggerOperator": "gt",
+        "query": "// Set the maximum number of deleted teams to flag suspicious activity\nlet max_delete_count = 3;\n// EnrichedMicrosoft365AuditLogs Query\nlet EnrichedEvents = EnrichedMicrosoft365AuditLogs\n    | where Workload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"TeamDeleted\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(tostring(AdditionalProperties.TeamName), 1000) by UserId\n    | where array_length(DeletedTeams) > max_delete_count\n    | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n// OfficeActivity Query\nlet OfficeEvents = OfficeActivity\n    | where OfficeWorkload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"TeamDeleted\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName, 1000) by UserId\n    | where array_length(DeletedTeams) > max_delete_count\n    | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n// Combine and Deduplicate Office and Enriched Logs\nlet CombinedEvents = OfficeEvents\n    | union EnrichedEvents\n    | summarize arg_min(StartTime, *) by UserId;\n// Final Output\nCombinedEvents\n    | project StartTime, EndTime, DeletedTeams, UserId, AccountName, AccountUPNSuffix\n",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -37,14 +40,11 @@
             ]
           }
         ],
-        "name": "GSA Enriched Office 365 - Multiple Teams deleted by a single user",
-        "status": "Available",
-        "query": "// Set the maximum number of deleted teams to flag suspicious activity\nlet max_delete_count = 3;\n// EnrichedMicrosoft365AuditLogs Query\nlet EnrichedEvents = EnrichedMicrosoft365AuditLogs\n    | where Workload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"TeamDeleted\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(tostring(AdditionalProperties.TeamName), 1000) by UserId\n    | where array_length(DeletedTeams) > max_delete_count\n    | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n// OfficeActivity Query\nlet OfficeEvents = OfficeActivity\n    | where OfficeWorkload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"TeamDeleted\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName, 1000) by UserId\n    | where array_length(DeletedTeams) > max_delete_count\n    | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n// Combine and Deduplicate Office and Enriched Logs\nlet CombinedEvents = OfficeEvents\n    | union EnrichedEvents\n    | summarize arg_min(StartTime, *) by UserId;\n// Final Output\nCombinedEvents\n    | project StartTime, EndTime, DeletedTeams, UserId, AccountName, AccountUPNSuffix\n",
+        "queryPeriod": "1d",
         "tactics": [
           "Impact"
         ],
-        "queryPeriod": "1d",
-        "queryFrequency": "1d"
+        "triggerThreshold": 0
       }
     }
   ]
