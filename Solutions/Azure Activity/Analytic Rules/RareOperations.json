@@ -14,23 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Low",
-        "name": "Rare subscription-level operations in Azure",
+        "queryPeriod": "14d",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "status": "Available",
         "description": "'This query looks for a few sensitive subscription-level events based on Azure Activity Logs. For example, this monitors for the operation name 'Create or Update Snapshot', which is used for creating backups but could be misused by attackers to dump hashes or extract sensitive information from the disk.'\n",
+        "tactics": [
+          "CredentialAccess",
+          "Persistence"
+        ],
+        "name": "Rare subscription-level operations in Azure",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Caller"
+                "columnName": "Caller",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -38,23 +46,15 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryFrequency": "1d",
-        "queryPeriod": "14d",
         "query": "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations above which an IP address is considered an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\n// Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all\nlet SensitiveOperationList =  dynamic([\"microsoft.compute/snapshots/write\", \"microsoft.network/networksecuritygroups/write\", \"microsoft.storage/storageaccounts/listkeys/action\"]);\nlet SensitiveActivity = AzureActivity\n| where OperationNameValue in~ (SensitiveOperationList) or OperationNameValue hassuffix \"listkeys/action\"\n| where ActivityStatusValue =~ \"Success\";\nSensitiveActivity\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)\n| where count_ >= alertOperationThreshold\n// Returns all the records from the right side that don't have matches from the left\n| join kind = rightanti (\nSensitiveActivity\n| where TimeGenerated >= ago(endtime)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_list(TimeGenerated), ActivityStatusValue = make_list(ActivityStatusValue), CorrelationIds = make_list(CorrelationId), ResourceGroups = make_list(ResourceGroup), ResourceIds = make_list(_ResourceId), ActivityCountByCallerIPAddress = count()\nby CallerIpAddress, Caller, OperationNameValue\n| where ActivityCountByCallerIPAddress >= alertOperationThreshold\n) on CallerIpAddress, Caller, OperationNameValue\n| extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])\n",
-        "status": "Available",
-        "tactics": [
-          "CredentialAccess",
-          "Persistence"
-        ],
-        "triggerOperator": "gt",
-        "triggerThreshold": 0
+        "severity": "Low"
       }
     }
   ]
