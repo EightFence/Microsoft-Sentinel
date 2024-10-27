@@ -14,20 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1d;\nlet TotalEventsThreshold = 25;\nlet TimeSeriesData = AzureActivity \n| where TimeGenerated between (startofday(ago(starttime))..startofday(now())) \n| where OperationNameValue endswith \"delete\" \n| project TimeGenerated, Caller \n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by Caller;\nTimeSeriesData \n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') \n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) \n| where TimeGenerated >= startofday(ago(endtime)) \n| where anomalies > 0 \n| project Caller, TimeGenerated, Total, baseline, anomalies, score \n| where Total > TotalEventsThreshold and baseline > 0 \n| join (AzureActivity \n| where TimeGenerated > startofday(ago(endtime)) \n| where OperationNameValue endswith \"delete\" \n| summarize count(), make_set(OperationNameValue,100), make_set(_ResourceId,100) by bin(TimeGenerated, timeframe), Caller ) on TimeGenerated, Caller \n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
+        "name": "Mass Cloud resource deletions Time Series Anomaly",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Caller"
+                "columnName": "Caller",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -35,25 +38,22 @@
           {
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "AadUserId"
+                "columnName": "AadUserId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
           }
         ],
-        "status": "Available",
         "queryFrequency": "1d",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "triggerThreshold": 0,
+        "queryPeriod": "14d",
         "tactics": [
           "Impact"
         ],
-        "name": "Mass Cloud resource deletions Time Series Anomaly",
-        "queryPeriod": "14d",
-        "query": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1d;\nlet TotalEventsThreshold = 25;\nlet TimeSeriesData = AzureActivity \n| where TimeGenerated between (startofday(ago(starttime))..startofday(now())) \n| where OperationNameValue endswith \"delete\" \n| project TimeGenerated, Caller \n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by Caller;\nTimeSeriesData \n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') \n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) \n| where TimeGenerated >= startofday(ago(endtime)) \n| where anomalies > 0 \n| project Caller, TimeGenerated, Total, baseline, anomalies, score \n| where Total > TotalEventsThreshold and baseline > 0 \n| join (AzureActivity \n| where TimeGenerated > startofday(ago(endtime)) \n| where OperationNameValue endswith \"delete\" \n| summarize count(), make_set(OperationNameValue,100), make_set(_ResourceId,100) by bin(TimeGenerated, timeframe), Caller ) on TimeGenerated, Caller \n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
-        "description": "'This query generates the baseline pattern of cloud resource deletions by an individual and generates an anomaly when any unusual spike is detected. These anomalies from unusual or privileged users could be an indication of a cloud infrastructure takedown by an adversary.'\n"
+        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "'This query generates the baseline pattern of cloud resource deletions by an individual and generates an anomaly when any unusual spike is detected. These anomalies from unusual or privileged users could be an indication of a cloud infrastructure takedown by an adversary.'\n",
+        "severity": "Medium"
       }
     }
   ]
