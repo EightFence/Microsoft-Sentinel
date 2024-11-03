@@ -14,10 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "description": "'Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.\n This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.\nReference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/'\n",
-        "queryPeriod": "1d",
         "query": "let Keywords = dynamic([\"helpdesk\", \" alert\", \" suspicious\", \"fake\", \"malicious\", \"phishing\", \"spam\", \"do not click\", \"do not open\", \"hijacked\", \"Fatal\"]);\nOfficeActivity\n| where OfficeWorkload =~ \"Exchange\" \n| where Operation =~ \"New-InboxRule\" and (ResultStatus =~ \"True\" or ResultStatus =~ \"Succeeded\")\n| where Parameters has \"Deleted Items\" or Parameters has \"Junk Email\"  or Parameters has \"DeleteMessage\"\n| extend Events=todynamic(Parameters)\n| parse Events  with * \"SubjectContainsWords\" SubjectContainsWords '}'*\n| parse Events  with * \"BodyContainsWords\" BodyContainsWords '}'*\n| parse Events  with * \"SubjectOrBodyContainsWords\" SubjectOrBodyContainsWords '}'*\n| where SubjectContainsWords has_any (Keywords)\n or BodyContainsWords has_any (Keywords)\n or SubjectOrBodyContainsWords has_any (Keywords)\n| extend ClientIPAddress = case( ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))), ClientIP )\n| extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))\n| extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\\\')[-1]))\n| summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n| extend OriginatingServerName = tostring(split(OriginatingServer, \" \")[0])\n",
+        "name": "Malicious Inbox Rule",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "description": "'Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.\n This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.\nReference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/'\n",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -55,15 +57,13 @@
             ]
           }
         ],
-        "severity": "Medium",
-        "triggerOperator": "gt",
         "tactics": [
           "Persistence",
           "DefenseEvasion"
         ],
-        "name": "Malicious Inbox Rule",
-        "queryFrequency": "1d",
-        "status": "Available"
+        "status": "Available",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d"
       }
     }
   ]
