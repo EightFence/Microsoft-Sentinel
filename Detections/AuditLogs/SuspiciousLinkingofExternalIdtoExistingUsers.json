@@ -14,14 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "' This query will detect when an attempt is made to update an existing user and link it to an guest or external identity. These activities are unusual and such linking of external \nidentities should be investigated. In some cases you may see internal Entra ID sync accounts (Sync_) do this which may be benign'\n",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          }
+        },
+        "query": "AuditLogs\n| where OperationName=~ \"Update user\" \n| where Result =~ \"success\" \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName = tostring(TargetResources_modifiedProperties.displayName), \nTargetUPN_oldValue = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue))[0]), \nTargetUPN_newValue = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue))[0])\n| where displayName == \"UserPrincipalName\" and TargetUPN_oldValue !has \"#EXT\" and TargetUPN_newValue has \"#EXT\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n| extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n| summarize arg_max(TimeGenerated, *) by CorrelationId\n| project-reorder TimeGenerated, InitiatedBy, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, TargetUPN_oldValue, TargetUPN_newValue\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| extend TargetAccountName = tostring(split(TargetUPN_oldValue, \"@\")[0]), TargetUPNSuffix = tostring(split(TargetUPN_oldValue, \"@\")[1])\n",
+        "name": "Suspicious linking of existing user to external User",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -31,10 +46,10 @@
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAppServicePrincipalId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -48,19 +63,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "InitiatingAccountUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -74,41 +89,26 @@
                 "identifier": "UPNSuffix",
                 "columnName": "TargetUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "InitiatingIPAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "metadata": {
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "source": {
-            "kind": "Community"
-          }
-        },
+        "description": "' This query will detect when an attempt is made to update an existing user and link it to an guest or external identity. These activities are unusual and such linking of external \nidentities should be investigated. In some cases you may see internal Entra ID sync accounts (Sync_) do this which may be benign'\n",
+        "triggerThreshold": 0,
         "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "query": "AuditLogs\n| where OperationName=~ \"Update user\" \n| where Result =~ \"success\" \n| mv-expand TargetResources \n| mv-expand TargetResources.modifiedProperties \n| extend displayName = tostring(TargetResources_modifiedProperties.displayName), \nTargetUPN_oldValue = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue))[0]), \nTargetUPN_newValue = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue))[0])\n| where displayName == \"UserPrincipalName\" and TargetUPN_oldValue !has \"#EXT\" and TargetUPN_newValue has \"#EXT\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n| extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n| summarize arg_max(TimeGenerated, *) by CorrelationId\n| project-reorder TimeGenerated, InitiatedBy, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, TargetUPN_oldValue, TargetUPN_newValue\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| extend TargetAccountName = tostring(split(TargetUPN_oldValue, \"@\")[0]), TargetUPNSuffix = tostring(split(TargetUPN_oldValue, \"@\")[1])\n",
-        "name": "Suspicious linking of existing user to external User"
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "severity": "Medium"
       }
     }
   ]

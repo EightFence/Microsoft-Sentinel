@@ -14,29 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "groupByCustomDetails": [],
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "groupByAlertDetails": [],
-            "reopenClosedIncident": false,
-            "groupByEntities": [
-              "Account"
-            ]
-          },
-          "createIncident": true
-        },
-        "queryFrequency": "15m",
         "name": "Office365 Sharepoint File transfer above threshold",
-        "description": "'Identifies Office365 Sharepoint File Transfers above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
         "query": "let threshold = 5000;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_OfficeObjectId=dcount(OfficeObjectId), fileslist=make_set(OfficeObjectId, 10000) by UserId,ClientIP,bin(TimeGenerated, 15m)\n| where count_distinct_OfficeObjectId >= threshold\n| extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat(\"SeeFilesListField\",\"_\", tostring(hash(tostring(fileslist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "tactics": [
+          "Exfiltration"
+        ],
+        "severity": "Medium",
+        "description": "'Identifies Office365 Sharepoint File Transfers above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
+        "queryFrequency": "15m",
+        "triggerOperator": "gt",
+        "queryPeriod": "15m",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -50,36 +40,46 @@
                 "identifier": "UPNSuffix",
                 "columnName": "AccountUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "File",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "FileSample"
               }
-            ]
+            ],
+            "entityType": "File"
           }
         ],
-        "queryPeriod": "15m",
-        "tactics": [
-          "Exfiltration"
-        ],
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "enabled": true,
+            "groupByAlertDetails": [],
+            "groupByEntities": [
+              "Account"
+            ],
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "groupByCustomDetails": []
+          },
+          "createIncident": true
+        },
         "customDetails": {
           "FilesList": "fileslist",
           "TransferCount": "count_distinct_OfficeObjectId"
-        },
-        "triggerOperator": "gt"
+        }
       }
     }
   ]

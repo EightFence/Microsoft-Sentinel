@@ -14,23 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryFrequency": "30m",
         "name": "Semperis DSP Operations Critical Notifications",
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess",
+          "ResourceDevelopment"
+        ],
+        "severity": "Medium",
         "description": "'Alerts when there are critical notifications fired in the DSP system.'\n",
+        "query": "Event\n| where Source == 'Semperis-DSP-Notifications' and EventID == 30001\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')\n| parse column_ifexists('objectDN', '') with * \"CN=\" cnName \",\" *\n| where \"Critical\" == column_ifexists('severity', \"\")\n| extend NTDomain = tostring(split(UserName, '\\\\', 0)[0]), LoginUser = tostring(split(UserName, '\\\\', 1)[0])\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "queryFrequency": "30m",
         "status": "Available",
+        "queryPeriod": "30m",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Critical Notification -- Alert from Semperis Directory Services Protector",
           "alertDescriptionFormat": "A critical notification was created in the DSP system."
         },
-        "query": "Event\n| where Source == 'Semperis-DSP-Notifications' and EventID == 30001\n| extend p1Xml = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array p1Xml\n| evaluate bag_unpack(p1Xml)\n| extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')\n| parse column_ifexists('objectDN', '') with * \"CN=\" cnName \",\" *\n| where \"Critical\" == column_ifexists('severity', \"\")\n| extend NTDomain = tostring(split(UserName, '\\\\', 0)[0]), LoginUser = tostring(split(UserName, '\\\\', 1)[0])\n| extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -40,10 +43,10 @@
                 "identifier": "NTDomain",
                 "columnName": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
@@ -53,16 +56,13 @@
                 "identifier": "DnsDomain",
                 "columnName": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
-        "queryPeriod": "30m",
-        "tactics": [
-          "InitialAccess",
-          "CredentialAccess",
-          "ResourceDevelopment"
-        ],
-        "triggerOperator": "gt"
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        }
       }
     }
   ]

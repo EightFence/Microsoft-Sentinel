@@ -14,23 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryFrequency": "1d",
         "name": "Suspicious Sign In Followed by MFA Modification",
         "description": "'This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.'\n",
+        "tactics": [
+          "InitialAccess",
+          "DefenseEvasion"
+        ],
+        "severity": "Medium",
+        "query": "let PriorityScore = 9;\nBehaviorAnalytics\n| where ActionType == \"Sign-in\"\n| where InvestigationPriority > PriorityScore\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend LogOnTime = TimeGenerated\n| join kind=inner (AuditLogs\n| where Category =~ \"UserManagement\" \n| where OperationName in~ (\"Admin registered security info\", \"Admin updated security info\", \"Admin deleted security info\", \"User registered security info\", \"User changed default security info\", \"User deleted security info\",\"User registered all required security info\",\"User started security info registration\") \n| extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))\n| extend InitiatorID = tostring(InitiatedBy.user.id)\n| extend FromIP = tostring(InitiatedBy.user.ipAddress) \n| extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| extend TargetId = tostring(TargetResources[0].id)\n| extend MFAModTime = TimeGenerated\n| where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN\n| where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))\n| extend InitiatorName = tostring(split(InitiatorUPN, \"@\")[0]), InitiatorUPNSuffix = tostring(split(InitiatorUPN, \"@\")[1]), TargetName = tostring(split(TargetUPN, \"@\")[0]), TargetUPNSuffix = tostring(split(TargetUPN, \"@\")[1])\n",
+        "queryFrequency": "1d",
         "status": "Available",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Suspicious Sign In by {{InitiatorUPN}} Followed by MFA Modification to {{TargetUPN}}",
           "alertDescriptionFormat": "This query looks uses Microsoft Sentinel's UEBA features to look for suspicious logons followed by modifications to MFA settings by that user.\nIn this case {{InitiatorUPN}} logged in followed by a modification to MFA settings for {{TargetUPN}}.\nThe sign in was from {{SourceIPAddress}}.\n"
         },
-        "query": "let PriorityScore = 9;\nBehaviorAnalytics\n| where ActionType == \"Sign-in\"\n| where InvestigationPriority > PriorityScore\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend LogOnTime = TimeGenerated\n| join kind=inner (AuditLogs\n| where Category =~ \"UserManagement\" \n| where OperationName in~ (\"Admin registered security info\", \"Admin updated security info\", \"Admin deleted security info\", \"User registered security info\", \"User changed default security info\", \"User deleted security info\",\"User registered all required security info\",\"User started security info registration\") \n| extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))\n| extend InitiatorID = tostring(InitiatedBy.user.id)\n| extend FromIP = tostring(InitiatedBy.user.ipAddress) \n| extend TargetUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| extend TargetId = tostring(TargetResources[0].id)\n| extend MFAModTime = TimeGenerated\n| where isnotempty(InitiatorUPN)) on $left.UserPrincipalName == $right.InitiatorUPN\n| where MFAModTime between((LogOnTime-30m)..(LogOnTime+1h))\n| extend InitiatorName = tostring(split(InitiatorUPN, \"@\")[0]), InitiatorUPNSuffix = tostring(split(InitiatorUPN, \"@\")[1]), TargetName = tostring(split(TargetUPN, \"@\")[0]), TargetUPNSuffix = tostring(split(TargetUPN, \"@\")[1])\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -44,19 +46,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "InitiatorUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatorID"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -70,42 +72,40 @@
                 "identifier": "UPNSuffix",
                 "columnName": "TargetUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "TargetId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "FromIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIPAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "queryPeriod": "1d",
-        "tactics": [
-          "InitialAccess",
-          "DefenseEvasion"
-        ],
-        "triggerOperator": "gt"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        }
       }
     }
   ]
