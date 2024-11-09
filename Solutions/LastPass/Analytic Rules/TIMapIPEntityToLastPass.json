@@ -14,50 +14,50 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "description": "'Identifies a match in LastPass table from any IP IOC from TI'\n",
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "name": "TI map IP entity to LastPass data",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "Username_s"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IP_Address_s"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "severity": "Medium",
+        "triggerThreshold": 0,
+        "status": "Available",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking Network IP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| join (\n    LastPassNativePoller_CL | where todatetime(Time_s) >= ago(dt_lookBack)\n    | where Action_s != \"Reporting\"\n    // renaming time column so it is clear the log this came from\n    | extend LastPass_TimeGenerated = todatetime(Time_s)\n)\non $left.TI_ipEntity == $right.IP_Address_s\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, LastPass_TimeGenerated, \nTI_ipEntity, IP_Address_s, Username_s, Action_s, Data_s, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n",
         "tactics": [
           "Impact"
-        ],
-        "description": "'Identifies a match in LastPass table from any IP IOC from TI'\n",
-        "status": "Available",
-        "name": "TI map IP entity to LastPass data",
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking Network IP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| join (\n    LastPassNativePoller_CL | where todatetime(Time_s) >= ago(dt_lookBack)\n    | where Action_s != \"Reporting\"\n    // renaming time column so it is clear the log this came from\n    | extend LastPass_TimeGenerated = todatetime(Time_s)\n)\non $left.TI_ipEntity == $right.IP_Address_s\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, LastPass_TimeGenerated, \nTI_ipEntity, IP_Address_s, Username_s, Action_s, Data_s, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        ]
       }
     }
   ]
