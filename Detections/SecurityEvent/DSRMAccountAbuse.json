@@ -14,21 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "Persistence"
+        ],
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
               }
             ]
           },
@@ -36,16 +39,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "User"
+                "columnName": "User",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "AccountNTDomain"
+                "columnName": "AccountNTDomain",
+                "identifier": "NTDomain"
               }
             ]
           },
@@ -53,8 +56,8 @@
             "entityType": "Process",
             "fieldMappings": [
               {
-                "identifier": "ProcessId",
-                "columnName": "ProcessId"
+                "columnName": "ProcessId",
+                "identifier": "ProcessId"
               }
             ]
           },
@@ -62,12 +65,12 @@
             "entityType": "File",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ImageFileName"
+                "columnName": "ImageFileName",
+                "identifier": "Name"
               },
               {
-                "identifier": "Directory",
-                "columnName": "ImageDirectory"
+                "columnName": "ImageDirectory",
+                "identifier": "Directory"
               }
             ]
           },
@@ -75,39 +78,36 @@
             "entityType": "RegistryKey",
             "fieldMappings": [
               {
-                "identifier": "Key",
-                "columnName": "TargetObject"
+                "columnName": "TargetObject",
+                "identifier": "Key"
               }
             ]
           }
         ],
-        "tactics": [
-          "Persistence"
-        ],
-        "severity": "High",
-        "queryPeriod": "1h",
-        "triggerThreshold": 0,
-        "description": "'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.\nRef: https://adsecurity.org/?p=1785'\n",
         "name": "DSRM Account Abuse",
+        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID in (13)\n| parse EventData with * 'ProcessId\">' ProcessId \"<\"* 'Image\">' Image \"<\" * 'TargetObject\">' TargetObject \"<\" * 'Details\">' Details \"<\" * 'User\">' User \"<\" * \n| where TargetObject has (\"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\") and Details == \"DWORD (0x00000002)\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(User, \"\\\\\")[1]), AccountNTDomain = tostring(split(User, \"\\\\\")[0])\n| extend ImageFileName = tostring(split(Image, \"\\\\\")[-1])\n| extend ImageDirectory = replace_string(Image, ImageFileName, \"\")\n| project-away DomainIndex\n",
         "queryFrequency": "1h",
+        "description": "'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.\nRef: https://adsecurity.org/?p=1785'\n",
+        "queryPeriod": "1h",
         "metadata": {
-          "author": {
-            "name": "Vasileios Paschalidis"
-          },
           "support": {
             "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Vasileios Paschalidis"
           },
           "categories": {
             "domains": [
               "Security - Others"
             ]
-          },
-          "source": {
-            "kind": "Community"
           }
         },
-        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID in (13)\n| parse EventData with * 'ProcessId\">' ProcessId \"<\"* 'Image\">' Image \"<\" * 'TargetObject\">' TargetObject \"<\" * 'Details\">' Details \"<\" * 'User\">' User \"<\" * \n| where TargetObject has (\"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\") and Details == \"DWORD (0x00000002)\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(User, \"\\\\\")[1]), AccountNTDomain = tostring(split(User, \"\\\\\")[0])\n| extend ImageFileName = tostring(split(Image, \"\\\\\")[-1])\n| extend ImageDirectory = replace_string(Image, ImageFileName, \"\")\n| project-away DomainIndex\n",
-        "triggerOperator": "gt"
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "severity": "High"
       }
     }
   ]
