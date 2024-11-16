@@ -14,14 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "query": "// Identify sessions\nlet sessions = \n  NetworkAccessTraffic\n  | summarize \n      StartTime = min(TimeGenerated), \n      EndTime = max(TimeGenerated), \n      SourceIps = make_set(SourceIp) \n    by DeviceId, UserPrincipalName, SessionId\n  | sort by StartTime asc;\n// Check for changed IP addresses and overlapping session times\nsessions\n  | extend PreviousSourceIps = prev(SourceIps, 1)\n  | extend PreviousEndTime = prev(EndTime, 1)\n  | extend PreviousDeviceId = prev(DeviceId, 1)\n  | extend PreviousUserPrincipalName = prev(UserPrincipalName, 1)\n  | where DeviceId == PreviousDeviceId \n        and UserPrincipalName == PreviousUserPrincipalName\n  | where array_length(set_difference(SourceIps, PreviousSourceIps)) > 0 // Check if the current and previous IP sets differ\n  | where PreviousEndTime > StartTime // Check for overlapping session times\n  | project \n      DeviceId, \n      UserPrincipalName, \n      SourceIps, \n      PreviousSourceIps, \n      StartTime, \n      EndTime, \n      PreviousEndTime\n  | extend \n      IPCustomEntity = tostring(array_slice(SourceIps, 0, 1)[0]), \n      PreviousIPCustomEntity = tostring(array_slice(PreviousSourceIps, 0, 1)[0]), \n      AccountCustomEntity = UserPrincipalName\n",
         "description": "This query identifies network sessions based on DeviceId and UserPrincipalName, then checks for changed IP addresses and overlapping session times.\n",
+        "queryPeriod": "24h",
+        "status": "Available",
+        "name": "GSA - Detect IP Address Changes and Overlapping Sessions",
+        "severity": "High",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountCustomEntity"
               }
             ]
           },
@@ -29,23 +40,12 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ]
           }
-        ],
-        "name": "GSA - Detect IP Address Changes and Overlapping Sessions",
-        "query": "// Identify sessions\nlet sessions = \n  NetworkAccessTraffic\n  | summarize \n      StartTime = min(TimeGenerated), \n      EndTime = max(TimeGenerated), \n      SourceIps = make_set(SourceIp) \n    by DeviceId, UserPrincipalName, SessionId\n  | sort by StartTime asc;\n// Check for changed IP addresses and overlapping session times\nsessions\n  | extend PreviousSourceIps = prev(SourceIps, 1)\n  | extend PreviousEndTime = prev(EndTime, 1)\n  | extend PreviousDeviceId = prev(DeviceId, 1)\n  | extend PreviousUserPrincipalName = prev(UserPrincipalName, 1)\n  | where DeviceId == PreviousDeviceId \n        and UserPrincipalName == PreviousUserPrincipalName\n  | where array_length(set_difference(SourceIps, PreviousSourceIps)) > 0 // Check if the current and previous IP sets differ\n  | where PreviousEndTime > StartTime // Check for overlapping session times\n  | project \n      DeviceId, \n      UserPrincipalName, \n      SourceIps, \n      PreviousSourceIps, \n      StartTime, \n      EndTime, \n      PreviousEndTime\n  | extend \n      IPCustomEntity = tostring(array_slice(SourceIps, 0, 1)[0]), \n      PreviousIPCustomEntity = tostring(array_slice(PreviousSourceIps, 0, 1)[0]), \n      AccountCustomEntity = UserPrincipalName\n",
-        "severity": "High",
-        "status": "Available",
-        "triggerOperator": "gt",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "queryPeriod": "24h"
+        ]
       }
     }
   ]
