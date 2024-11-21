@@ -43,18 +43,18 @@
           }
         ],
         "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "severity": "Medium",
         "name": "GSA Enriched Office 365 - Office Policy Tampering",
-        "status": "Available",
-        "queryPeriod": "1d",
         "query": "// Query for EnrichedMicrosoft365AuditLogs\nlet enrichedOpList = EnrichedMicrosoft365AuditLogs \n    | summarize by Operation\n    | where Operation has_any (\"Remove\", \"Disable\")\n    | where Operation contains \"AntiPhish\" \n        or Operation contains \"SafeAttachment\" \n        or Operation contains \"SafeLinks\" \n        or Operation contains \"Dlp\" \n        or Operation contains \"Audit\"\n    | summarize make_set(Operation, 500);\n\nlet enrichedLogs = EnrichedMicrosoft365AuditLogs\n    | where RecordType == \"ExchangeAdmin\"\n    | where UserType in~ (\"Admin\", \"DcAdmin\")\n    | where Operation in~ (enrichedOpList)\n    | extend ClientIPOnly = case( \n        ClientIp has \".\", tostring(split(ClientIp, \":\")[0]), \n        ClientIp has \"[\", tostring(trim_start(@'[[]', tostring(split(ClientIp, \"]\")[0]))),\n        ClientIp\n      )  \n    | extend Port = case(\n        ClientIp has \".\", tostring(split(ClientIp, \":\")[1]),\n        ClientIp has \"[\", tostring(split(ClientIp, \"]:\")[1]),\n        \"\"\n      )\n    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() \n        by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)\n    | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n\n// Query for OfficeActivity\nlet officeOpList = OfficeActivity \n    | summarize by Operation\n    | where Operation has_any (\"Remove\", \"Disable\")\n    | where Operation contains \"AntiPhish\" \n        or Operation contains \"SafeAttachment\" \n        or Operation contains \"SafeLinks\" \n        or Operation contains \"Dlp\" \n        or Operation contains \"Audit\"\n    | summarize make_set(Operation, 500);\n\nlet officeLogs = OfficeActivity\n    | where RecordType =~ \"ExchangeAdmin\"\n    | where UserType in~ (\"Admin\",\"DcAdmin\")\n    | where Operation in~ (officeOpList)\n    | extend ClientIPOnly = case( \n        ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), \n        ClientIP has \"[\", tostring(trim_start(@'[[]', tostring(split(ClientIP,\"]\")[0]))),\n        ClientIP\n      )  \n    | extend Port = case(\n        ClientIP has \".\", tostring(split(ClientIP,\":\")[1]),\n        ClientIP has \"[\", tostring(split(ClientIP, \"]:\")[1]),\n        \"\"\n      )\n    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() \n        by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters\n    | extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n\n// Combine Enriched Logs and Office Activity Logs\nunion isfuzzy=true enrichedLogs, officeLogs\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), TotalOperationCount = sum(OperationCount) \n    by Operation, UserType, UserId, ClientIP, Port, ResultStatus, Parameters, AccountName, AccountUPNSuffix\n| order by StartTimeUtc desc;\n",
-        "description": "Identifies if any tampering is done to either audit log, ATP Safelink, SafeAttachment, AntiPhish, or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy-based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.\n",
         "tactics": [
           "Persistence",
           "DefenseEvasion"
         ],
-        "queryFrequency": "1d",
+        "status": "Available",
         "triggerThreshold": 0,
-        "severity": "Medium"
+        "description": "Identifies if any tampering is done to either audit log, ATP Safelink, SafeAttachment, AntiPhish, or Dlp policy. \nAn adversary may use this technique to evade detection or avoid other policy-based defenses.\nReferences: https://docs.microsoft.com/powershell/module/exchange/advanced-threat-protection/remove-antiphishrule?view=exchange-ps.\n",
+        "queryPeriod": "1d"
       }
     }
   ]
