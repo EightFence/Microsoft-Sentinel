@@ -1,0 +1,99 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ba5e608f-7879-4927-8b0d-a9948b4fe6f3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ba5e608f-7879-4927-8b0d-a9948b4fe6f3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Dataverse - Executable uploaded to SharePoint document management site",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIP"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
+              }
+            ]
+          },
+          {
+            "entityType": "File",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "SourceFileName"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "SharePointId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "SharePointUrl"
+              }
+            ]
+          }
+        ],
+        "severity": "Low",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Executable/script {{SourceFileName}} was uploaded by {{UserId}} in SharePoint site {{SharePointUrl}}",
+          "alertDisplayNameFormat": "Dataverse - Executable files uploaded in document management for {{InstanceUrl}}"
+        },
+        "triggerThreshold": 0,
+        "description": "Identifies executable files and scripts uploaded to SharePoint sites used for Dynamics document management, circumventing native file extension restrictions in Dataverse.",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "queryPeriod": "14d",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "query": "let file_extensions = dynamic(['com', 'exe', 'bat', 'cmd', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'msc', 'cpl', 'ps1', 'scr']);\nlet query_frequency = 1h;\nDataverseSharePointSites\n| join kind=inner (\n    OfficeActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where OfficeWorkload == \"SharePoint\" and Operation == \"FileUploaded\")\n    on $left.SharePointUrl == $right.Site_Url\n| where SourceFileExtension in (file_extensions)\n| extend\n    CloudAppId = int(32780),\n    SharePointId = int(20892),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeGenerated,\n    UserId,\n    ClientIP,\n    InstanceUrl,\n    SourceFileName,\n    SharePointUrl,\n    CloudAppId,\n    SharePointId,\n    AccountName,\n    UPNSuffix\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Execution",
+          "Persistence"
+        ]
+      }
+    }
+  ]
+}

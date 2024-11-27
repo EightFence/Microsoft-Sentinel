@@ -14,9 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "Vectra AI Detect - Suspected Compromised Host",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "7d",
+            "reopenClosedIncident": true
+          },
+          "createIncident": true
+        },
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "SourceHostName"
+              }
+            ]
+          }
+        ],
+        "severity": "Informational",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "The host {{SourceHostName}} has a Threat score of {{threat_score}} and a\ncertainty of {{certainty_score}}\n",
-          "alertDisplayNameFormat": "Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity",
           "alertDynamicProperties": [
             {
               "value": "vectra_URL",
@@ -35,36 +56,22 @@
               "alertProperty": "ConfidenceScore"
             }
           ],
-          "alertSeverityColumnName": "Severity"
+          "alertSeverityColumnName": "Severity",
+          "alertDisplayNameFormat": "Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity"
         },
-        "name": "Vectra AI Detect - Suspected Compromised Host",
+        "triggerThreshold": 0,
         "description": "'Create an incident when a Host is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n",
-        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: \"High\", \"Critical\" ). Possible values are: \"Low\", \"Medium\", \"High\", \"Critical\"\nlet configured_level = dynamic([\"High\", \"Critical\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                      threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                      threat_score >= 50 and certainty_score <= 50, \"High\", \n                      threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                      \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(TimeGenerated, *) by SourceHostName\n| sort by TimeGenerated\n",
-        "queryFrequency": "5m",
         "customDetails": {
           "ScoreDecrease": "score_decreases"
         },
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "SourceHostName"
-              }
-            ],
-            "entityType": "Host"
-          }
-        ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": true,
-            "lookbackDuration": "7d",
-            "enabled": true,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
+        "queryFrequency": "5m",
+        "status": "Available",
+        "queryPeriod": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
-        "severity": "Informational",
+        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: \"High\", \"Critical\" ). Possible values are: \"Low\", \"Medium\", \"High\", \"Critical\"\nlet configured_level = dynamic([\"High\", \"Critical\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                      threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                      threat_score >= 50 and certainty_score <= 50, \"High\", \n                      threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                      \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(TimeGenerated, *) by SourceHostName\n| sort by TimeGenerated\n",
+        "triggerOperator": "gt",
         "tactics": [
           "CredentialAccess",
           "Discovery",
@@ -73,14 +80,7 @@
           "CommandAndControl",
           "Exfiltration",
           "Impact"
-        ],
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "queryPeriod": "5m",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "status": "Available"
+        ]
       }
     }
   ]

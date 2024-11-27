@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0881b209-62c9-4b15-9f9a-e0c1d1b1eb7b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0881b209-62c9-4b15-9f9a-e0c1d1b1eb7b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Dataverse - Export activity from terminated or notified employee",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Export events where employee state found matching {{UserState}} found in {{InstanceUrl}}.",
+          "alertDisplayNameFormat": "Dataverse - Export events detected from a terminated employee in {{InstanceUrl}} "
+        },
+        "triggerThreshold": 0,
+        "description": "This query identifies Dataverse export activity triggered by terminated, or employees about to leave the organization. This analytics rule uses the TerminatedEmployees watchlist template.",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "queryPeriod": "1d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "// Set a time period before employee terminatation date to search for export events\nlet termination_watch_period = 7d;\nlet query_frequency = 1h;\nlet exportEvents = dynamic(['ExportToExcel', 'ExportPdfDocument', 'ExportWordDocument', 'ExecutePowerBISql']);\nMSBizAppsTerminatedEmployees\n| where (UserState =~ \"Terminated\") or (UserState =~ \"Notified\" and TerminationDate <= startofday(now()) + termination_watch_period)\n| join kind=inner (DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message in (exportEvents))\n    on $left.UserPrincipalName == $right.UserId\n| summarize\n    FirstEvent = min(TimeGenerated),\n    LastEvent = max(TimeGenerated),\n    Event = make_set(Message, 4)\n    by UserId, InstanceUrl, ClientIp, UserState\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    LastEvent,\n    UserId,\n    ClientIp,\n    UserState,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Exfiltration"
+        ]
+      }
+    }
+  ]
+}

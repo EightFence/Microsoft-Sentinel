@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/dccbdb5b-2ce7-4931-bfbe-f1ad6523ee64')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/dccbdb5b-2ce7-4931-bfbe-f1ad6523ee64')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "F&O - Bank account change following network alias reassignment",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AliasChangedBy"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Username"
+              }
+            ]
+          }
+        ],
+        "severity": "Low",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "A user account alias was reassigned for {{Username}} by {{AliasChangedBy}} and shortly afterwards, bank account {{AccountId}} was modified.",
+          "alertDisplayNameFormat": "F&O - Suspicious bank account changes"
+        },
+        "triggerThreshold": 0,
+        "description": "Identifies changes to user accounts where the network alias was modified to a new value. Shortly afterwards, the updated alias is used to update a bank account number.",
+        "queryFrequency": "15m",
+        "status": "Available",
+        "queryPeriod": "1d",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "query": "let query_frequency = 15m;\nFinanceOperationsActivity_CL\n| where LogType == \"Update\" and TableName == \"UserInfo\"\n| extend UserId = tostring(parse_json(tostring(FormattedData.[\"03::id\"])).NewData)\n| extend NetworkAlias = parse_json(tostring(FormattedData.networkAlias))\n| extend\n    CurrentAlias = tostring(NetworkAlias.NewData),\n    PreviousAlias = tostring(NetworkAlias.OldData)\n| where CurrentAlias != PreviousAlias\n| extend\n    AliasUpdated = LogCreatedDateTime,\n    AliasChangedBy = Username\n| join kind=inner(FinanceOperationsActivity_CL\n    | where TimeGenerated >= ago (query_frequency)\n    | where LogType == \"Update\" and TableName == \"BankAccountTable\"\n    | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)\n    | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))\n    | extend\n        CurrentAccountNum = tostring(AccountNum.NewData),\n        OldAccountNum = tostring(AccountNum.OldData)\n    | where CurrentAccountNum != OldAccountNum\n    | extend BankUpdated = LogCreatedDateTime)\n    on $left.UserId == $right.Username\n| where BankUpdated > AliasUpdated\n| extend\n    FinOpsAppId = 32780,\n    AccountName = tostring(split(CurrentAlias, \"@\")[0]),\n    UPNSuffix = tostring(split(CurrentAlias, \"@\")[1])\n| project\n    AliasUpdated,\n    AliasChangedBy,\n    Username,\n    AccountId,\n    CurrentAccountNum,\n    OldAccountNum,\n    CurrentAlias,\n    PreviousAlias,\n    FinOpsAppId,\n    AccountName,\n    UPNSuffix\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "CredentialAccess",
+          "LateralMovement",
+          "PrivilegeEscalation"
+        ]
+      }
+    }
+  ]
+}

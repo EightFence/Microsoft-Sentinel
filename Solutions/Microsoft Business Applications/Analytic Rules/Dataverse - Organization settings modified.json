@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a6f6b734-3db8-4259-a988-69e0b8eac0c2')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a6f6b734-3db8-4259-a988-69e0b8eac0c2')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Dataverse - Organization settings modified",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
+              }
+            ]
+          }
+        ],
+        "severity": "Informational",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Organization setting {{DisplayName}} : {{Description}} changed by {{UserId}}",
+          "alertDisplayNameFormat": "Dataverse - {{DisplayName}} changed in {{InstanceUrl}} "
+        },
+        "triggerThreshold": 0,
+        "description": "Identifies changes made at organization level in the Dataverse environment.",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "queryPeriod": "14d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "let query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message == \"Update\" and EntityName == \"organization\"\n| mv-expand Fields\n| extend FieldName = tostring(Fields.Name)\n| extend Value = tostring(Fields.Value)\n| where FieldName != \"organizationid\"\n| lookup MSBizAppsOrgSettings on FieldName\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeGenerated,\n    UserId,\n    ClientIp,\n    FieldName,\n    Value,\n    DisplayName,\n    Description,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Persistence"
+        ]
+      }
+    }
+  ]
+}
