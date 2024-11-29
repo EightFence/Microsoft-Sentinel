@@ -14,39 +14,39 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
         "query": "let RunTime = 1d; \nlet StartRunTime = 1d; \nlet EndRunTime = StartRunTime - RunTime; \nlet MinAffectedThreshold = 5;\nunion isfuzzy=true\n(AzureDiagnostics \n| where TimeGenerated  between (ago(StartRunTime) .. ago(EndRunTime))\n| where OperationName == \"AzureFirewallThreatIntelLog\"\n| parse msg_s with * \"from \" SourceIp \":\" SourcePort:int \" to \" Fqdn \":\" DestinationPort:int  \".\" * \"Action: Deny. \" ThreatDescription),\n(AZFWThreatIntel\n| where TimeGenerated between (ago(StartRunTime) .. ago(EndRunTime)))\n| summarize TiTrafficCount = count(), dCountSourceIps = dcount(SourceIp), AffectedIps = make_set(SourceIp, 10000) by Fqdn, ThreatDescription\n| where array_length(AffectedIps) > MinAffectedThreshold\n| mv-expand SourceIp = AffectedIps\n| order by TiTrafficCount desc, Fqdn asc, parse_ipv4(tostring(SourceIp)) asc\n",
+        "description": "'Identifies multiple machines trying to reach out to the same destination blocked by TI in Azure Firewall. This can indicate attack on the organization by the same attack group.\n\nConfigurable Parameters:\n\n- Minimum affected threshold - alert only if more than this number of hosts affected. Default is set to 5.\n- Recommendation is to use the new resource specific logs. If you are using both, the TiTraffic Count will be duplicated.'\n",
+        "tactics": [
+          "Exfiltration",
+          "CommandAndControl"
+        ],
+        "name": "Multiple Sources Affected by the Same TI Destination",
+        "triggerThreshold": 1,
+        "queryPeriod": "1d",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Fqdn"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "severity": "Medium",
-        "triggerThreshold": 1,
-        "status": "Available",
-        "queryFrequency": "1d",
-        "description": "'Identifies multiple machines trying to reach out to the same destination blocked by TI in Azure Firewall. This can indicate attack on the organization by the same attack group.\n\nConfigurable Parameters:\n\n- Minimum affected threshold - alert only if more than this number of hosts affected. Default is set to 5.\n- Recommendation is to use the new resource specific logs. If you are using both, the TiTraffic Count will be duplicated.'\n",
-        "queryPeriod": "1d",
-        "tactics": [
-          "Exfiltration",
-          "CommandAndControl"
-        ],
-        "triggerOperator": "gt",
-        "name": "Multiple Sources Affected by the Same TI Destination"
+        "status": "Available"
       }
     }
   ]
