@@ -14,77 +14,77 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "customDetails": {
-          "AppCreator": "AppCreator",
-          "Environment": "EnvironmentId",
-          "PowerAppsAppName": "AppName",
-          "PowerAppsApp": "AppId"
-        },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Possible malicious app detected - {{AppName}} ",
-          "alertDescriptionFormat": "Multiple users opened a malicious link after launching app {{AppName}}.  Click here to navigate to the Power Apps Portal to examine the app: https://make.powerapps.com/environments/{{EnvironmentId}}/apps"
-        },
+        "queryPeriod": "14d",
         "queryFrequency": "1h",
-        "query": "// Define a threshold (distinct_user_launch_threshold) for\n// the minimum number of users who launched an app\n// to be in scope of this detection\nlet distinct_user_launch_threshold = 2;\n// Define a threshold for the minumum number of users\n// who clicked the same malicious link after launching the app\n// to be in scope of this detection\nlet distinct_user_url_click_threshold = 2;\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nlet new_app_creation_activity = materialize(\n    PowerPlatformAdminActivity\n    | where TimeGenerated >= ago (query_lookback)\n    | where EventOriginalType == \"CreatePowerApp\"\n    | extend Properties = tostring(PropertyCollection)\n    | extend SrcIpAddr = extract(@'\"enduser.ip_address\",\"Value\":\"([^\"]+)\"', 1, Properties)\n    | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)\n    | extend AppId = extract(@'\"powerplatform.analytics.resource.power_app.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n    | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))\n    | extend\n        AppName = extract(@'\"powerplatform.analytics.resource.power_app.display_name\",\"Value\":\"([^\"]+)\"', 1, Properties),\n        EnvironmentId = extract(@'\"powerplatform.analytics.resource.environment.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n    | project-rename\n        AppCreatedTime = TimeGenerated,\n        AppCreator = ActorName,\n        AppCreatorIpAddr = SrcIpAddr\n    );\nlet distinct_apps = new_app_creation_activity\n    | distinct AppName;\nlet new_app_launch_activity = materialize(\n    new_app_creation_activity\n    | join kind=inner (\n        PowerPlatformAdminActivity\n        | where TimeGenerated >= ago (query_lookback)\n        | where EventOriginalType == \"LaunchPowerApp\"\n        | where PropertyCollection has_any (distinct_apps)\n        | extend Properties = tostring(PropertyCollection)\n        | extend AppName = extract(@'\"powerplatform.analytics.resource.power_app.display_name\",\"Value\":\"([^\"]+)\"', 1, Properties)\n        | summarize FirstAppLaunchTime = min(TimeGenerated) by ActorName, AppName)\n        on AppName\n    | where FirstAppLaunchTime > AppCreatedTime\n    );\nlet new_app_launch_users = new_app_launch_activity\n    | summarize LaunchCount = dcount(ActorName) by AppName\n    | where LaunchCount > distinct_user_launch_threshold\n    | join kind=inner new_app_launch_activity on AppName\n    | summarize\n        by\n        ActorName,\n        FirstAppLaunchTime,\n        AppName,\n        AppId,\n        EnvironmentId,\n        AppCreator,\n        AppCreatorIpAddr;\nlet detected_urls = union isfuzzy=true\n        (\n        SecurityAlert\n        | where TimeGenerated >= ago (query_lookback)\n        | where Entities has_cs '\"Type\":\"url\"'\n        | mv-expand todynamic(Entities)\n        | where tostring(Entities.Type) == \"url\"\n        | project Url = tostring(Entities.Url), Source = \"SecurityAlert\"\n        ),\n        (\n        ThreatIntelligenceIndicator\n        | where TimeGenerated >= ago(query_lookback)\n        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n        | where Active == true and ExpirationDateTime > now()\n        | where isnotempty(isnotempty(Url))\n        | project Url, Source = \"ThreatIntelligence\"\n        )\n    | summarize by Url, Source;\nlet url_click_events = materialize(\n    union isfuzzy=true\n        (\n        UrlClickEvents\n        | where TimeGenerated >= ago(query_frequency)\n        | where isnotempty(ThreatTypes)\n        | join kind=inner (new_app_launch_users) on $left.AccountUpn == $right.ActorName\n        | where TimeGenerated between (FirstAppLaunchTime .. (FirstAppLaunchTime + 1h))\n        | summarize by ActorName, Url, Source = \"MicrosoftDefender\"\n        ),\n        (\n        _Im_WebSession\n        | where TimeGenerated >= ago(query_frequency)\n        | join kind=inner (new_app_launch_users) on $left.SrcUsername == $right.ActorName\n        | join kind=inner (detected_urls) on Url\n        | where TimeGenerated between (FirstAppLaunchTime .. (FirstAppLaunchTime + 1h))\n        | summarize by ActorName, Url, Source\n        )\n    );\nlet distinct_url_click_events_count = toscalar(\n    url_click_events\n    | summarize DistinctUserCount = dcount(ActorName) by Url\n    | where DistinctUserCount > distinct_user_url_click_threshold\n    | summarize sum(DistinctUserCount)\n    );\nurl_click_events\n| summarize DistinctUserCount = dcount(ActorName) by Url\n| where DistinctUserCount >= distinct_user_url_click_threshold\n| join kind=inner url_click_events on Url\n| join kind=inner (new_app_launch_users) on ActorName\n| extend\n    PowerAppsEntityId = 27593,\n    DataverseId = 32780,\n    AccountName = tostring(split(ActorName, '@')[0]),\n    UPNSuffix = tostring(split(ActorName, '@')[1])\n| project\n    FirstAppLaunchTime,\n    AppCreator,\n    AppName,\n    AppId,\n    ImpactedUser = ActorName,\n    AccountName,\n    UPNSuffix,\n    EnvironmentId,\n    Url,\n    Source,\n    PowerAppsEntityId\n",
-        "description": "Identifies a chain of events, where a new Power App is created, followed by mulitple users launching the app within the detection window and clicking on the same malicious URL.",
         "tactics": [
           "InitialAccess"
         ],
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "name": "Power Apps - Multiple users access a malicious link after launching new app",
-        "triggerThreshold": 0,
-        "queryPeriod": "14d",
+        "customDetails": {
+          "PowerAppsApp": "AppId",
+          "PowerAppsAppName": "AppName",
+          "AppCreator": "AppCreator",
+          "Environment": "EnvironmentId"
+        },
+        "triggerOperator": "gt",
         "severity": "High",
+        "triggerThreshold": 0,
+        "query": "// Define a threshold (distinct_user_launch_threshold) for\n// the minimum number of users who launched an app\n// to be in scope of this detection\nlet distinct_user_launch_threshold = 2;\n// Define a threshold for the minumum number of users\n// who clicked the same malicious link after launching the app\n// to be in scope of this detection\nlet distinct_user_url_click_threshold = 2;\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nlet new_app_creation_activity = materialize(\n    PowerPlatformAdminActivity\n    | where TimeGenerated >= ago (query_lookback)\n    | where EventOriginalType == \"CreatePowerApp\"\n    | extend Properties = tostring(PropertyCollection)\n    | extend SrcIpAddr = extract(@'\"enduser.ip_address\",\"Value\":\"([^\"]+)\"', 1, Properties)\n    | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)\n    | extend AppId = extract(@'\"powerplatform.analytics.resource.power_app.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n    | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))\n    | extend\n        AppName = extract(@'\"powerplatform.analytics.resource.power_app.display_name\",\"Value\":\"([^\"]+)\"', 1, Properties),\n        EnvironmentId = extract(@'\"powerplatform.analytics.resource.environment.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n    | project-rename\n        AppCreatedTime = TimeGenerated,\n        AppCreator = ActorName,\n        AppCreatorIpAddr = SrcIpAddr\n    );\nlet distinct_apps = new_app_creation_activity\n    | distinct AppName;\nlet new_app_launch_activity = materialize(\n    new_app_creation_activity\n    | join kind=inner (\n        PowerPlatformAdminActivity\n        | where TimeGenerated >= ago (query_lookback)\n        | where EventOriginalType == \"LaunchPowerApp\"\n        | where PropertyCollection has_any (distinct_apps)\n        | extend Properties = tostring(PropertyCollection)\n        | extend AppName = extract(@'\"powerplatform.analytics.resource.power_app.display_name\",\"Value\":\"([^\"]+)\"', 1, Properties)\n        | summarize FirstAppLaunchTime = min(TimeGenerated) by ActorName, AppName)\n        on AppName\n    | where FirstAppLaunchTime > AppCreatedTime\n    );\nlet new_app_launch_users = new_app_launch_activity\n    | summarize LaunchCount = dcount(ActorName) by AppName\n    | where LaunchCount > distinct_user_launch_threshold\n    | join kind=inner new_app_launch_activity on AppName\n    | summarize\n        by\n        ActorName,\n        FirstAppLaunchTime,\n        AppName,\n        AppId,\n        EnvironmentId,\n        AppCreator,\n        AppCreatorIpAddr;\nlet detected_urls = union isfuzzy=true\n        (\n        SecurityAlert\n        | where TimeGenerated >= ago (query_lookback)\n        | where Entities has_cs '\"Type\":\"url\"'\n        | mv-expand todynamic(Entities)\n        | where tostring(Entities.Type) == \"url\"\n        | project Url = tostring(Entities.Url), Source = \"SecurityAlert\"\n        ),\n        (\n        ThreatIntelligenceIndicator\n        | where TimeGenerated >= ago(query_lookback)\n        | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n        | where Active == true and ExpirationDateTime > now()\n        | where isnotempty(isnotempty(Url))\n        | project Url, Source = \"ThreatIntelligence\"\n        )\n    | summarize by Url, Source;\nlet url_click_events = materialize(\n    union isfuzzy=true\n        (\n        UrlClickEvents\n        | where TimeGenerated >= ago(query_frequency)\n        | where isnotempty(ThreatTypes)\n        | join kind=inner (new_app_launch_users) on $left.AccountUpn == $right.ActorName\n        | where TimeGenerated between (FirstAppLaunchTime .. (FirstAppLaunchTime + 1h))\n        | summarize by ActorName, Url, Source = \"MicrosoftDefender\"\n        ),\n        (\n        _Im_WebSession\n        | where TimeGenerated >= ago(query_frequency)\n        | join kind=inner (new_app_launch_users) on $left.SrcUsername == $right.ActorName\n        | join kind=inner (detected_urls) on Url\n        | where TimeGenerated between (FirstAppLaunchTime .. (FirstAppLaunchTime + 1h))\n        | summarize by ActorName, Url, Source\n        )\n    );\nlet distinct_url_click_events_count = toscalar(\n    url_click_events\n    | summarize DistinctUserCount = dcount(ActorName) by Url\n    | where DistinctUserCount > distinct_user_url_click_threshold\n    | summarize sum(DistinctUserCount)\n    );\nurl_click_events\n| summarize DistinctUserCount = dcount(ActorName) by Url\n| where DistinctUserCount >= distinct_user_url_click_threshold\n| join kind=inner url_click_events on Url\n| join kind=inner (new_app_launch_users) on ActorName\n| extend\n    PowerAppsEntityId = 27593,\n    DataverseId = 32780,\n    AccountName = tostring(split(ActorName, '@')[0]),\n    UPNSuffix = tostring(split(ActorName, '@')[1])\n| project\n    FirstAppLaunchTime,\n    AppCreator,\n    AppName,\n    AppId,\n    ImpactedUser = ActorName,\n    AccountName,\n    UPNSuffix,\n    EnvironmentId,\n    Url,\n    Source,\n    PowerAppsEntityId\n",
+        "status": "Available",
         "entityMappings": [
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "PowerAppsEntityId"
+                "columnName": "PowerAppsEntityId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "AppName"
+                "columnName": "AppName",
+                "identifier": "InstanceName"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AppCreator"
+                "columnName": "AppCreator",
+                "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "status": "Available"
+        "name": "Power Apps - Multiple users access a malicious link after launching new app",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Possible malicious app detected - {{AppName}} ",
+          "alertDescriptionFormat": "Multiple users opened a malicious link after launching app {{AppName}}.  Click here to navigate to the Power Apps Portal to examine the app: https://make.powerapps.com/environments/{{EnvironmentId}}/apps"
+        },
+        "description": "Identifies a chain of events, where a new Power App is created, followed by mulitple users launching the app within the detection window and clicking on the same malicious URL."
       }
     }
   ]
