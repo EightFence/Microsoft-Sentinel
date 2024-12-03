@@ -14,30 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Sign-in activity detected in {{InstanceUrl}} from an IP {{ClientIp}} not on the allow list.",
+          "alertDisplayNameFormat": "Dataverse - Login from IP not on the allow list in {{InstanceUrl}} "
+        },
         "severity": "High",
-        "status": "Available",
-        "triggerThreshold": 0,
         "tactics": [
           "InitialAccess"
         ],
         "queryPeriod": "1d",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "query": "// Use static IP address or CIDR list specified in the\n// NetworkAddresses watchlist template with tag \"AllowDataverse\"\nlet allowed_networks = MSBizAppsNetworkAddresses()\n    | where Tags has \"AllowDataverse\"\n    | summarize by IPSubnet;\nlet query_frequency = 1h;\nlet watchlist_entries_count = toscalar (allowed_networks\n    | summarize count());\nlet dataverse_signin_activity = materialize(\n    DataverseActivity\n    | where watchlist_entries_count > 0\n    | where TimeGenerated >= ago (query_frequency)\n    | where Message == \"UserSignIn\" and isnotempty(ClientIp)\n    | summarize FirstEvent = arg_min(TimeGenerated, *) by UserId, ClientIp, InstanceUrl\n    );\nlet authorized_ip_addresses = dataverse_signin_activity\n    | evaluate ipv4_lookup(allowed_networks, ClientIp, IPSubnet);\ndataverse_signin_activity\n| join kind=leftanti(authorized_ip_addresses) on ClientIp\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "name": "Dataverse - Login from IP not in the allow list",
         "queryFrequency": "1h",
+        "status": "Available",
+        "name": "Dataverse - Login from IP not in the allow list",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -45,8 +45,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ClientIp"
+                "columnName": "ClientIp",
+                "identifier": "Address"
               }
             ]
           },
@@ -54,22 +54,22 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "CloudAppId"
+                "columnName": "CloudAppId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "InstanceUrl"
+                "columnName": "InstanceUrl",
+                "identifier": "InstanceName"
               }
             ]
           }
         ],
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Sign-in activity detected in {{InstanceUrl}} from an IP {{ClientIp}} not on the allow list.",
-          "alertDisplayNameFormat": "Dataverse - Login from IP not on the allow list in {{InstanceUrl}} "
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
-        "triggerOperator": "gt",
-        "description": "Identifies logons from IPv4 addresses not matching IPv4 subnets maintained on an allow list. This analytics rule uses the NetworkAddresses watchlist template."
+        "triggerThreshold": 0,
+        "description": "Identifies logons from IPv4 addresses not matching IPv4 subnets maintained on an allow list. This analytics rule uses the NetworkAddresses watchlist template.",
+        "query": "// Use static IP address or CIDR list specified in the\n// NetworkAddresses watchlist template with tag \"AllowDataverse\"\nlet allowed_networks = MSBizAppsNetworkAddresses()\n    | where Tags has \"AllowDataverse\"\n    | summarize by IPSubnet;\nlet query_frequency = 1h;\nlet watchlist_entries_count = toscalar (allowed_networks\n    | summarize count());\nlet dataverse_signin_activity = materialize(\n    DataverseActivity\n    | where watchlist_entries_count > 0\n    | where TimeGenerated >= ago (query_frequency)\n    | where Message == \"UserSignIn\" and isnotempty(ClientIp)\n    | summarize FirstEvent = arg_min(TimeGenerated, *) by UserId, ClientIp, InstanceUrl\n    );\nlet authorized_ip_addresses = dataverse_signin_activity\n    | evaluate ipv4_lookup(allowed_networks, ClientIp, IPSubnet);\ndataverse_signin_activity\n| join kind=leftanti(authorized_ip_addresses) on ClientIp\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n"
       }
     }
   ]
