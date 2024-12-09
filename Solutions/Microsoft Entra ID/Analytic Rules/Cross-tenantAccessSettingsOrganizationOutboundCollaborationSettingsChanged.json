@@ -14,25 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "2d",
         "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Outbound Collaboration Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
-        "status": "Available",
-        "triggerOperator": "gt",
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "Discovery"
-        ],
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "InitiatingAppName"
+                "columnName": "InitiatingAppName",
+                "identifier": "Name"
               },
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAppServicePrincipalId"
+                "columnName": "InitiatingAppServicePrincipalId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -40,16 +32,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "InitiatingUserPrincipalName"
+                "columnName": "InitiatingUserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "InitiatingAccountName"
+                "columnName": "InitiatingAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatingAccountUPNSuffix"
+                "columnName": "InitiatingAccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -57,8 +49,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAadUserId"
+                "columnName": "InitiatingAadUserId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -66,16 +58,24 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "InitiatingIpAddress"
+                "columnName": "InitiatingIpAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "2d",
         "queryPeriod": "2d",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "Discovery"
+        ],
+        "severity": "Medium",
+        "status": "Available",
         "name": "Cross-tenant Access Settings Organization Outbound Collaboration Settings Changed",
         "query": "// In User & Groups and in Applications, the following \"AccessType\" values in columns PremodifiedOutboundSettings and ModifiedOutboundSettings are interpreted accordingly\n// When Access Type in premodified outbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified outbound settings value was 2 that means that the initial access was blocked.\n// When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked.\nAuditLogs\n| where OperationName has \"Update a partner cross-tenant access setting\"\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"Policy\"\n      | extend Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on\n  (\n      where Property.displayName =~ \"b2bCollaborationOutbound\"\n      | extend PremodifiedOutboundSettings = trim('\"',tostring(Property.oldValue)),\n               ModifiedOutboundSettings = trim(@'\"',tostring(Property.newValue))\n  )\n| where PremodifiedOutboundSettings != ModifiedOutboundSettings\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n"
       }
