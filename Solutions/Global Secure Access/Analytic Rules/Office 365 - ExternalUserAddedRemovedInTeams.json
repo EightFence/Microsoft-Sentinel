@@ -15,79 +15,79 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "MemberAdded_Removed",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "MemberAdded_RemovedAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "MemberAdded_RemovedAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UserWhoAdded",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "UserWhoAddedAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UserWhoAddedAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UserWhoDeleted",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "UserWhoDeletedAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UserWhoDeletedAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ClientIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "queryPeriod": "1h",
-        "status": "Available",
+        "name": "GSA Enriched Office 365 - External User Added and Removed in Short Timeframe",
         "tactics": [
           "Persistence"
         ],
+        "status": "Available",
+        "triggerOperator": "gt",
+        "query": "let TeamsAddDelOffice = (Op:string){\n  OfficeActivity\n  | where OfficeWorkload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where Members has (\"#EXT#\")\n  | mv-expand Members\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP\n};\nlet TeamsAddDelEnriched = (Op:string){\n  EnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), ClientIP = SourceIp\n};\nlet TeamsAddOffice = TeamsAddDelOffice(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelOffice = TeamsAddDelOffice(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAddEnriched = TeamsAddDelEnriched(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelEnriched = TeamsAddDelEnriched(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAdd = TeamsAddOffice\n  | union TeamsAddEnriched\n  | project TimeAdded, Operation, MemberAdded, UserWhoAdded, TeamName, ClientIP;\nlet TeamsDel = TeamsDelOffice\n  | union TeamsDelEnriched\n  | project TimeDeleted, Operation, MemberRemoved, UserWhoDeleted, TeamName, ClientIP;\nTeamsAdd\n| join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
         "severity": "Low",
         "triggerThreshold": 0,
-        "name": "GSA Enriched Office 365 - External User Added and Removed in Short Timeframe",
-        "query": "let TeamsAddDelOffice = (Op:string){\n  OfficeActivity\n  | where OfficeWorkload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where Members has (\"#EXT#\")\n  | mv-expand Members\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP\n};\nlet TeamsAddDelEnriched = (Op:string){\n  EnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), ClientIP = SourceIp\n};\nlet TeamsAddOffice = TeamsAddDelOffice(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelOffice = TeamsAddDelOffice(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAddEnriched = TeamsAddDelEnriched(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelEnriched = TeamsAddDelEnriched(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAdd = TeamsAddOffice\n  | union TeamsAddEnriched\n  | project TimeAdded, Operation, MemberAdded, UserWhoAdded, TeamName, ClientIP;\nlet TeamsDel = TeamsDelOffice\n  | union TeamsDelEnriched\n  | project TimeDeleted, Operation, MemberRemoved, UserWhoDeleted, TeamName, ClientIP;\nTeamsAdd\n| join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n"
+        "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "MemberAdded_Removed"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "MemberAdded_RemovedAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "MemberAdded_RemovedAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UserWhoAdded"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "UserWhoAddedAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UserWhoAddedAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UserWhoDeleted"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "UserWhoDeletedAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UserWhoDeletedAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIP"
+              }
+            ]
+          }
+        ]
       }
     }
   ]

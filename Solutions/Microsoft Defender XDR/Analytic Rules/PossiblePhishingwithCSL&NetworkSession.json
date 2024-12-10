@@ -15,89 +15,89 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'This query looks for malicious URL clicks in phishing email recognized by MDO in correlation with CommonSecurityLogs(CSL) & NetworkSession events. \nIf your workspace doesnt have one of the many data sources required for ASIM it may give informational error which can be safely ignored.'\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingProcessAccountUpn",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "InitiatingProcessAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "InitiatingProcessAccountDomain",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "RecipientEmailAddress",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "RecipientEmailName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "RecipientEmailUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DeviceName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "HostName",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "HostNameDomain",
-                "identifier": "DnsDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SourceIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DestinationIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "status": "Available",
+        "name": "Possible Phishing with CSL and Network Sessions",
         "tactics": [
           "InitialAccess",
           "CommandAndControl"
         ],
+        "status": "Available",
+        "triggerOperator": "gt",
+        "query": "//SuspiciousUrlClicked\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"Url\"\n| project AlertId, RemoteUrl\n| join kind=inner (\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"MailMessage\"\n| project AlertId, NetworkMessageId\n)\non AlertId\n| distinct RemoteUrl, NetworkMessageId\n| join EmailEvents on NetworkMessageId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID\n| join kind = inner  \n(DeviceEvents\n| where ActionType =~ \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl)\n| project  UrlClickedByUserSid = RemoteUrl,\nInitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName,\nInitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n)\non $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\n| distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,\n AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName,\n InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n|  join kind=inner\n(\n//Suspicious url clicked found in common security logs\nCommonSecurityLog\n| project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication\n) on $left.RemoteUrl== $right.RequestURL\n|  join kind=inner\n(\n//Find the relevant network sessions\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| where not(ipv4_is_private(DstIpAddr))\n| project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes\n) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected \n| summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain,\nDeviceName, InitiatingProcessFileName, DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n| extend RecipientEmailName = tostring(split(RecipientEmailAddress,'@',0)[0]), RecipientEmailUPNSuffix = tostring(split(RecipientEmailAddress,'@',1)[0])\n",
         "severity": "Medium",
         "triggerThreshold": 0,
-        "name": "Possible Phishing with CSL and Network Sessions",
-        "query": "//SuspiciousUrlClicked\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"Url\"\n| project AlertId, RemoteUrl\n| join kind=inner (\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"MailMessage\"\n| project AlertId, NetworkMessageId\n)\non AlertId\n| distinct RemoteUrl, NetworkMessageId\n| join EmailEvents on NetworkMessageId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID\n| join kind = inner  \n(DeviceEvents\n| where ActionType =~ \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl)\n| project  UrlClickedByUserSid = RemoteUrl,\nInitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName,\nInitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n)\non $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\n| distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,\n AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName,\n InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n|  join kind=inner\n(\n//Suspicious url clicked found in common security logs\nCommonSecurityLog\n| project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication\n) on $left.RemoteUrl== $right.RequestURL\n|  join kind=inner\n(\n//Find the relevant network sessions\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| where not(ipv4_is_private(DstIpAddr))\n| project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes\n) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected \n| summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain,\nDeviceName, InitiatingProcessFileName, DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n| extend RecipientEmailName = tostring(split(RecipientEmailAddress,'@',0)[0]), RecipientEmailUPNSuffix = tostring(split(RecipientEmailAddress,'@',1)[0])\n"
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingProcessAccountUpn"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingProcessAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingProcessAccountDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "RecipientEmailAddress"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "RecipientEmailName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "RecipientEmailUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "DeviceName"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "HostNameDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIP"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DestinationIP"
+              }
+            ]
+          }
+        ]
       }
     }
   ]
