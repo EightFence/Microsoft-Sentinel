@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a924d317-03d2-4420-a71f-4d347bda4bd8')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a924d317-03d2-4420-a71f-4d347bda4bd8')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "TI map IP entity to Workday(ASimAuditEventLogs)",
+        "queryPeriod": "14d",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "ActorUsername"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "Name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DvcIpAddr"
+              }
+            ]
+          }
+        ],
+        "description": "Detects a match in Workday activity from any IP Indicator of Compromise (IOC) provided by Threat Intelligence (TI).\n",
+        "triggerThreshold": 0,
+        "query": "let dtLookBack = 1h; // Define the lookback period for audit events\nlet ioc_lookBack = 14d; // Define the lookback period for threat intelligence indicators\nThreatIntelligenceIndicator \n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| where isnotempty(NetworkIP)\n      or isnotempty(EmailSourceIpAddress)\n      or isnotempty(NetworkDestinationIP)\n      or isnotempty(NetworkSourceIP) // Filter for indicators with relevant IP fields\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId // Get the latest indicator time for each IndicatorId\n  | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress) // Combine IP fields into a single entity\n  | where Active == true and ExpirationDateTime > now() // Filter for active indicators that have not expired\n  | join kind=inner (\n      ASimAuditEventLogs\n      | where EventVendor == \"Workday\" // Filter for Workday events\n      | where TimeGenerated >= ago(dtLookBack) // Filter events within the lookback period\n      | where isnotempty(DvcIpAddr) // Filter for events with a device IP address\n      | extend WD_TimeGenerated = EventStartTime // Rename the event start time column\n      | project WD_TimeGenerated, ActorUsername, DvcIpAddr, Operation, Object // Select relevant columns\n      )\n      on $left.TI_ipEntity == $right.DvcIpAddr // Join on the IP entity\n  | project\n      LatestIndicatorTime,\n      Description,\n      ActivityGroupNames,\n      IndicatorId,\n      ThreatType,\n      Url,\n      ExpirationDateTime,\n      ConfidenceScore,\n      WD_TimeGenerated,\n      ActorUsername,\n      DvcIpAddr,\n      Operation,\n      Object // Select relevant columns after the join\n  | extend\n      timestamp = WD_TimeGenerated,\n      Name = tostring(split(ActorUsername, '@', 0)),\n      UPNSuffix = tostring(split(ActorUsername, '@', 1)) // Add additional fields for timestamp, name, and UPN suffix    \n",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "severity": "Medium"
+      }
+    }
+  ]
+}
