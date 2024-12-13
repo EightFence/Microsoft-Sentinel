@@ -14,20 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'This rule looks for a service principal being granted the Microsoft Graph RoleManagement.ReadWrite.Directory (application) permission before being used to add an Microsoft Entra ID object or user account to an Admin directory role (i.e. Global Administrators).\nThis is a known attack path that is usually abused when a service principal already has the AppRoleAssignment.ReadWrite.All permission granted. This permission allows an app to manage permission grants for application permissions to any API.\nA service principal can promote itself or other service principals to admin roles (i.e. Global Administrators). This would be considered a privilege escalation technique.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions, https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "tactics": [
-          "PrivilegeEscalation",
-          "Persistence"
-        ],
-        "name": "Admin promotion after Role Management Application Permission Grant",
         "queryPeriod": "2h",
-        "status": "Available",
-        "queryFrequency": "1h",
+        "query": "let query_frequency = 1h;\nlet query_period = 2h;\nAuditLogs\n| where TimeGenerated > ago(query_period)\n| where Category =~ \"ApplicationManagement\" and LoggedByService =~ \"Core Directory\"\n| where OperationName =~ \"Add app role assignment to service principal\"\n| mv-expand TargetResource = TargetResources\n| mv-expand modifiedProperty = TargetResource[\"modifiedProperties\"]\n| where tostring(modifiedProperty[\"displayName\"]) == \"AppRole.Value\"\n| extend PermissionGrant = tostring(modifiedProperty[\"newValue\"])\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply modifiedProperty = TargetResource[\"modifiedProperties\"] on (\n    summarize modifiedProperties = make_bag(\n        bag_pack(tostring(modifiedProperty[\"displayName\"]),\n            bag_pack(\"oldValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"oldValue\"])),\n                \"newValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"newValue\"])))), 100)\n)\n| project\n    PermissionGrant_TimeGenerated = TimeGenerated,\n    PermissionGrant_OperationName = OperationName,\n    PermissionGrant_Result = Result,\n    PermissionGrant,\n    AppDisplayName = tostring(modifiedProperties[\"ServicePrincipal.DisplayName\"][\"newValue\"]),\n    AppServicePrincipalId = tostring(modifiedProperties[\"ServicePrincipal.ObjectID\"][\"newValue\"]),\n    PermissionGrant_InitiatedBy = InitiatedBy,\n    PermissionGrant_TargetResources = TargetResources,\n    PermissionGrant_AdditionalDetails = AdditionalDetails,\n    PermissionGrant_CorrelationId = CorrelationId\n| join kind=inner (\n    AuditLogs\n    | where TimeGenerated > ago(query_frequency)\n    | where Category =~ \"RoleManagement\" and LoggedByService =~ \"Core Directory\" and AADOperationType =~ \"Assign\"\n    | where isnotempty(InitiatedBy[\"app\"])\n    | mv-expand TargetResource = TargetResources\n    | mv-expand modifiedProperty = TargetResource[\"modifiedProperties\"]\n    | where tostring(modifiedProperty[\"displayName\"]) in (\"Role.DisplayName\", \"RoleDefinition.DisplayName\")\n    | extend RoleAssignment = tostring(modifiedProperty[\"newValue\"])\n    | where RoleAssignment contains \"Admin\"\n    | project\n        RoleAssignment_TimeGenerated = TimeGenerated,\n        RoleAssignment_OperationName = OperationName,\n        RoleAssignment_Result = Result,\n        RoleAssignment,\n        TargetType = tostring(TargetResources[0][\"type\"]),\n        Target = iff(isnotempty(TargetResources[0][\"displayName\"]), tostring(TargetResources[0][\"displayName\"]), tolower(TargetResources[0][\"userPrincipalName\"])),\n        TargetId = tostring(TargetResources[0][\"id\"]),\n        RoleAssignment_InitiatedBy = InitiatedBy,\n        RoleAssignment_TargetResources = TargetResources,\n        RoleAssignment_AdditionalDetails = AdditionalDetails,\n        RoleAssignment_CorrelationId = CorrelationId,\n        AppServicePrincipalId = tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"])\n    ) on AppServicePrincipalId\n| where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated\n| extend\n    TargetName = tostring(split(Target, \"@\")[0]),\n    TargetUPNSuffix = tostring(split(Target, \"@\")[1])\n| project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId, \nRoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetName, TargetUPNSuffix, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId\n| extend PermissionGrant_InitiatingUserPrincipalName = tostring(PermissionGrant_InitiatedBy.user.userPrincipalName)\n| extend PermissionGrant_InitiatingAadUserId = tostring(PermissionGrant_InitiatedBy.user.id)\n| extend PermissionGrant_InitiatingIpAddress = tostring(iff(isnotempty(PermissionGrant_InitiatedBy.user.ipAddress), PermissionGrant_InitiatedBy.user.ipAddress, PermissionGrant_InitiatedBy.app.ipAddress))\n| extend PermissionGrant_InitiatingAccountName = tostring(split(PermissionGrant_InitiatingUserPrincipalName, \"@\")[0]), PermissionGrant_InitiatingAccountUPNSuffix = tostring(split(PermissionGrant_InitiatingUserPrincipalName, \"@\")[1])\n| extend RoleAssignment_InitiatingUserPrincipalName = tostring(RoleAssignment_InitiatedBy.user.userPrincipalName)\n| extend RoleAssignment_InitiatingAadUserId = tostring(RoleAssignment_InitiatedBy.user.id)\n| extend RoleAssignment_InitiatingIpAddress = tostring(iff(isnotempty(RoleAssignment_InitiatedBy.user.ipAddress), RoleAssignment_InitiatedBy.user.ipAddress, RoleAssignment_InitiatedBy.app.ipAddress))\n| extend RoleAssignment_InitiatingAccountName = tostring(split(RoleAssignment_InitiatingUserPrincipalName, \"@\")[0]),  RoleAssignment_InitiatingAccountUPNSuffix = tostring(split(RoleAssignment_InitiatingUserPrincipalName, \"@\")[1])\n",
+        "severity": "High",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AppDisplayName",
@@ -37,10 +29,10 @@
                 "columnName": "AppServicePrincipalId",
                 "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Target",
@@ -54,10 +46,10 @@
                 "columnName": "TargetUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "PermissionGrant_InitiatingUserPrincipalName",
@@ -71,19 +63,19 @@
                 "columnName": "PermissionGrant_InitiatingAccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "PermissionGrant_InitiatingAadUserId",
                 "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "RoleAssignment_InitiatingUserPrincipalName",
@@ -97,20 +89,28 @@
                 "columnName": "RoleAssignment_InitiatingAccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "RoleAssignment_InitiatingAadUserId",
                 "identifier": "AadUserId"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "query": "let query_frequency = 1h;\nlet query_period = 2h;\nAuditLogs\n| where TimeGenerated > ago(query_period)\n| where Category =~ \"ApplicationManagement\" and LoggedByService =~ \"Core Directory\"\n| where OperationName =~ \"Add app role assignment to service principal\"\n| mv-expand TargetResource = TargetResources\n| mv-expand modifiedProperty = TargetResource[\"modifiedProperties\"]\n| where tostring(modifiedProperty[\"displayName\"]) == \"AppRole.Value\"\n| extend PermissionGrant = tostring(modifiedProperty[\"newValue\"])\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply modifiedProperty = TargetResource[\"modifiedProperties\"] on (\n    summarize modifiedProperties = make_bag(\n        bag_pack(tostring(modifiedProperty[\"displayName\"]),\n            bag_pack(\"oldValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"oldValue\"])),\n                \"newValue\", trim(@'[\\\"\\s]+', tostring(modifiedProperty[\"newValue\"])))), 100)\n)\n| project\n    PermissionGrant_TimeGenerated = TimeGenerated,\n    PermissionGrant_OperationName = OperationName,\n    PermissionGrant_Result = Result,\n    PermissionGrant,\n    AppDisplayName = tostring(modifiedProperties[\"ServicePrincipal.DisplayName\"][\"newValue\"]),\n    AppServicePrincipalId = tostring(modifiedProperties[\"ServicePrincipal.ObjectID\"][\"newValue\"]),\n    PermissionGrant_InitiatedBy = InitiatedBy,\n    PermissionGrant_TargetResources = TargetResources,\n    PermissionGrant_AdditionalDetails = AdditionalDetails,\n    PermissionGrant_CorrelationId = CorrelationId\n| join kind=inner (\n    AuditLogs\n    | where TimeGenerated > ago(query_frequency)\n    | where Category =~ \"RoleManagement\" and LoggedByService =~ \"Core Directory\" and AADOperationType =~ \"Assign\"\n    | where isnotempty(InitiatedBy[\"app\"])\n    | mv-expand TargetResource = TargetResources\n    | mv-expand modifiedProperty = TargetResource[\"modifiedProperties\"]\n    | where tostring(modifiedProperty[\"displayName\"]) in (\"Role.DisplayName\", \"RoleDefinition.DisplayName\")\n    | extend RoleAssignment = tostring(modifiedProperty[\"newValue\"])\n    | where RoleAssignment contains \"Admin\"\n    | project\n        RoleAssignment_TimeGenerated = TimeGenerated,\n        RoleAssignment_OperationName = OperationName,\n        RoleAssignment_Result = Result,\n        RoleAssignment,\n        TargetType = tostring(TargetResources[0][\"type\"]),\n        Target = iff(isnotempty(TargetResources[0][\"displayName\"]), tostring(TargetResources[0][\"displayName\"]), tolower(TargetResources[0][\"userPrincipalName\"])),\n        TargetId = tostring(TargetResources[0][\"id\"]),\n        RoleAssignment_InitiatedBy = InitiatedBy,\n        RoleAssignment_TargetResources = TargetResources,\n        RoleAssignment_AdditionalDetails = AdditionalDetails,\n        RoleAssignment_CorrelationId = CorrelationId,\n        AppServicePrincipalId = tostring(InitiatedBy[\"app\"][\"servicePrincipalId\"])\n    ) on AppServicePrincipalId\n| where PermissionGrant_TimeGenerated < RoleAssignment_TimeGenerated\n| extend\n    TargetName = tostring(split(Target, \"@\")[0]),\n    TargetUPNSuffix = tostring(split(Target, \"@\")[1])\n| project PermissionGrant_TimeGenerated, PermissionGrant_OperationName, PermissionGrant_Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, PermissionGrant_InitiatedBy, PermissionGrant_TargetResources, PermissionGrant_AdditionalDetails, PermissionGrant_CorrelationId, \nRoleAssignment_TimeGenerated, RoleAssignment_OperationName, RoleAssignment_Result, RoleAssignment, TargetType, Target, TargetName, TargetUPNSuffix, TargetId, RoleAssignment_InitiatedBy, RoleAssignment_TargetResources, RoleAssignment_AdditionalDetails, RoleAssignment_CorrelationId\n| extend PermissionGrant_InitiatingUserPrincipalName = tostring(PermissionGrant_InitiatedBy.user.userPrincipalName)\n| extend PermissionGrant_InitiatingAadUserId = tostring(PermissionGrant_InitiatedBy.user.id)\n| extend PermissionGrant_InitiatingIpAddress = tostring(iff(isnotempty(PermissionGrant_InitiatedBy.user.ipAddress), PermissionGrant_InitiatedBy.user.ipAddress, PermissionGrant_InitiatedBy.app.ipAddress))\n| extend PermissionGrant_InitiatingAccountName = tostring(split(PermissionGrant_InitiatingUserPrincipalName, \"@\")[0]), PermissionGrant_InitiatingAccountUPNSuffix = tostring(split(PermissionGrant_InitiatingUserPrincipalName, \"@\")[1])\n| extend RoleAssignment_InitiatingUserPrincipalName = tostring(RoleAssignment_InitiatedBy.user.userPrincipalName)\n| extend RoleAssignment_InitiatingAadUserId = tostring(RoleAssignment_InitiatedBy.user.id)\n| extend RoleAssignment_InitiatingIpAddress = tostring(iff(isnotempty(RoleAssignment_InitiatedBy.user.ipAddress), RoleAssignment_InitiatedBy.user.ipAddress, RoleAssignment_InitiatedBy.app.ipAddress))\n| extend RoleAssignment_InitiatingAccountName = tostring(split(RoleAssignment_InitiatingUserPrincipalName, \"@\")[0]),  RoleAssignment_InitiatingAccountUPNSuffix = tostring(split(RoleAssignment_InitiatingUserPrincipalName, \"@\")[1])\n"
+        "tactics": [
+          "PrivilegeEscalation",
+          "Persistence"
+        ],
+        "description": "'This rule looks for a service principal being granted the Microsoft Graph RoleManagement.ReadWrite.Directory (application) permission before being used to add an Microsoft Entra ID object or user account to an Admin directory role (i.e. Global Administrators).\nThis is a known attack path that is usually abused when a service principal already has the AppRoleAssignment.ReadWrite.All permission granted. This permission allows an app to manage permission grants for application permissions to any API.\nA service principal can promote itself or other service principals to admin roles (i.e. Global Administrators). This would be considered a privilege escalation technique.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions, https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "name": "Admin promotion after Role Management Application Permission Grant"
       }
     }
   ]

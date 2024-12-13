@@ -14,38 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Email sender IP in TI list.'\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "tactics": [
-          "Exfiltration",
-          "InitialAccess"
-        ],
-        "name": "ProofpointPOD - Email sender IP in TI list",
         "queryPeriod": "14d",
-        "queryFrequency": "1d",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n          ProofpointPOD \n          | where TimeGenerated >= ago(dt_lookBack)\n          | where isnotempty(SrcIpAddr)\n          | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientIP = SrcIpAddr\n  )\non $left.TI_ipEntity == $right.ClientIP\n| where ProofpointPOD_TimeGenerated < ExpirationDateTime\n| summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientIP\n| project ProofpointPOD_TimeGenerated, SrcUserUpn, DstUserUpn, SrcIpAddr, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, ClientIP\n| extend timestamp = ProofpointPOD_TimeGenerated\n",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "SrcUserUpn",
                 "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "ClientIP",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n          ProofpointPOD \n          | where TimeGenerated >= ago(dt_lookBack)\n          | where isnotempty(SrcIpAddr)\n          | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientIP = SrcIpAddr\n  )\non $left.TI_ipEntity == $right.ClientIP\n| where ProofpointPOD_TimeGenerated < ExpirationDateTime\n| summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientIP\n| project ProofpointPOD_TimeGenerated, SrcUserUpn, DstUserUpn, SrcIpAddr, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore,\nTI_ipEntity, ClientIP\n| extend timestamp = ProofpointPOD_TimeGenerated\n"
+        "tactics": [
+          "Exfiltration",
+          "InitialAccess"
+        ],
+        "description": "'Email sender IP in TI list.'\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "name": "ProofpointPOD - Email sender IP in TI list"
       }
     }
   ]
