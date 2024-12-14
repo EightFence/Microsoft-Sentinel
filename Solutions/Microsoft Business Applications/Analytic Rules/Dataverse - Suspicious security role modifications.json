@@ -14,25 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The following action ocurred following role modifications changes in {{InstanceUrl}}: {{Action}}.",
-          "alertSeverityColumnName": "Severity",
-          "alertDisplayNameFormat": "Dataverse - suspicious role modifications in {{InstanceUrl}}"
+        "name": "Dataverse - Suspicious security role modifications",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerThreshold": {
+          "IsPowerOfTwo": false,
+          "IsZero": true,
+          "IsOne": false,
+          "IsEven": true,
+          "Sign": 0
         },
         "queryPeriod": "14d",
-        "query": "let role_create_watch_period = 2d;\nlet query_frequency = 1h;\nlet role_create_add_events= DataverseActivity\n    | where Message == \"Create\" and EntityName == \"role\"\n    | mv-expand Role = Fields\n    | extend RoleName = Role.Value\n    | where Role.Name == \"name\"\n    | mv-expand Role = Fields\n    | extend RoleCreateTime = TimeGenerated, RoleId = tostring(Role.Value)\n    | where Role.Name == \"roleid\"\n    | join kind=inner (\n        DataverseActivity\n        | where Message == \"Associate\" and EntityName == \"systemuser\"\n        | mv-expand Role = Fields\n        | where Role.Name == \"role\"\n        | extend RoleMemberAddedTime = TimeGenerated, MemberAddedRoleId = tostring(Role.Value))\n        on $left.RoleId == $right.MemberAddedRoleId, InstanceUrl, UserId\n    | where RoleMemberAddedTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));\nlet remove_role_member_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Disassociate\" and EntityName == \"systemuser\"\n    | mv-expand Role = Fields\n    | where Role.Name == \"role\"\n    | extend ActionTime = TimeGenerated, MemberRemovedRoleId = tostring(Role.Value);\nlet role_delete_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Delete\" and EntityName == \"role\"\n    | extend DeletedRoleID = EntityId, Action = \"Role deleted within defined time window\"\n    | project Action, ActionTime = TimeGenerated, UserId, ClientIp, DeletedRoleID, InstanceUrl;\nlet role_member_removals = role_create_add_events\n    | join kind=inner (remove_role_member_events) on $left.RoleId == $right.MemberRemovedRoleId\n    | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period))\n    | extend Action = \"Role membership removed within defined time window\";\nlet role_deletions = role_create_add_events\n    | join kind=inner (role_delete_events) on $left.RoleId == $right.DeletedRoleID\n    | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));\nunion isfuzzy=true role_member_removals, role_deletions\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    UserId,\n    InstanceUrl,\n    ClientIp,\n    Action,\n    RoleCreateTime,\n    RoleName,\n    ActionTime,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -40,8 +44,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ClientIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIp"
               }
             ]
           },
@@ -49,12 +53,12 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
               },
               {
-                "columnName": "InstanceUrl",
-                "identifier": "InstanceName"
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
               }
             ]
           }
@@ -62,15 +66,17 @@
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "description": "Identifies an unusual pattern of events whereby a new role is created followed by the creator adding members to the role and subsequently removing the member or deleting the role after a short time period.",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "The following action ocurred following role modifications changes in {{InstanceUrl}}: {{Action}}.",
+          "alertDisplayNameFormat": "Dataverse - suspicious role modifications in {{InstanceUrl}}",
+          "alertSeverityColumnName": "Severity"
         },
-        "name": "Dataverse - Suspicious security role modifications"
+        "status": "Available",
+        "description": "Identifies an unusual pattern of events whereby a new role is created followed by the creator adding members to the role and subsequently removing the member or deleting the role after a short time period.",
+        "query": "let role_create_watch_period = 2d;\nlet query_frequency = 1h;\nlet role_create_add_events= DataverseActivity\n    | where Message == \"Create\" and EntityName == \"role\"\n    | mv-expand Role = Fields\n    | extend RoleName = Role.Value\n    | where Role.Name == \"name\"\n    | mv-expand Role = Fields\n    | extend RoleCreateTime = TimeGenerated, RoleId = tostring(Role.Value)\n    | where Role.Name == \"roleid\"\n    | join kind=inner (\n        DataverseActivity\n        | where Message == \"Associate\" and EntityName == \"systemuser\"\n        | mv-expand Role = Fields\n        | where Role.Name == \"role\"\n        | extend RoleMemberAddedTime = TimeGenerated, MemberAddedRoleId = tostring(Role.Value))\n        on $left.RoleId == $right.MemberAddedRoleId, InstanceUrl, UserId\n    | where RoleMemberAddedTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));\nlet remove_role_member_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Disassociate\" and EntityName == \"systemuser\"\n    | mv-expand Role = Fields\n    | where Role.Name == \"role\"\n    | extend ActionTime = TimeGenerated, MemberRemovedRoleId = tostring(Role.Value);\nlet role_delete_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Delete\" and EntityName == \"role\"\n    | extend DeletedRoleID = EntityId, Action = \"Role deleted within defined time window\"\n    | project Action, ActionTime = TimeGenerated, UserId, ClientIp, DeletedRoleID, InstanceUrl;\nlet role_member_removals = role_create_add_events\n    | join kind=inner (remove_role_member_events) on $left.RoleId == $right.MemberRemovedRoleId\n    | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period))\n    | extend Action = \"Role membership removed within defined time window\";\nlet role_deletions = role_create_add_events\n    | join kind=inner (role_delete_events) on $left.RoleId == $right.DeletedRoleID\n    | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));\nunion isfuzzy=true role_member_removals, role_deletions\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    UserId,\n    InstanceUrl,\n    ClientIp,\n    Action,\n    RoleCreateTime,\n    RoleName,\n    ActionTime,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h"
       }
     }
   ]
