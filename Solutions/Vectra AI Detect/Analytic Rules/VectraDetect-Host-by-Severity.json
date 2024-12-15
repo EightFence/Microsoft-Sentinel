@@ -14,27 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Vectra AI Detect - Suspected Compromised Host",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "customDetails": {
+          "ScoreDecrease": "score_decreases"
         },
-        "triggerThreshold": {
-          "IsPowerOfTwo": false,
-          "IsZero": true,
-          "IsOne": false,
-          "IsEven": true,
-          "Sign": 0
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "7d",
+            "reopenClosedIncident": true,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          }
         },
-        "queryPeriod": "5m",
+        "description": "'Create an incident when a Host is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n",
+        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: \"High\", \"Critical\" ). Possible values are: \"Low\", \"Medium\", \"High\", \"Critical\"\nlet configured_level = dynamic([\"High\", \"Critical\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                      threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                      threat_score >= 50 and certainty_score <= 50, \"High\", \n                      threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                      \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(TimeGenerated, *) by SourceHostName\n| sort by TimeGenerated\n",
         "entityMappings": [
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "SourceHostName"
+                "columnName": "SourceHostName",
+                "identifier": "HostName"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
         "tactics": [
@@ -47,7 +49,6 @@
           "Impact"
         ],
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "The host {{SourceHostName}} has a Threat score of {{threat_score}} and a\ncertainty of {{certainty_score}}\n",
           "alertDynamicProperties": [
             {
               "alertProperty": "AlertLink",
@@ -66,27 +67,26 @@
               "value": "certainty_score"
             }
           ],
+          "alertSeverityColumnName": "Severity",
           "alertDisplayNameFormat": "Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity",
-          "alertSeverityColumnName": "Severity"
+          "alertDescriptionFormat": "The host {{SourceHostName}} has a Threat score of {{threat_score}} and a\ncertainty of {{certainty_score}}\n"
+        },
+        "queryPeriod": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
         "status": "Available",
-        "description": "'Create an incident when a Host is suspected to be compromised. \nThe higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. \nLevel of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'\n",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": true,
-            "matchingMethod": "AllEntities",
-            "enabled": true,
-            "lookbackDuration": "7d"
-          },
-          "createIncident": true
-        },
-        "query": "// Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: \"High\", \"Critical\" ). Possible values are: \"Low\", \"Medium\", \"High\", \"Critical\"\nlet configured_level = dynamic([\"High\", \"Critical\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                      threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                      threat_score >= 50 and certainty_score <= 50, \"High\", \n                      threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                      \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where level in (configured_level) \n//keep only the event with the highest threat score per Host\n| summarize arg_max(TimeGenerated, *) by SourceHostName\n| sort by TimeGenerated\n",
         "severity": "Informational",
-        "triggerOperator": "gt",
-        "customDetails": {
-          "ScoreDecrease": "score_decreases"
+        "name": "Vectra AI Detect - Suspected Compromised Host",
+        "triggerThreshold": {
+          "IsPowerOfTwo": false,
+          "IsZero": true,
+          "IsOne": false,
+          "IsEven": true,
+          "Sign": 0
         },
-        "queryFrequency": "5m"
+        "queryFrequency": "5m",
+        "triggerOperator": "gt"
       }
     }
   ]

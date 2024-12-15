@@ -14,6 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on FullAccess managed policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
+        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) has \"FullAccess\" and tostring(parse_json(RequestParameters).policyArn) !has \"Admin\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements\n| extend timestamp = TimeGenerated\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              },
+              {
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "severity": "Medium",
         "name": "Privilege escalation with FullAccess managed policy",
         "triggerThreshold": {
           "IsPowerOfTwo": false,
@@ -22,43 +59,6 @@
           "IsEven": true,
           "Sign": 0
         },
-        "queryPeriod": "1d",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
-              },
-              {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
-              }
-            ]
-          }
-        ],
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "status": "Available",
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on FullAccess managed policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
-        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) has \"FullAccess\" and tostring(parse_json(RequestParameters).policyArn) !has \"Admin\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements\n| extend timestamp = TimeGenerated\n",
-        "severity": "Medium",
-        "triggerOperator": "gt",
         "queryFrequency": "1d"
       }
     }
