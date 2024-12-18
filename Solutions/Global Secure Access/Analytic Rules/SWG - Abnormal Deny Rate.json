@@ -14,7 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1h",
+        "status": "Available",
         "triggerOperator": "gt",
+        "triggerThreshold": 1,
+        "tactics": [
+          "InitialAccess",
+          "Exfiltration",
+          "CommandAndControl"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SourceIp",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "DestinationIp",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "25h",
+        "name": "GSA - Detect Abnormal Deny Rate for Source to Destination IP",
+        "severity": "Medium",
         "configurableParameters": [
           {
             "minimumOfStdsThreshold": "The number of stds to use in the threshold calculation. Default is set to 3."
@@ -32,39 +63,8 @@
             "minimumBucketThreshold": "Minimum learning buckets threshold for alert. Default is set to 5."
           }
         ],
-        "status": "Available",
         "query": "let NumOfStdsThreshold = 3;\nlet LearningPeriod = 5d;\nlet BinTime = 1h;\nlet MinThreshold = 5.0;\nlet MinLearningBuckets = 5;\nlet TrafficLogs = NetworkAccessTraffic\n  | where Action == 'Denied'\n  | where isnotempty(DestinationIp) and isnotempty(SourceIp);\nlet LearningSrcIpDenyRate = TrafficLogs\n  | where TimeGenerated between (ago(LearningPeriod + 1d) .. ago(1d))\n  | summarize count() by SourceIp, bin(TimeGenerated, BinTime), DestinationIp\n  | summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, DestinationIp\n  | where LearningTimeBuckets > MinLearningBuckets;\nlet AlertTimeSrcIpDenyRate = TrafficLogs\n  | where TimeGenerated between (ago(1h) .. now())\n  | summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp, DestinationIp;\nAlertTimeSrcIpDenyRate\n  | join kind=leftouter (LearningSrcIpDenyRate) on SourceIp, DestinationIp\n  | extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)\n  | where AlertTimeSrcIpDenyRateCount > LearningThreshold\n  | project SourceIp, DestinationIp, AlertTimeSrcIpDenyRateCount, LearningThreshold    \n",
-        "triggerThreshold": 1,
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIp"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "DestinationIp"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
-        "tactics": [
-          "InitialAccess",
-          "Exfiltration",
-          "CommandAndControl"
-        ],
-        "name": "GSA - Detect Abnormal Deny Rate for Source to Destination IP",
-        "description": "Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access, or C2, where an attacker tries to exploit the same vulnerability on machines in the organization but is being blocked by firewall rules.\n",
-        "queryFrequency": "1h",
-        "queryPeriod": "25h"
+        "description": "Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access, or C2, where an attacker tries to exploit the same vulnerability on machines in the organization but is being blocked by firewall rules.\n"
       }
     }
   ]
