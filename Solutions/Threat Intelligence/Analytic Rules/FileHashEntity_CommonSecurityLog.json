@@ -14,15 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "tactics": [
-          "CommandAndControl"
-        ],
+        "queryPeriod": "14d",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "SourceUserName",
@@ -36,10 +30,10 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
@@ -53,28 +47,28 @@
                 "columnName": "DnsDomain",
                 "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "FileHashValue",
@@ -84,14 +78,20 @@
                 "columnName": "FileHashType",
                 "identifier": "Algorithm"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
-        "queryPeriod": "14d",
-        "name": "TI map File Hash to CommonSecurityLog Event",
+        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n",
+        "queryFrequency": "1h",
+        "tactics": [
+          "CommandAndControl"
+        ],
         "severity": "Medium",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelligenceIndicator\n| where isnotempty(FileHashValue)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now();\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | where isnotempty(FileHash)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
-        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n"
+        "name": "TI map File Hash to CommonSecurityLog Event"
       }
     }
   ]
