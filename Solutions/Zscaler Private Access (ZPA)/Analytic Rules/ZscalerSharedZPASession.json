@@ -14,13 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Detects shared ZPA session.'\n",
         "queryPeriod": "24h",
+        "name": "Zscaler - Shared ZPA session",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountCustomEntity"
               }
             ],
             "entityType": "Account"
@@ -28,24 +31,21 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "severity": "High",
         "tactics": [
           "InitialAccess"
         ],
         "status": "Available",
-        "severity": "High",
-        "triggerThreshold": 0,
-        "name": "Zscaler - Shared ZPA session",
-        "triggerOperator": "gt",
-        "query": "let open_sessions =\nZPAEvent\n| where DvcAction == 'open'\n| summarize timestampstart = min(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId\n| sort by timestampstart asc;\nlet closed_sessions =\nZPAEvent\n| where TimeGenerated > ago(1h)\n| where DvcAction == 'close'\n| summarize timestampend = max(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId\n| sort by timestampend asc;\nopen_sessions\n| join (closed_sessions) on DstUserName\n| sort by DstUserName, timestampstart\n| extend prev_session_closetime = prev(timestampend,1)\n| extend prev_session_starttime = prev(timestampstart,1)\n| extend PreviousSrcIpAddr = prev(SrcIpAddr, 1)\n| extend prev_sessionuser = prev(DstUserName, 1) \n| where DstUserName == prev_sessionuser\n| where SrcIpAddr != PreviousSrcIpAddr\n| where prev_session_closetime > timestampstart\n| project DstUserName, SrcIpAddr, PreviousSrcIpAddr\n| extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName\n",
-        "description": "'Detects shared ZPA session.'\n"
+        "queryFrequency": "1h",
+        "query": "let open_sessions =\nZPAEvent\n| where DvcAction == 'open'\n| summarize timestampstart = min(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId\n| sort by timestampstart asc;\nlet closed_sessions =\nZPAEvent\n| where TimeGenerated > ago(1h)\n| where DvcAction == 'close'\n| summarize timestampend = max(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId\n| sort by timestampend asc;\nopen_sessions\n| join (closed_sessions) on DstUserName\n| sort by DstUserName, timestampstart\n| extend prev_session_closetime = prev(timestampend,1)\n| extend prev_session_starttime = prev(timestampstart,1)\n| extend PreviousSrcIpAddr = prev(SrcIpAddr, 1)\n| extend prev_sessionuser = prev(DstUserName, 1) \n| where DstUserName == prev_sessionuser\n| where SrcIpAddr != PreviousSrcIpAddr\n| where prev_session_closetime > timestampstart\n| project DstUserName, SrcIpAddr, PreviousSrcIpAddr\n| extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName\n"
       }
     }
   ]
