@@ -14,82 +14,82 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "queryPeriod": "1d",
         "name": "COM Event System Loading New DLL",
+        "triggerOperator": "gt",
+        "description": "'This query uses Sysmon Image Load (Event ID 7) and Process Create (Event ID 1) data to look for COM Event System being used to load a newly seen DLL.'\n",
+        "query": "let lookback_start = 7d;\nlet lookback_end = 1d;\nlet timedelta = 5s;\n// Get a list of previously seen DLLs being loaded\nlet known_dlls = (Event\n| where TimeGenerated between(ago(lookback_start)..ago(lookback_end))\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| summarize by DLL);\n// Get Image Load events related to svchost.exe\nEvent\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Image Load Event in Sysmon\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Images = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand Images\n// Parse out executing process\n| where tostring(Images.[\"@Name\"]) =~ \"Image\"\n| extend Image = tostring(Images.[\"#text\"])\n| where Image endswith \"\\\\svchost.exe\"\n// Parse out loaded DLLs\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| extend Image = tostring(Image)\n| extend ImageLoadTime = TimeGenerated\n// Join with processes with a command line related to COM Event System\n| join kind = inner(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Sysmon process execution events\n| where EventID == 1\n| extend RenderedDescription = tostring(split(RenderedDescription, \":\")[0])\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend ParentImage = tostring(column_ifexists(\"ParentImage\", \"NotAvailable\"))\n// Command line related to COM Event System\n| where ParentImage endswith \"\\\\svchost.exe\"\n//| where ParentCommandLine has_all (\" -k LocalService\",\" -p\",\" -s EventSystem\")\n| extend ProcessExecutionTime = TimeGenerated) on $left.Image == $right.ParentImage\n// Check timespan between DLL load and process creation\n| extend delta =  ProcessExecutionTime - ImageLoadTime\n| where ImageLoadTime <= ProcessExecutionTime and delta <= timedelta\n// Filter to only newly seen DLLs\n| where DLL !in (known_dlls)\n| extend ParentCommandLine = tostring(column_ifexists(\"ParentCommandLine\", \"NotAvailable\"))\n| project-reorder ImageLoadTime, ProcessExecutionTime , Image, ParentCommandLine, DLL\n| extend Hashes = tostring(column_ifexists(\"Hashes\", \"NotAvailable, NotAvailable\"))\n| extend Hashes = split(Hashes, \",\")\n| mv-apply Hashes on (summarize FileHashes = make_bag(pack(tostring(split(Hashes, \"=\")[0]), tostring(split(Hashes, \"=\")[1]))))\n| extend SHA1 = tostring(FileHashes.SHA1)\n| extend HashAlgo = \"SHA1\"\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend Name = tostring(split(UserName, \"\\\\\")[1]), NTDomain = tostring(split(UserName, \"\\\\\")[0])\n",
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserName"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "NTDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Computer"
               },
               {
-                "columnName": "HostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName"
               },
               {
-                "columnName": "HostNameDomain",
-                "identifier": "DnsDomain"
+                "identifier": "DnsDomain",
+                "columnName": "HostNameDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
-                "columnName": "SHA1",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "SHA1"
               },
               {
-                "columnName": "HashAlgo",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "HashAlgo"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
-        "severity": "Medium",
-        "description": "'This query uses Sysmon Image Load (Event ID 7) and Process Create (Event ID 1) data to look for COM Event System being used to load a newly seen DLL.'\n",
-        "triggerOperator": "gt",
-        "query": "let lookback_start = 7d;\nlet lookback_end = 1d;\nlet timedelta = 5s;\n// Get a list of previously seen DLLs being loaded\nlet known_dlls = (Event\n| where TimeGenerated between(ago(lookback_start)..ago(lookback_end))\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| summarize by DLL);\n// Get Image Load events related to svchost.exe\nEvent\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Image Load Event in Sysmon\n| where EventID == 7\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Images = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand Images\n// Parse out executing process\n| where tostring(Images.[\"@Name\"]) =~ \"Image\"\n| extend Image = tostring(Images.[\"#text\"])\n| where Image endswith \"\\\\svchost.exe\"\n// Parse out loaded DLLs\n| extend LoadedItems = parse_json(tostring(parse_json(tostring(EvData.DataItem)).EventData)).[\"Data\"]\n| mv-expand LoadedItems\n| where tostring(LoadedItems.[\"@Name\"]) =~ \"ImageLoaded\"\n| extend DLL = tostring(LoadedItems.[\"#text\"])\n| extend Image = tostring(Image)\n| extend ImageLoadTime = TimeGenerated\n// Join with processes with a command line related to COM Event System\n| join kind = inner(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n// Sysmon process execution events\n| where EventID == 1\n| extend RenderedDescription = tostring(split(RenderedDescription, \":\")[0])\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend ParentImage = tostring(column_ifexists(\"ParentImage\", \"NotAvailable\"))\n// Command line related to COM Event System\n| where ParentImage endswith \"\\\\svchost.exe\"\n//| where ParentCommandLine has_all (\" -k LocalService\",\" -p\",\" -s EventSystem\")\n| extend ProcessExecutionTime = TimeGenerated) on $left.Image == $right.ParentImage\n// Check timespan between DLL load and process creation\n| extend delta =  ProcessExecutionTime - ImageLoadTime\n| where ImageLoadTime <= ProcessExecutionTime and delta <= timedelta\n// Filter to only newly seen DLLs\n| where DLL !in (known_dlls)\n| extend ParentCommandLine = tostring(column_ifexists(\"ParentCommandLine\", \"NotAvailable\"))\n| project-reorder ImageLoadTime, ProcessExecutionTime , Image, ParentCommandLine, DLL\n| extend Hashes = tostring(column_ifexists(\"Hashes\", \"NotAvailable, NotAvailable\"))\n| extend Hashes = split(Hashes, \",\")\n| mv-apply Hashes on (summarize FileHashes = make_bag(pack(tostring(split(Hashes, \"=\")[0]), tostring(split(Hashes, \"=\")[1]))))\n| extend SHA1 = tostring(FileHashes.SHA1)\n| extend HashAlgo = \"SHA1\"\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend Name = tostring(split(UserName, \"\\\\\")[1]), NTDomain = tostring(split(UserName, \"\\\\\")[0])\n",
+        "queryFrequency": "1d",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
           "author": {
             "name": "Shain"
-          },
-          "support": {
-            "tier": "Community"
           },
           "categories": {
             "domains": [
               "Security - Others"
             ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           }
-        },
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "queryPeriod": "1d",
-        "queryFrequency": "1d"
+        }
       }
     }
   ]

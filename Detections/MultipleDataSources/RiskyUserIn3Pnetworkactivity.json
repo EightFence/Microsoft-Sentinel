@@ -14,70 +14,70 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "queryPeriod": "1d",
         "name": "Risky user signin observed in non-Microsoft network device",
+        "triggerOperator": "gt",
+        "description": "'This content is utilized to identify instances of successful login by risky users, who have been observed engaging in potentially suspicious network activity on non-Microsoft network devices.'\n",
+        "query": "SigninLogs\n//Find risky Signin\n| where RiskState == \"atRisk\" and ResultType == 0\n| extend Signin_Time = TimeGenerated\n| summarize\n    AppDisplayName=make_set(AppDisplayName),\n    ClientAppUsed=make_set(ClientAppUsed),\n    UserAgent=make_set(UserAgent),\n    CorrelationId=make_set(CorrelationId),\n    Signin_Time= min(Signin_Time),\n    RiskEventTypes=make_set(RiskEventTypes)\n    by\n    ConditionalAccessStatus,\n    IPAddress,\n    IsRisky,\n    ResourceDisplayName,\n    RiskDetail,\n    ResultType,\n    RiskLevelAggregated,\n    RiskLevelDuringSignIn,\n    RiskState,\n    UserPrincipalName=tostring(tolower(UserPrincipalName)),\n    SourceSystem\n| join kind=inner (\n    CommonSecurityLog\n    | where DeviceVendor has_any  (\"Palo Alto Networks\", \"Fortinet\", \"Check Point\", \"Zscaler\")\n    | where DeviceProduct startswith \"FortiGate\" or DeviceProduct startswith  \"PAN\" or DeviceProduct startswith  \"VPN\" or DeviceProduct startswith \"FireWall\" or DeviceProduct startswith  \"NSSWeblog\" or DeviceProduct startswith \"URL\"\n    | where DeviceAction != \"Block\"\n    | where isnotempty(RequestURL)\n    | where isnotempty(SourceUserName)\n    | extend SourceUserName = tolower(SourceUserName)\n    | summarize\n        min(TimeGenerated),\n        max(TimeGenerated),\n        Activity=make_set(Activity)\n        by DestinationHostName, DestinationIP, RequestURL, SourceUserName=tostring(tolower(SourceUserName)),DeviceVendor,DeviceProduct\n    | extend 3p_observed_Time= min_TimeGenerated,Name = tostring(split(SourceUserName,\"@\")[0]),UPNSuffix =tostring(split(SourceUserName,\"@\")[1]))\n    on $left.IPAddress == $right.DestinationIP and $left.UserPrincipalName == $right.SourceUserName\n| extend Timediff = datetime_diff('day', 3p_observed_Time, Signin_Time)\n| where Timediff <= 1 and Timediff >= 0\n",
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserPrincipalName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserPrincipalName"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "DestinationIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "DestinationIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "DNS",
             "fieldMappings": [
               {
-                "columnName": "DestinationHostName",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "DestinationHostName"
               }
-            ]
+            ],
+            "entityType": "DNS"
           }
         ],
-        "severity": "Medium",
-        "description": "'This content is utilized to identify instances of successful login by risky users, who have been observed engaging in potentially suspicious network activity on non-Microsoft network devices.'\n",
-        "triggerOperator": "gt",
-        "query": "SigninLogs\n//Find risky Signin\n| where RiskState == \"atRisk\" and ResultType == 0\n| extend Signin_Time = TimeGenerated\n| summarize\n    AppDisplayName=make_set(AppDisplayName),\n    ClientAppUsed=make_set(ClientAppUsed),\n    UserAgent=make_set(UserAgent),\n    CorrelationId=make_set(CorrelationId),\n    Signin_Time= min(Signin_Time),\n    RiskEventTypes=make_set(RiskEventTypes)\n    by\n    ConditionalAccessStatus,\n    IPAddress,\n    IsRisky,\n    ResourceDisplayName,\n    RiskDetail,\n    ResultType,\n    RiskLevelAggregated,\n    RiskLevelDuringSignIn,\n    RiskState,\n    UserPrincipalName=tostring(tolower(UserPrincipalName)),\n    SourceSystem\n| join kind=inner (\n    CommonSecurityLog\n    | where DeviceVendor has_any  (\"Palo Alto Networks\", \"Fortinet\", \"Check Point\", \"Zscaler\")\n    | where DeviceProduct startswith \"FortiGate\" or DeviceProduct startswith  \"PAN\" or DeviceProduct startswith  \"VPN\" or DeviceProduct startswith \"FireWall\" or DeviceProduct startswith  \"NSSWeblog\" or DeviceProduct startswith \"URL\"\n    | where DeviceAction != \"Block\"\n    | where isnotempty(RequestURL)\n    | where isnotempty(SourceUserName)\n    | extend SourceUserName = tolower(SourceUserName)\n    | summarize\n        min(TimeGenerated),\n        max(TimeGenerated),\n        Activity=make_set(Activity)\n        by DestinationHostName, DestinationIP, RequestURL, SourceUserName=tostring(tolower(SourceUserName)),DeviceVendor,DeviceProduct\n    | extend 3p_observed_Time= min_TimeGenerated,Name = tostring(split(SourceUserName,\"@\")[0]),UPNSuffix =tostring(split(SourceUserName,\"@\")[1]))\n    on $left.IPAddress == $right.DestinationIP and $left.UserPrincipalName == $right.SourceUserName\n| extend Timediff = datetime_diff('day', 3p_observed_Time, Signin_Time)\n| where Timediff <= 1 and Timediff >= 0\n",
+        "queryFrequency": "1d",
+        "tactics": [
+          "CommandAndControl"
+        ],
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
           "author": {
             "name": "Arjun Trivedi"
-          },
-          "support": {
-            "tier": "Community"
           },
           "categories": {
             "domains": [
               "Security - Threat Protection"
             ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           }
-        },
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "queryPeriod": "1d",
-        "queryFrequency": "1d"
+        }
       }
     }
   ]
