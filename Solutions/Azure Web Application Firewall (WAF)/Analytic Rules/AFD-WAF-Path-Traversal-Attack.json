@@ -14,7 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "6h",
+        "entityMappings": [
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URI_s"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "clientIP_s"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "severity": "High",
+        "name": "AFD WAF - Path Traversal Attack",
         "tactics": [
           "DefenseEvasion",
           "Execution",
@@ -22,34 +44,12 @@
           "PrivilegeEscalation",
           "Discovery"
         ],
-        "name": "AFD WAF - Path Traversal Attack",
-        "status": "Available",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "URI_s"
-              }
-            ],
-            "entityType": "URL"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "clientIP_s"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerOperator": "gt",
-        "description": "'Identifies a match for a Path Traversal based attack in the AFD WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.\nReferences: https://owasp.org/www-community/attacks/Path_Traversal'\n",
         "queryFrequency": "6h",
+        "queryPeriod": "6h",
         "query": "let Threshold = 3;\nAzureDiagnostics\n| where Category =~ \"FrontDoorWebApplicationFirewallLog\"\n| where action_s =~ \"AnomalyScoring\"\n| where details_msg_s has \"Path Traversal Attack\"\n| parse details_data_s with MessageText \"Matched Data:\" MatchedData \"AND \" * \"table_name FROM \" TableName \" \" *\n| project trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData\n| join kind = inner(\nAzureDiagnostics\n| where Category =~ \"FrontDoorWebApplicationFirewallLog\"\n| where action_s =~ \"Block\") on trackingReference_s\n| summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s\n| where Total_TrackingReference >= Threshold\n",
-        "severity": "High",
-        "triggerThreshold": 0
+        "triggerOperator": "gt",
+        "status": "Available",
+        "description": "'Identifies a match for a Path Traversal based attack in the AFD WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.\nReferences: https://owasp.org/www-community/attacks/Path_Traversal'\n"
       }
     }
   ]
