@@ -14,18 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "description": "'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'\n",
         "query": "let dt_lookBack = 1h; // Define the lookback period for email data as 1 hour\nlet ioc_lookBack = 14d; // Define the lookback period for threat intelligence data as 14 days\nlet EmailUrlInfo_ = EmailUrlInfo\n| where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains\n| where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback period\n| extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs and domains to lowercase\n| extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column for the time generated\nlet EmailEvents_ = EmailEvents\n| where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period\nlet TI_Urls = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| where isnotempty(Url) // Filter for non-empty URLs\n| extend Url = tolower(Url) // Convert URLs to lowercase\n| join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL\n| where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired\n| where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url // Get the latest email info for each indicator\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, UrlLocation, NetworkMessageId; // Select relevant columns\nlet TI_Domains = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| where isnotempty(DomainName) // Filter for non-empty domain names\n| extend DomainName = tolower(DomainName) // Convert domain names to lowercase\n| join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name\n| where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired\n| where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns\nunion TI_Urls, TI_Domains // Combine URL and domain threat intelligence data\n| extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column\n| join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events on network message ID\n| where DeliveryAction !has \"Blocked\" // Filter out blocked delivery actions\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address\n",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
         "triggerOperator": "gt",
+        "severity": "Medium",
+        "name": "TI map Domain entity to EmailUrlInfo",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -39,20 +34,25 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
+        "description": "'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'\n",
         "queryPeriod": "14d",
-        "name": "TI map Domain entity to EmailUrlInfo"
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]
