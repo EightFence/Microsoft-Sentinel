@@ -14,18 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Malicous IP {{Url}} was found in {{InstanceUrl}}. Associated user is {{UserId}}",
+          "alertDisplayNameFormat": "Dataverse - TI match on URL in {{InstanceUrl}}"
+        },
         "tactics": [
           "InitialAccess",
           "Execution",
           "Persistence"
         ],
-        "name": "Dataverse - TI map URL to DataverseActivity",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,28 +34,28 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -66,21 +65,22 @@
                 "identifier": "InstanceName",
                 "columnName": "InstanceUrl"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
         ],
         "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Malicous IP {{Url}} was found in {{InstanceUrl}}. Associated user is {{UserId}}",
-          "alertDisplayNameFormat": "Dataverse - TI match on URL in {{InstanceUrl}}"
-        },
         "severity": "Medium",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(Url)\n| join kind=innerunique (\n    DataverseActivity\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where Message in (\"Create\", \"Update\")\n    | where isnotempty(Fields) and Fields has \"http\"\n    | extend\n        ExtractedUrls = extract_all(\"(http[s]?://(?:[a-zA-Z\\\\.-]|[0-9])+)\", tostring(Fields)),\n        DataverseActivity_TimeGenerated = TimeGenerated\n    | mv-expand Url = ExtractedUrls\n    | project\n        DataverseActivity_TimeGenerated,\n        tostring(Url),\n        UserId,\n        ClientIp,\n        InstanceUrl,\n        EntityName\n    )\n    on Url\n| where DataverseActivity_TimeGenerated < ExpirationDateTime\n| summarize DataverseActivity_TimeGenerated  = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, Url\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    DataverseActivity_TimeGenerated,\n    Description,\n    ActivityGroupNames,\n    IndicatorId,\n    ThreatType,\n    ExpirationDateTime,\n    ConfidenceScore,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix,\n    Url\n",
+        "status": "Available",
+        "description": "Identifies a match in DataverseActivity from any URL IOC from Microsoft Sentinel Threat Intelligence.",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "queryPeriod": "14d",
-        "description": "Identifies a match in DataverseActivity from any URL IOC from Microsoft Sentinel Threat Intelligence."
+        "name": "Dataverse - TI map URL to DataverseActivity"
       }
     }
   ]
