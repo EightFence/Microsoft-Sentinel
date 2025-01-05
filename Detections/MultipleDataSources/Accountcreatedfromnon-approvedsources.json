@@ -14,9 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1d",
+        "metadata": {
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "tactics": [
+          "Persistence"
+        ],
+        "description": "'This query looks for an account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to confirm expected creation.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "7d",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -26,10 +49,10 @@
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAppServicePrincipalId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -43,28 +66,28 @@
                 "identifier": "UPNSuffix",
                 "columnName": "AddedByUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "AadUserId",
                 "columnName": "InitiatingAadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "InitiatingIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -78,37 +101,14 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UserAddedDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "tactics": [
-          "Persistence"
-        ],
-        "triggerThreshold": 0,
         "query": "let core_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where ResultType == 0\n  | extend domain = tolower(split(UserPrincipalName, \"@\")[1])\n  | summarize by tostring(domain));\n  let alternative_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where isnotempty(AlternateSignInName)\n  | where ResultType == 0\n  | extend domain = tolower(split(AlternateSignInName, \"@\")[1])\n  | summarize by tostring(domain));\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add User\"\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)\n  | extend UserAddedDomain = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[1]),\n  UserAdded !has \"#EXT#\", tostring(split(UserAdded, \"@\")[1]),\n  UserAdded)\n  | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)\n  | extend AddedByName = case(\n  InitiatingUserPrincipalName has \"#EXT#\", tostring(split(tostring(split(InitiatingUserPrincipalName, \"#EXT#\")[0]), \"_\")[0]),\n  InitiatingUserPrincipalName !has \"#EXT#\", tostring(split(InitiatingUserPrincipalName, \"@\")[0]),\n  InitiatingUserPrincipalName)\n  | extend AddedByUPNSuffix = case(\n  InitiatingUserPrincipalName has \"#EXT#\", tostring(split(tostring(split(InitiatingUserPrincipalName, \"#EXT#\")[0]), \"_\")[1]),\n  InitiatingUserPrincipalName !has \"#EXT#\", tostring(split(InitiatingUserPrincipalName, \"@\")[1]),\n  InitiatingUserPrincipalName)\n  | extend UserAddedName = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[0]),\n  UserAdded !has \"#EXT#\", tostring(split(UserAdded, \"@\")[0]),\n  UserAdded)\n",
-        "severity": "Medium",
-        "queryFrequency": "1d",
         "triggerOperator": "gt",
-        "description": "'This query looks for an account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to confirm expected creation.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
-        "name": "Account created from non-approved sources",
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          }
-        },
-        "queryPeriod": "7d"
+        "severity": "Medium",
+        "name": "Account created from non-approved sources"
       }
     }
   ]
