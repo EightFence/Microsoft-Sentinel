@@ -14,53 +14,53 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Low",
-        "triggerOperator": "gt",
+        "status": "Available",
         "description": "Identifies users accessing Dynamics with a User Agent that has not been seen in any Office 365 workloads in the last 14 days.",
+        "severity": "Low",
         "tactics": [
           "InitialAccess"
         ],
-        "queryPeriod": "14d",
         "entityMappings": [
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "LatestIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "LatestIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "query": "let query_lookback = 14d;\nlet query_frequency = 1h;\nlet known_useragents = dynamic([\n    // Enter known user agents to exclude.\n    // example:\n    // \"Agent1\", \"Agent2\", \"Agent3\"\n    ]);\nDataverseActivity\n| where TimeGenerated > ago(query_frequency)\n| where not (UserId has_any (\"@onmicrosoft.com\", \"@microsoft.com\", \"Unknown\"))\n| where isnotempty(UserAgent)\n| where UserAgent !in~ (known_useragents)\n| where UserAgent !hasprefix \"azure-logic-apps\" and UserAgent !hasprefix \"PowerApps\"\n| join kind = leftanti (\n    OfficeActivity\n    | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n    | where isnotempty(UserAgent)\n    | summarize by UserAgent)\n    on UserAgent\n// Exclude user agents with a render agent to reduce noise.\n| join kind = leftanti(\n    DataverseActivity\n    | where TimeGenerated > ago(query_frequency)\n    | where UserAgent has_any (\"Gecko\", \"WebKit\", \"Presto\", \"Trident\", \"EdgeHTML\", \"Blink\"))\n    on UserAgent\n| summarize\n    FirstSeen = min(TimeGenerated),\n    LatestIP = arg_max(ClientIp, TimeGenerated)\n    by UserAgent, UserId, InstanceUrl\n| extend\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1]),\n    CloudAppId = int(32780)\n| project\n    FirstSeen,\n    UserId,\n    UserAgent,\n    LatestIP,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "status": "Available",
-        "queryFrequency": "1h",
+        "queryPeriod": "14d",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "queryFrequency": "1h",
         "name": "Dataverse - New user agent type that was not used with Office 365"
       }
     }
