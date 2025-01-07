@@ -14,18 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "New user sign-in activity was detected in {{InstanceUrl}} originating from user {{UserId}}. This user's UPN suffix is not on the authorized list of domains.",
-          "alertDisplayNameFormat": "Dataverse - Unauthorized sign-in activity"
-        },
-        "status": "Available",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
         "description": "Identifies Dataverse sign-in activity originating from users with UPN suffixes that have not been seen previously in the last 14 days and are not present on a predefined list of authorized domains. Common internal Power Platform system users are excluded by default.",
-        "severity": "Medium",
-        "tactics": [
-          "InitialAccess"
-        ],
+        "query": "// Allow list of UPN suffixes allowed by the organization.\nlet allowed_domains = dynamic([\n    'onmicrosoft.com',\n    'microsoft.com'\n    ]);\n// All list of users allowed by the organization\nlet allowed_users = dynamic([\n    'user1@mydomain.com',\n    'user2@mydomain.com'\n    ]);\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nlet historical_users = DataverseActivity\n    | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n    | where Message == 'UserSignIn'\n    | summarize by UserId;\nDataverseActivity\n| where TimeGenerated >= ago (query_frequency)\n| where Message == 'UserSignIn'\n| join kind=leftanti (historical_users) on UserId\n| summarize FirstEvent = min(TimeGenerated), LastEvent = max(TimeGenerated) by UserId, ClientIp, InstanceUrl\n| where isnotempty(ClientIp)\n| extend CloudAppId = int(32780)\n| extend AccountName = tostring(split(UserId, '@')[0])\n| extend UPNSuffix = tostring(split(UserId, '@')[1])\n| where UPNSuffix !in (allowed_domains) and UserId !in (allowed_users)\n| project\n    FirstEvent,\n    LastEvent,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,19 +31,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -57,19 +53,23 @@
                 "identifier": "InstanceName",
                 "columnName": "InstanceUrl"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "query": "// Allow list of UPN suffixes allowed by the organization.\nlet allowed_domains = dynamic([\n    'onmicrosoft.com',\n    'microsoft.com'\n    ]);\n// All list of users allowed by the organization\nlet allowed_users = dynamic([\n    'user1@mydomain.com',\n    'user2@mydomain.com'\n    ]);\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nlet historical_users = DataverseActivity\n    | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n    | where Message == 'UserSignIn'\n    | summarize by UserId;\nDataverseActivity\n| where TimeGenerated >= ago (query_frequency)\n| where Message == 'UserSignIn'\n| join kind=leftanti (historical_users) on UserId\n| summarize FirstEvent = min(TimeGenerated), LastEvent = max(TimeGenerated) by UserId, ClientIp, InstanceUrl\n| where isnotempty(ClientIp)\n| extend CloudAppId = int(32780)\n| extend AccountName = tostring(split(UserId, '@')[0])\n| extend UPNSuffix = tostring(split(UserId, '@')[1])\n| where UPNSuffix !in (allowed_domains) and UserId !in (allowed_users)\n| project\n    FirstEvent,\n    LastEvent,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "queryPeriod": "14d",
+        "name": "Dataverse - New sign-in from an unauthorized domain",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
-        "queryFrequency": "1h",
-        "name": "Dataverse - New sign-in from an unauthorized domain"
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "New user sign-in activity was detected in {{InstanceUrl}} originating from user {{UserId}}. This user's UPN suffix is not on the authorized list of domains.",
+          "alertDisplayNameFormat": "Dataverse - Unauthorized sign-in activity"
+        },
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerThreshold": 0
       }
     }
   ]

@@ -14,14 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "query": "let MaxCount = 70; //Number of requests per 2 minute timeframe, depending on org size.\nIdentityLogonEvents\n| where ActionType == \"LogonSuccess\"\n| where Protocol == \"Kerberos\"\n| extend json = todynamic(parse_json(tostring(AdditionalFields)))\n| extend SPN = json.Spns,\n       AttackTechniques = json.AttackTechniques\n      | project-away json\n| where isnotempty(SPN)\n| where AttackTechniques has \"T1558.003\"\n| mv-expand SPN\n        | extend SPNType = tostring(extract(@\"^\\w+\",0,tostring(SPN)))\n| distinct tostring(SPN), DeviceName, AccountUpn, AccountSid, bin(TimeGenerated, 2m), ReportId, tostring(AttackTechniques)\n| summarize count(), SPNS=(make_list(SPN, 100000)),ReportId=tostring((make_list(ReportId, 100000))[0]) by AccountUpn,AccountSid,DeviceName, bin(TimeGenerated, 2m), tostring(AttackTechniques)\n| extend SPNS = (replace_regex(tostring(SPNS), @'[^\\w+-\\/]+', '')) \n| where count_ >= MaxCount\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n| extend AccountDomain = tostring(split(AccountUpn, '@')[1]), AccountName = tostring(split(AccountUpn, '@')[0])\n",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
         "description": "This query aim to detect if someone requests service tickets (where count => maxcount)\nThe query requires trimming to set a baseline level for MaxCount  \nMitre Technique: Kerberoasting (T1558.003)\n@MattiasBorg82\n",
-        "severity": "Medium",
-        "tactics": [
-          "CredentialAccess"
+        "tag": [
+          "Kerberoast"
         ],
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -35,10 +38,10 @@
                 "identifier": "DnsDomain",
                 "columnName": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -52,19 +55,16 @@
                 "identifier": "Name",
                 "columnName": "AccountName"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "query": "let MaxCount = 70; //Number of requests per 2 minute timeframe, depending on org size.\nIdentityLogonEvents\n| where ActionType == \"LogonSuccess\"\n| where Protocol == \"Kerberos\"\n| extend json = todynamic(parse_json(tostring(AdditionalFields)))\n| extend SPN = json.Spns,\n       AttackTechniques = json.AttackTechniques\n      | project-away json\n| where isnotempty(SPN)\n| where AttackTechniques has \"T1558.003\"\n| mv-expand SPN\n        | extend SPNType = tostring(extract(@\"^\\w+\",0,tostring(SPN)))\n| distinct tostring(SPN), DeviceName, AccountUpn, AccountSid, bin(TimeGenerated, 2m), ReportId, tostring(AttackTechniques)\n| summarize count(), SPNS=(make_list(SPN, 100000)),ReportId=tostring((make_list(ReportId, 100000))[0]) by AccountUpn,AccountSid,DeviceName, bin(TimeGenerated, 2m), tostring(AttackTechniques)\n| extend SPNS = (replace_regex(tostring(SPNS), @'[^\\w+-\\/]+', '')) \n| where count_ >= MaxCount\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n| extend AccountDomain = tostring(split(AccountUpn, '@')[1]), AccountName = tostring(split(AccountUpn, '@')[0])\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "queryPeriod": "1h",
-        "tag": [
-          "Kerberoast"
+        "name": "Detect Potential Kerberoast Activities",
+        "severity": "Medium",
+        "tactics": [
+          "CredentialAccess"
         ],
-        "queryFrequency": "1h",
-        "name": "Detect Potential Kerberoast Activities"
+        "triggerThreshold": 0
       }
     }
   ]
