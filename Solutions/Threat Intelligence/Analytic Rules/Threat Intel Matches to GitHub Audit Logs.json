@@ -14,13 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Identifies a match in GitHub_CL table from any IP IOC from TI'\n",
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\nThreatIntelligenceIndicator\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| where Action == true\n| where TimeGenerated >= ago(ioc_lookBack)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| join (\n  GitHubAudit\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend GitHubAudit_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.IPaddress\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Actor"
+                "columnName": "Actor",
+                "identifier": "FullName"
               }
             ]
           },
@@ -28,23 +30,21 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPaddress"
+                "columnName": "IPaddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "description": "'Identifies a match in GitHub_CL table from any IP IOC from TI'\n",
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "severity": "Medium",
-        "name": "TI map IP entity to GitHub_CL",
+        "queryFrequency": "1h",
         "tactics": [
           "CommandAndControl"
         ],
         "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\nThreatIntelligenceIndicator\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| where Action == true\n| where TimeGenerated >= ago(ioc_lookBack)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| join (\n  GitHubAudit\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend GitHubAudit_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.IPaddress\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n",
-        "queryPeriod": "14d"
+        "name": "TI map IP entity to GitHub_CL"
       }
     }
   ]

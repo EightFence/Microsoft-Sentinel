@@ -14,17 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "Identifies a match in DataverseActivity from any IP IOC from Microsoft Sentinel Threat Intelligence.",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP)\n    or isnotempty(EmailSourceIpAddress)\n    or isnotempty(NetworkDestinationIP)\n    or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false\n    and TI_ipEntity !startswith \"fe80\"\n    and TI_ipEntity !startswith \"::\"\n    and TI_ipEntity !startswith \"127.\"\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    DataverseActivity\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(ClientIp)\n    //Exclude local addresses, using the ipv4_is_private operator\n    | where ipv4_is_private(ClientIp) == false\n        and ClientIp !startswith \"fe80\"\n        and ClientIp !startswith \"::\"\n        and ClientIp !startswith \"127.\"\n    // renaming time column so it is clear the log this came from\n    | extend DataverseActivity_TimeGenerated = TimeGenerated\n    )\n    on $left.TI_ipEntity == $right.ClientIp\n| where DataverseActivity_TimeGenerated < ExpirationDateTime\n| summarize DataverseActivity_TimeGenerated = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, ClientIp\n| project DataverseActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, ClientIp, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, InstanceUrl, UserId\n| extend\n    timestamp = DataverseActivity_TimeGenerated,\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[0]),\n    CloudAppId = int(32780)\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - TI map IP in {{InstanceUrl}} ",
+          "alertDescriptionFormat": "Malicous IP {{ClientIp}} was found in {{InstanceUrl}} . User affected is {{UserId}}"
+        },
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -32,8 +43,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ClientIp"
+                "columnName": "ClientIp",
+                "identifier": "Address"
               }
             ]
           },
@@ -41,8 +52,8 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ]
           },
@@ -50,37 +61,26 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "CloudAppId"
+                "columnName": "CloudAppId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "InstanceUrl"
+                "columnName": "InstanceUrl",
+                "identifier": "InstanceName"
               }
             ]
           }
         ],
-        "description": "Identifies a match in DataverseActivity from any IP IOC from Microsoft Sentinel Threat Intelligence.",
         "severity": "Medium",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Malicous IP {{ClientIp}} was found in {{InstanceUrl}} . User affected is {{UserId}}",
-          "alertDisplayNameFormat": "Dataverse - TI map IP in {{InstanceUrl}} "
-        },
-        "name": "Dataverse - TI map IP to DataverseActivity",
+        "queryFrequency": "1h",
         "tactics": [
           "InitialAccess",
           "LateralMovement",
           "Discovery"
         ],
         "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
         "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP)\n    or isnotempty(EmailSourceIpAddress)\n    or isnotempty(NetworkDestinationIP)\n    or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false\n    and TI_ipEntity !startswith \"fe80\"\n    and TI_ipEntity !startswith \"::\"\n    and TI_ipEntity !startswith \"127.\"\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    DataverseActivity\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(ClientIp)\n    //Exclude local addresses, using the ipv4_is_private operator\n    | where ipv4_is_private(ClientIp) == false\n        and ClientIp !startswith \"fe80\"\n        and ClientIp !startswith \"::\"\n        and ClientIp !startswith \"127.\"\n    // renaming time column so it is clear the log this came from\n    | extend DataverseActivity_TimeGenerated = TimeGenerated\n    )\n    on $left.TI_ipEntity == $right.ClientIp\n| where DataverseActivity_TimeGenerated < ExpirationDateTime\n| summarize DataverseActivity_TimeGenerated = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, ClientIp\n| project DataverseActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, ClientIp, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, InstanceUrl, UserId\n| extend\n    timestamp = DataverseActivity_TimeGenerated,\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[0]),\n    CloudAppId = int(32780)\n",
-        "queryPeriod": "14d"
+        "name": "Dataverse - TI map IP to DataverseActivity"
       }
     }
   ]
