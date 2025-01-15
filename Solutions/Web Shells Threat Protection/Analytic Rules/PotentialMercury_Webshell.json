@@ -14,12 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let timeframe = 1d;\nlet time_window = 5m;\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4688\n| where Process has_any (\"java.exe\", \"javaw.exe\") and CommandLine has \"SysAidServer\" \n| summarize by ParentProcessName,Process, Account, Computer, CommandLine, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId\n| join kind=inner(\nSecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4663\n| where Process has_any (\"java.exe\", \"javaw.exe\")\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| where ObjectName endswith \".jsp\" \n| summarize by ParentProcessName, Account, Computer, ObjectName, ProcessName, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId)\n on timekey, Computer, SubjectLogonId\n),\n(DeviceFileEvents \n| where InitiatingProcessFileName has_any (\"java.exe\", \"javaw.exe\")  \n| where InitiatingProcessCommandLine has \"SysAidServer\"  \n| where FileName endswith \".jsp\" \n| extend Account = strcat(InitiatingProcessAccountDomain, @'\\', InitiatingProcessAccountName), Computer = DeviceName\n),\n(imFileEvent\n| where TimeGenerated > ago(timeframe)\n| where EventType == \"FileCreated\"\n| where ActingProcessName has_any (\"java.exe\", \"javaw.exe\") \n| where ActingProcessCommandLine has \"SysAidServer\"  \n| where FilePath endswith \".jsp\" \n| extend Account = ActorUsername, Computer = DvcHostname\n)\n)\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Scheduled"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          }
+        },
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "name": "Identify SysAid Server web shell creation",
+        "severity": "High",
         "tactics": [
           "InitialAccess"
         ],
+        "query": "let timeframe = 1d;\nlet time_window = 5m;\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4688\n| where Process has_any (\"java.exe\", \"javaw.exe\") and CommandLine has \"SysAidServer\" \n| summarize by ParentProcessName,Process, Account, Computer, CommandLine, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId\n| join kind=inner(\nSecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4663\n| where Process has_any (\"java.exe\", \"javaw.exe\")\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| where ObjectName endswith \".jsp\" \n| summarize by ParentProcessName, Account, Computer, ObjectName, ProcessName, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId)\n on timekey, Computer, SubjectLogonId\n),\n(DeviceFileEvents \n| where InitiatingProcessFileName has_any (\"java.exe\", \"javaw.exe\")  \n| where InitiatingProcessCommandLine has \"SysAidServer\"  \n| where FileName endswith \".jsp\" \n| extend Account = strcat(InitiatingProcessAccountDomain, @'\\', InitiatingProcessAccountName), Computer = DeviceName\n),\n(imFileEvent\n| where TimeGenerated > ago(timeframe)\n| where EventType == \"FileCreated\"\n| where ActingProcessName has_any (\"java.exe\", \"javaw.exe\") \n| where ActingProcessCommandLine has \"SysAidServer\"  \n| where FilePath endswith \".jsp\" \n| extend Account = ActorUsername, Computer = DvcHostname\n)\n)\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -33,10 +56,10 @@
                 "identifier": "NTDomain",
                 "columnName": "AccountNTDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -50,32 +73,9 @@
                 "identifier": "DnsDomain",
                 "columnName": "HostNameDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ],
-        "triggerOperator": "gt",
-        "severity": "High",
-        "queryFrequency": "1d",
-        "name": "Identify SysAid Server web shell creation",
-        "triggerThreshold": 0,
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
-            ]
-          },
-          "source": {
-            "kind": "Scheduled"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          }
-        },
-        "queryPeriod": "1d",
         "description": "'This query looks for potential webshell creation by the threat actor Mercury after the sucessful exploitation of SysAid server. \nReference:  https://www.microsoft.com/security/blog/2022/08/25/mercury-leveraging-log4j-2-vulnerabilities-in-unpatched-systems-to-target-israeli-organizations/'\n"
       }
     }

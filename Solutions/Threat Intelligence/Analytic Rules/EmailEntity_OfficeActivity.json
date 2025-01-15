@@ -14,12 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet OfficeEvents = materialize(\n  OfficeActivity\n  | where isnotempty(UserId)\n  | where TimeGenerated >= ago(dt_lookBack)\n  | where UserId matches regex emailregex\n  | project-rename  OfficeActivity_TimeGenerated = TimeGenerated);\nlet OfficeActivityUPNs = OfficeEvents | distinct UserId = tolower(UserId) | summarize make_list(UserId);\nThreatIntelligenceIndicator\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where tolower(EmailSenderAddress) in (OfficeActivityUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (OfficeEvents) on $left.EmailSenderAddress == $right.UserId\n| where OfficeActivity_TimeGenerated < ExpirationDateTime\n| summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, UserId\n| project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload, Parameters\n| extend Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])\n| extend timestamp = OfficeActivity_TimeGenerated\n",
-        "tactics": [
-          "InitialAccess"
-        ],
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
+        "name": "TI map Email entity to OfficeActivity",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -33,34 +34,33 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
+        "tactics": [
+          "InitialAccess"
+        ],
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet OfficeEvents = materialize(\n  OfficeActivity\n  | where isnotempty(UserId)\n  | where TimeGenerated >= ago(dt_lookBack)\n  | where UserId matches regex emailregex\n  | project-rename  OfficeActivity_TimeGenerated = TimeGenerated);\nlet OfficeActivityUPNs = OfficeEvents | distinct UserId = tolower(UserId) | summarize make_list(UserId);\nThreatIntelligenceIndicator\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where tolower(EmailSenderAddress) in (OfficeActivityUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (OfficeEvents) on $left.EmailSenderAddress == $right.UserId\n| where OfficeActivity_TimeGenerated < ExpirationDateTime\n| summarize OfficeActivity_TimeGenerated = arg_max(OfficeActivity_TimeGenerated, *) by IndicatorId, UserId\n| project OfficeActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, UserId, ClientIP, Operation, UserType, RecordType, OfficeWorkload, Parameters\n| extend Name = tostring(split(UserId, '@', 0)[0]), UPNSuffix = tostring(split(UserId, '@', 1)[0])\n| extend timestamp = OfficeActivity_TimeGenerated\n",
         "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "name": "TI map Email entity to OfficeActivity",
         "triggerThreshold": 0,
-        "queryPeriod": "14d",
         "description": "'Identifies a match in OfficeActivity table from any Email IOC from TI'\n"
       }
     }
