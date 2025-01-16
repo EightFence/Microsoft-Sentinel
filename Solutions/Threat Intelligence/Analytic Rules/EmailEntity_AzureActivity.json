@@ -14,25 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "queryFrequency": "1h",
         "name": "TI map Email entity to AzureActivity",
-        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Caller"
+                "columnName": "Caller",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -40,8 +37,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
             ]
           },
@@ -49,18 +46,21 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ]
           }
         ],
+        "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Caller)\n    | extend Caller = tolower(Caller)\n    | where Caller matches regex emailregex\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.Caller\n| where AzureActivity_TimeGenerated < ExpirationDateTime\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by IndicatorId, Caller\n| project AzureActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, EmailSenderName, EmailRecipient,\nEmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Caller, Level, CallerIpAddress, CategoryValue, OperationNameValue, ActivityStatusValue,\nResourceGroup, SubscriptionId\n| extend Name = tostring(split(Caller, '@', 0)[0]), UPNSuffix = tostring(split(Caller, '@', 1)[0])\n| extend timestamp = AzureActivity_TimeGenerated\n",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess"
         ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Caller)\n    | extend Caller = tolower(Caller)\n    | where Caller matches regex emailregex\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.Caller\n| where AzureActivity_TimeGenerated < ExpirationDateTime\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by IndicatorId, Caller\n| project AzureActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, EmailSenderName, EmailRecipient,\nEmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Caller, Level, CallerIpAddress, CategoryValue, OperationNameValue, ActivityStatusValue,\nResourceGroup, SubscriptionId\n| extend Name = tostring(split(Caller, '@', 0)[0]), UPNSuffix = tostring(split(Caller, '@', 1)[0])\n| extend timestamp = AzureActivity_TimeGenerated\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryFrequency": "1h",
         "description": "'Identifies a match in AzureActivity table from any Email IOC from TI'\n"
       }
     }

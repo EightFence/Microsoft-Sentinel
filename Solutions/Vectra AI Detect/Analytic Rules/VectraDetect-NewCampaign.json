@@ -14,16 +14,47 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "5m",
-        "queryFrequency": "5m",
         "name": "Vectra AI Detect - New Campaign Detected",
+        "entityMappings": [
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "columnName": "Activity",
+                "identifier": "DomainName"
+              }
+            ]
+          }
+        ],
         "customDetails": {
           "CampaignSourceHost": "SourceHostName",
-          "CampaignReason": "reason",
-          "CampaignName": "Activity"
+          "CampaignName": "Activity",
+          "CampaignReason": "reason"
         },
+        "triggerThreshold": 0,
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID contains \"campaign\"\n| where DeviceAction == \"START\"\n| extend reason = coalesce(\n                          column_ifexists(\"Reason\", \"\"), \n                          extract(\"reason=(.+?)($|;)\", 1, AdditionalExtensions),\n                          \"\"\n                      )\n| project-rename vectra_URL = DeviceCustomString4\n| sort by TimeGenerated\n",
+        "queryPeriod": "5m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": true,
+            "lookbackDuration": "7d",
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "description": "'Identifies when a new Campaign has been detected.  This occurs when multiple Detections accross different Hosts are suspected to be part of the same Attack Campaign.'\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "LateralMovement",
+          "CommandAndControl"
+        ],
+        "severity": "Medium",
+        "queryFrequency": "5m",
+        "status": "Available",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "A new campaign named {{Activity}} has been detected (reason is {{reason}})\n",
+          "alertDisplayNameFormat": "Vectra AI - New Campaign Detected",
           "alertDynamicProperties": [
             {
               "value": "vectra_URL",
@@ -37,39 +68,8 @@
               "value": "DeviceVendor",
               "alertProperty": "ProviderName"
             }
-          ],
-          "alertDisplayNameFormat": "Vectra AI - New Campaign Detected"
-        },
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "Activity"
-              }
-            ]
-          }
-        ],
-        "tactics": [
-          "LateralMovement",
-          "CommandAndControl"
-        ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": true,
-            "lookbackDuration": "7d",
-            "enabled": true,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID contains \"campaign\"\n| where DeviceAction == \"START\"\n| extend reason = coalesce(\n                          column_ifexists(\"Reason\", \"\"), \n                          extract(\"reason=(.+?)($|;)\", 1, AdditionalExtensions),\n                          \"\"\n                      )\n| project-rename vectra_URL = DeviceCustomString4\n| sort by TimeGenerated\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "description": "'Identifies when a new Campaign has been detected.  This occurs when multiple Detections accross different Hosts are suspected to be part of the same Attack Campaign.'\n"
+          ]
+        }
       }
     }
   ]

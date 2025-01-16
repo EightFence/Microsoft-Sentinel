@@ -14,17 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "queryFrequency": "1h",
         "name": "Access Token Manipulation - Create Process with Token",
-        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "DeviceName"
+                "columnName": "DeviceName",
+                "identifier": "FullName"
               }
             ]
           },
@@ -32,16 +29,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Sid",
-                "columnName": "AccountSid"
+                "columnName": "AccountSid",
+                "identifier": "Sid"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "AccountDomain"
+                "columnName": "AccountDomain",
+                "identifier": "NTDomain"
               }
             ]
           },
@@ -49,21 +46,24 @@
             "entityType": "Process",
             "fieldMappings": [
               {
-                "identifier": "CommandLine",
-                "columnName": "ProcessCommandLine"
+                "columnName": "ProcessCommandLine",
+                "identifier": "CommandLine"
               }
             ]
           }
         ],
+        "triggerThreshold": 0,
+        "query": "let RunAsProcess=DeviceProcessEvents\n    | where FileName =~ \"runas.exe\" \n    // You can choose to filter out the local admin account. This is based on convention. Here, we assume that localadmin accounts\n    // end with _ladmin (RID 500 / LAPS).\n    | where not(AccountName has_any(\"_ladmin\"))\n    // De-obfuscate the commandline used. \n    | extend CleanProcessCommandLine=parse_command_line(tostring(ProcessCommandLine), \"windows\")\n    // Exclude a user running something on their system through their admin account.\n    | where CleanProcessCommandLine !contains strcat(AccountName, \"_adm\") // Replace this with your admin account naming convention.\n    // Exclude local admin account activities by, for instance, the servicedesk that uses the LAPS provisioned account. This is optional. \n    // Disable the line below if the number of false positives is acceptable. \n    | where not(CleanProcessCommandLine has_any (\":_ladmin\")) // Replace this with your local RID500/LAPS account.\n    // Extract the username for the elevation action.\n    | extend ElevatedAccountName=extract(\"user:([a-zA-Z0-9\\\\\\\\]+)\",1,tostring(CleanProcessCommandLine))\n    // Strip the domain suffix.\n    | extend CleanElevatedAccountName= trim(\"(.*\\\\\\\\)\",ElevatedAccountName);\nRunAsProcess\n| join kind=leftouter ( \n    DeviceLogonEvents\n    | project-rename CleanElevatedAccountName = AccountName\n    ) on CleanElevatedAccountName,DeviceId\n| project-rename ElevatedActionType=ActionType1,ElevatedAccountSid=AccountSid1\n| project TimeGenerated,DeviceId,DeviceName,FileName,FolderPath,ProcessCommandLine,SHA256,ProcessIntegrityLevel,AccountDomain,AccountName,AccountSid, LogonId, InitiatingProcessFileName,InitiatingProcessFolderPath,InitiatingProcessCommandLine,CleanProcessCommandLine,ElevatedAccountName,CleanElevatedAccountName,ElevatedActionType,LogonType,ElevatedAccountSid\n",
+        "queryPeriod": "1h",
+        "description": "This query detects the use of the 'runas' command and checks whether the account used to elevate privileges isn't the user's own admin account. \nAdditionally, it will match this event to the logon events - to check whether it has been successful as well as augment the event with the new SID.\n",
+        "triggerOperator": "gt",
         "tactics": [
           "PrivilegeEscalation",
           "DefenseEvasion"
         ],
-        "query": "let RunAsProcess=DeviceProcessEvents\n    | where FileName =~ \"runas.exe\" \n    // You can choose to filter out the local admin account. This is based on convention. Here, we assume that localadmin accounts\n    // end with _ladmin (RID 500 / LAPS).\n    | where not(AccountName has_any(\"_ladmin\"))\n    // De-obfuscate the commandline used. \n    | extend CleanProcessCommandLine=parse_command_line(tostring(ProcessCommandLine), \"windows\")\n    // Exclude a user running something on their system through their admin account.\n    | where CleanProcessCommandLine !contains strcat(AccountName, \"_adm\") // Replace this with your admin account naming convention.\n    // Exclude local admin account activities by, for instance, the servicedesk that uses the LAPS provisioned account. This is optional. \n    // Disable the line below if the number of false positives is acceptable. \n    | where not(CleanProcessCommandLine has_any (\":_ladmin\")) // Replace this with your local RID500/LAPS account.\n    // Extract the username for the elevation action.\n    | extend ElevatedAccountName=extract(\"user:([a-zA-Z0-9\\\\\\\\]+)\",1,tostring(CleanProcessCommandLine))\n    // Strip the domain suffix.\n    | extend CleanElevatedAccountName= trim(\"(.*\\\\\\\\)\",ElevatedAccountName);\nRunAsProcess\n| join kind=leftouter ( \n    DeviceLogonEvents\n    | project-rename CleanElevatedAccountName = AccountName\n    ) on CleanElevatedAccountName,DeviceId\n| project-rename ElevatedActionType=ActionType1,ElevatedAccountSid=AccountSid1\n| project TimeGenerated,DeviceId,DeviceName,FileName,FolderPath,ProcessCommandLine,SHA256,ProcessIntegrityLevel,AccountDomain,AccountName,AccountSid, LogonId, InitiatingProcessFileName,InitiatingProcessFolderPath,InitiatingProcessCommandLine,CleanProcessCommandLine,ElevatedAccountName,CleanElevatedAccountName,ElevatedActionType,LogonType,ElevatedAccountSid\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "description": "This query detects the use of the 'runas' command and checks whether the account used to elevate privileges isn't the user's own admin account. \nAdditionally, it will match this event to the logon events - to check whether it has been successful as well as augment the event with the new SID.\n"
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "status": "Available"
       }
     }
   ]
