@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "query": "let relevantOperations = pack_array(\"FileDeleted\", \"FileRecycled\", \"FileDeletedFirstStageRecycleBin\", \"FileDeletedSecondStageRecycleBin\", \"FileVersionsAllMinorsRecycled\", \"FileVersionRecycled\", \"FileVersionsAllRecycled\");\nlet relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive\nlet timeWindow = 7d;\nlet timeNow = now();\n//\nlet riskyUsers= // Look for users with risky sign-ins\n  SigninLogs    \n  | where CreatedDateTime between ((timeNow - timeWindow) .. (timeNow))\n  | where isnotempty(UserId) and isnotempty(OriginalRequestId)\n  | where ResultType == '0'\n  | where RiskLevelDuringSignIn == 'high'\n  | project RiskLevelDuringSignIn, UserId, CreatedDateTime, SessionId=OriginalRequestId\n  ;\nlet hasUsers = isnotempty(toscalar(riskyUsers));\n//\nlet deleteEvents = // look for file deletion activity and scope it to risky users\n  CloudAppEvents\n  | where hasUsers\n  | where TimeGenerated between ((timeNow - timeWindow) .. (timeNow))\n  | where ApplicationId in (relevantAppIds)\n  | where isnotempty(AccountObjectId)\n  | where AccountObjectId in (riskyUsers)\n  | where ActionType in (relevantOperations)\n  | extend SessionId= tostring(RawEventData.AppAccessContext.AADSessionId)\n  | where isnotempty(SessionId)\n  | project UserId=AccountObjectId, AccountDisplayName, ApplicationId, SessionId, ActionType, TimeGenerated, ReportId\n  ;   \n //\ndeleteEvents  \n| join kind=leftsemi riskyUsers on UserId, SessionId\n| summarize Count=count() , (Timestamp, ReportId)=arg_min(TimeGenerated, ReportId) by UserId, AccountDisplayName, ApplicationId, ActionType, Time=bin(TimeGenerated, 5m)\n// look for only those scoped users who have generated an increase in file deletion activity.\n| summarize TotalCount= countif(Count > 50), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by UserId, AccountDisplayName, ApplicationId \n| where TotalCount >= 3\n| project UserId, AccountDisplayName, ApplicationId, TotalCount, ReportId, Timestamp\n| extend NTDomain = tostring(split(AccountDisplayName,'\\\\',0)[0]), Name = tostring(split(AccountDisplayName,'\\\\',1)[0])\n",
-        "queryPeriod": "1h",
-        "name": "Unusual Volume of file deletion by users",
-        "triggerThreshold": 0,
-        "description": "This query looks for users performing file deletion activities. Spikes in file deletion observed from risky sign-in sessions are flagged here.\nThis applies to SharePoint and OneDrive users.\nAudit event and Cloud application identifier references.\nReference - https://learn.microsoft.com/microsoft-365/compliance/audit-log-activities?view=o365-worldwide\nReference - https://learn.microsoft.com/azure/sentinel/entities-reference#cloud-application-identifiers\n",
         "tactics": [
           "Impact"
         ],
-        "customDetails": {
-          "Count": "TotalCount"
-        },
+        "description": "This query looks for users performing file deletion activities. Spikes in file deletion observed from risky sign-in sessions are flagged here.\nThis applies to SharePoint and OneDrive users.\nAudit event and Cloud application identifier references.\nReference - https://learn.microsoft.com/microsoft-365/compliance/audit-log-activities?view=o365-worldwide\nReference - https://learn.microsoft.com/azure/sentinel/entities-reference#cloud-application-identifiers\n",
+        "query": "let relevantOperations = pack_array(\"FileDeleted\", \"FileRecycled\", \"FileDeletedFirstStageRecycleBin\", \"FileDeletedSecondStageRecycleBin\", \"FileVersionsAllMinorsRecycled\", \"FileVersionRecycled\", \"FileVersionsAllRecycled\");\nlet relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive\nlet timeWindow = 7d;\nlet timeNow = now();\n//\nlet riskyUsers= // Look for users with risky sign-ins\n  SigninLogs    \n  | where CreatedDateTime between ((timeNow - timeWindow) .. (timeNow))\n  | where isnotempty(UserId) and isnotempty(OriginalRequestId)\n  | where ResultType == '0'\n  | where RiskLevelDuringSignIn == 'high'\n  | project RiskLevelDuringSignIn, UserId, CreatedDateTime, SessionId=OriginalRequestId\n  ;\nlet hasUsers = isnotempty(toscalar(riskyUsers));\n//\nlet deleteEvents = // look for file deletion activity and scope it to risky users\n  CloudAppEvents\n  | where hasUsers\n  | where TimeGenerated between ((timeNow - timeWindow) .. (timeNow))\n  | where ApplicationId in (relevantAppIds)\n  | where isnotempty(AccountObjectId)\n  | where AccountObjectId in (riskyUsers)\n  | where ActionType in (relevantOperations)\n  | extend SessionId= tostring(RawEventData.AppAccessContext.AADSessionId)\n  | where isnotempty(SessionId)\n  | project UserId=AccountObjectId, AccountDisplayName, ApplicationId, SessionId, ActionType, TimeGenerated, ReportId\n  ;   \n //\ndeleteEvents  \n| join kind=leftsemi riskyUsers on UserId, SessionId\n| summarize Count=count() , (Timestamp, ReportId)=arg_min(TimeGenerated, ReportId) by UserId, AccountDisplayName, ApplicationId, ActionType, Time=bin(TimeGenerated, 5m)\n// look for only those scoped users who have generated an increase in file deletion activity.\n| summarize TotalCount= countif(Count > 50), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by UserId, AccountDisplayName, ApplicationId \n| where TotalCount >= 3\n| project UserId, AccountDisplayName, ApplicationId, TotalCount, ReportId, Timestamp\n| extend NTDomain = tostring(split(AccountDisplayName,'\\\\',0)[0]), Name = tostring(split(AccountDisplayName,'\\\\',1)[0])\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "name": "Unusual Volume of file deletion by users",
+        "queryPeriod": "1h",
         "status": "Available",
         "queryFrequency": "1h",
-        "severity": "High",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserId",
-                "identifier": "AadUserId"
+                "identifier": "AadUserId",
+                "columnName": "UserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "NTDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "ApplicationId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "ApplicationId"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
-        ]
+        ],
+        "severity": "High",
+        "customDetails": {
+          "Count": "TotalCount"
+        }
       }
     }
   ]
