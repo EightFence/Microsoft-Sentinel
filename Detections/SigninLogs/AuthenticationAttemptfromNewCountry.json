@@ -17,13 +17,33 @@
         "tactics": [
           "InitialAccess"
         ],
-        "query": "let CombinedSignInLogs = union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs;\n  // Combine AADNonInteractiveUserSignInLogs and SigninLogs into a single table\n  // Fetch Azure IP address ranges data from a JSON file hosted on GitHub\n  let AzureRanges = externaldata(changeNumber: string, cloud: string, values: dynamic)\n  [\"https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json\"] with(format='multijson')\n  // Load Azure IP address ranges from the JSON file hosted on GitHub\n  | mv-expand values\n  // Expand the values column into separate rows\n  | extend Name = values.name, AddressPrefixes = tostring(values.properties.addressPrefixes);\n  // Create additional columns for the name and address prefixes\n  // Identify known locations to be excluded from analysis\n  let ExcludedKnownLocations = CombinedSignInLogs\n  // Filter the combined logs based on the specified time range\n  | where TimeGenerated between (ago(14d)..ago(1d))\n  // Filter by specific ResultType\n  | where ResultType == 0\n  // Summarize the logs by location\n  | summarize by Location;\n  // Find sign-in locations matching specific criteria\n  let MatchedLocations = materialize(CombinedSignInLogs\n  // Filter the combined logs based on the specified time range\n  | where TimeGenerated > ago(1d)\n  // Exclude specific ResultTypes\n  | where ResultType !in (50126, 50053, 50074, 70044)\n  // Exclude known locations\n  | where Location !in (ExcludedKnownLocations));\n  // Match IP addresses of matched locations with Azure IP address ranges\n  let MatchedIPs = MatchedLocations\n  // Use the 'ipv4_lookup' function to match IP addresses with Azure IP address ranges\n  | evaluate ipv4_lookup(AzureRanges, IPAddress, AddressPrefixes)\n  // Project only the IPAddress column\n  | project IPAddress;\n  // Exclude IP addresses that are already matched with Azure IP address ranges\n  let MaxSetSize = 5; // Set the maximum size limit for make_set\n  let ExcludedIPs = MatchedLocations\n  // Filter out IP addresses that are already matched\n  | where not (IPAddress in (MatchedIPs))\n  // Exclude empty or null Location values\n  | where isnotempty(Location)\n  // Handle dynamic and string column values for LocationDetails and DeviceDetail\n  | extend LocationDetails_dynamic = column_ifexists(\"LocationDetails_dynamic\", \"\")\n  | extend DeviceDetail_dynamic = column_ifexists(\"DeviceDetail_dynamic\", \"\")\n  | extend LocationDetails = iif(isnotempty(LocationDetails_dynamic), LocationDetails_dynamic, parse_json(LocationDetails_string))\n  | extend DeviceDetail = iif(isnotempty(DeviceDetail_dynamic), DeviceDetail_dynamic, parse_json(DeviceDetail_string))\n  // Extract location details (city and state)\n  | extend City = tostring(LocationDetails.city)\n  | extend State = tostring(LocationDetails.state)\n  | extend Place = strcat(City, \" - \", State)\n  | extend DeviceId = tostring(DeviceDetail.deviceId)\n  | extend Result = strcat(tostring(ResultType), \" - \", ResultDescription)\n  // Summarize the data based on UserPrincipalName, Location, and Category\n  | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated),\n  make_set(Result, MaxSetSize), make_set(IPAddress, MaxSetSize),\n  make_set(UserAgent, MaxSetSize), make_set(Place, MaxSetSize),\n  make_set(DeviceId, MaxSetSize) by UserPrincipalName, Location, Category\n  // Extract the username prefix and suffix from UserPrincipalName\n  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]);\n  ExcludedIPs // Output the final result set\n  | extend IP = set_IPAddress[0]\n",
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
+        "description": "Detects when there is a login attempt from a country that has not seen a successful login in the previous 14 days.\nThreat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.\nAuthentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.\nRef: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins\n",
+        "triggerOperator": "gt",
         "severity": "Medium",
+        "query": "let CombinedSignInLogs = union isfuzzy=True AADNonInteractiveUserSignInLogs, SigninLogs;\n  // Combine AADNonInteractiveUserSignInLogs and SigninLogs into a single table\n  // Fetch Azure IP address ranges data from a JSON file hosted on GitHub\n  let AzureRanges = externaldata(changeNumber: string, cloud: string, values: dynamic)\n  [\"https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json\"] with(format='multijson')\n  // Load Azure IP address ranges from the JSON file hosted on GitHub\n  | mv-expand values\n  // Expand the values column into separate rows\n  | extend Name = values.name, AddressPrefixes = tostring(values.properties.addressPrefixes);\n  // Create additional columns for the name and address prefixes\n  // Identify known locations to be excluded from analysis\n  let ExcludedKnownLocations = CombinedSignInLogs\n  // Filter the combined logs based on the specified time range\n  | where TimeGenerated between (ago(14d)..ago(1d))\n  // Filter by specific ResultType\n  | where ResultType == 0\n  // Summarize the logs by location\n  | summarize by Location;\n  // Find sign-in locations matching specific criteria\n  let MatchedLocations = materialize(CombinedSignInLogs\n  // Filter the combined logs based on the specified time range\n  | where TimeGenerated > ago(1d)\n  // Exclude specific ResultTypes\n  | where ResultType !in (50126, 50053, 50074, 70044)\n  // Exclude known locations\n  | where Location !in (ExcludedKnownLocations));\n  // Match IP addresses of matched locations with Azure IP address ranges\n  let MatchedIPs = MatchedLocations\n  // Use the 'ipv4_lookup' function to match IP addresses with Azure IP address ranges\n  | evaluate ipv4_lookup(AzureRanges, IPAddress, AddressPrefixes)\n  // Project only the IPAddress column\n  | project IPAddress;\n  // Exclude IP addresses that are already matched with Azure IP address ranges\n  let MaxSetSize = 5; // Set the maximum size limit for make_set\n  let ExcludedIPs = MatchedLocations\n  // Filter out IP addresses that are already matched\n  | where not (IPAddress in (MatchedIPs))\n  // Exclude empty or null Location values\n  | where isnotempty(Location)\n  // Handle dynamic and string column values for LocationDetails and DeviceDetail\n  | extend LocationDetails_dynamic = column_ifexists(\"LocationDetails_dynamic\", \"\")\n  | extend DeviceDetail_dynamic = column_ifexists(\"DeviceDetail_dynamic\", \"\")\n  | extend LocationDetails = iif(isnotempty(LocationDetails_dynamic), LocationDetails_dynamic, parse_json(LocationDetails_string))\n  | extend DeviceDetail = iif(isnotempty(DeviceDetail_dynamic), DeviceDetail_dynamic, parse_json(DeviceDetail_string))\n  // Extract location details (city and state)\n  | extend City = tostring(LocationDetails.city)\n  | extend State = tostring(LocationDetails.state)\n  | extend Place = strcat(City, \" - \", State)\n  | extend DeviceId = tostring(DeviceDetail.deviceId)\n  | extend Result = strcat(tostring(ResultType), \" - \", ResultDescription)\n  // Summarize the data based on UserPrincipalName, Location, and Category\n  | summarize FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated),\n  make_set(Result, MaxSetSize), make_set(IPAddress, MaxSetSize),\n  make_set(UserAgent, MaxSetSize), make_set(Place, MaxSetSize),\n  make_set(DeviceId, MaxSetSize) by UserPrincipalName, Location, Category\n  // Extract the username prefix and suffix from UserPrincipalName\n  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]);\n  ExcludedIPs // Output the final result set\n  | extend IP = set_IPAddress[0]\n",
         "name": "Authentication Attempt from New Country",
         "queryFrequency": "1d",
-        "triggerThreshold": 0,
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
+          }
+        },
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserPrincipalName",
@@ -37,38 +57,18 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IP",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerOperator": "gt",
-        "description": "Detects when there is a login attempt from a country that has not seen a successful login in the previous 14 days.\nThreat actors may attempt to authenticate with credentials from compromised accounts - monitoring attempts from anomalous locations may help identify these attempts.\nAuthentication attempts should be investigated to ensure the activity was legitimate and if there is other similar activity.\nRef: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins\n",
-        "queryPeriod": "14d",
-        "metadata": {
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
             ]
-          },
-          "source": {
-            "kind": "Community"
           }
-        }
+        ]
       }
     }
   ]
