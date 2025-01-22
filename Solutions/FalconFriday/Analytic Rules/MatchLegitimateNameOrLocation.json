@@ -14,28 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
         "name": "Match Legitimate Name or Location - 2",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "status": "Available",
         "tactics": [
           "DefenseEvasion"
         ],
-        "queryFrequency": "1h",
-        "queryPeriod": "1h",
         "description": "Attackers often match or approximate the name or location of legitimate files to avoid detection rules that are based trust of on certain operating system processes.\nThis query detects mismatches in the parent-child relationship of core operating system processes to uncover different masquerading attempts.\n",
-        "status": "Available",
-        "severity": "Medium",
+        "queryPeriod": "1h",
         "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "DeviceName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Sid",
@@ -49,17 +50,16 @@
                 "identifier": "NTDomain",
                 "columnName": "AccountDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Process",
             "fieldMappings": [
               {
                 "identifier": "CommandLine",
                 "columnName": "ProcessCommandLine"
               }
-            ],
-            "entityType": "Process"
+            ]
           }
         ],
         "query": "let ProcessRelations=datatable(ImageFile:string,ExpectedParent:dynamic) [\n  \"smss.exe\", dynamic([\"smss.exe\", \"ntoskrnl.exe\", \"\"]),\n  \"crmss.exe\", dynamic([\"smss.exe\"]),\n  \"wininit.exe\", dynamic([\"smss.exe\"]),\n  \"winlogon.exe\", dynamic([\"smss.exe\"]),\n  \"services.exe\", dynamic([\"wininit.exe\"]),\n  \"lsaiso.exe\", dynamic([\"wininit.exe\"]),\n  \"lsass.exe\", dynamic([\"wininit.exe\"]),\n  \"spoolsv.exe\", dynamic([\"services.exe\"]),\n  \"dllhost.exe\", dynamic([\"svchost.exe\", \"services.exe\"]),\n  \"lsm.exe\", dynamic([\"wininit.exe\"]),\n  \"svchost.exe\", dynamic([\"services.exe\", \"msmpeng.exe\"]),\n  \"runtimebroker.exe\", dynamic([\"svchost.exe\"]),\n  \"taskhostw.exe\", dynamic([\"svchost.exe\"]),\n  \"userinit.exe\", dynamic([\"winlogon.exe\"])\n  // Explorer can have a lot of parents in some environments\n  //,\"explorer.exe\", dynamic([\"userinit.exe\"])\n];\nDeviceProcessEvents\n| extend ImageFile = tostring(tolower(parse_path(tostring(FolderPath)).Filename))\n| extend ParentFile = tostring(tolower(parse_path(tostring(InitiatingProcessFolderPath)).Filename))\n| lookup kind=inner ProcessRelations on ImageFile\n| where not(set_has_element(ExpectedParent,ParentFile))\n"
