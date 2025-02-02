@@ -14,72 +14,72 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "queryFrequency": "1h",
+        "name": "Detection of Specific Hashes in CommonSecurityLog",
+        "description": "'Identifies a match in CommonSecurityLog from Recorded Future Hash Observed in Underground Virus Testing Sites RiskList.'\n",
         "status": "Available",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SourceUserName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "DeviceName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SourceIP",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "Url",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "queryPeriod": "1d",
         "tactics": [
           "ResourceDevelopment"
         ],
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "SourceUserName"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "DeviceName"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIP"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
+        "severity": "Medium",
         "query": "// Identifies a match in CommonSecurityLog from the Recorded Future Hashes Observed in Underground Virus Testing Sites\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 1d;\nlet fileHashIndicators = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n// Picking up only Recorded Future IOC's that have been observed in undersground testing sites\n| where Description == \"Recorded Future - HASH - Observed in Underground Virus Testing Sites\"\n| where Active == true\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n| join (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | where isnotempty(FileHash)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated >= TimeGenerated and CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nCommonSecurityLog_TimeGenerated, SourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction, RequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHash, AdditionalInformation\n| extend AccountName = tostring(split(SourceUserName, \"@\")[0]), AccountUPNSuffix = tostring(split(SourceUserName, \"@\")[1])\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n",
-        "name": "Detection of Specific Hashes in CommonSecurityLog",
-        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "description": "'Identifies a match in CommonSecurityLog from Recorded Future Hash Observed in Underground Virus Testing Sites RiskList.'\n",
-        "queryFrequency": "1h"
+        "triggerOperator": "gt"
       }
     }
   ]
