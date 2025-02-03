@@ -14,9 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "name": "Brute force attack against a Cloud PC",
+        "triggerOperator": "gt",
         "description": "'Identifies evidence of brute force activity against a Windows 365 Cloud PC by highlighting multiple authentication failures and by a successful authentication within a given time window.'\n",
+        "query": "let authenticationWindow = 20m;\nlet sensitivity = 2.5;\nSigninLogs\n| where AppDisplayName =~ \"Windows Sign In\"\n| extend FailureOrSuccess = iff(ResultType in (\"0\", \"50125\", \"50140\", \"70043\", \"70044\"), \"Success\", \"Failure\")\n| summarize FailureCount = countif(FailureOrSuccess==\"Failure\"), SuccessCount = countif(FailureOrSuccess==\"Success\"), IPAddresses = make_set(IPAddress,1000)\n                          by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName\n| extend FailureSuccessDiff = FailureCount - SuccessCount\n| where FailureSuccessDiff > 0\n| summarize Diff = make_list(FailureSuccessDiff, 10000), TimeStamp = make_list(TimeGenerated, 10000) by UserDisplayName, UserPrincipalName//, tostring(IPAddresses)\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Diff, sensitivity, -1, 'linefit')  \n| mv-expand Diff to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0\n| summarize by UserDisplayName, UserPrincipalName, Anomalies, Score, Baseline, FailureToSuccessDiff = Diff\n| join kind=leftouter (\n      SigninLogs\n      | where AppDisplayName =~ \"Windows Sign In\"\n      | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)\n      | summarize StartTime = min(TimeGenerated), \n                  EndTime = max(TimeGenerated), \n                  IPAddresses = make_set(IPAddress,100), \n                  OS = make_set(OS,20), \n                  Browser = make_set(Browser,20), \n                  City = make_set(City,100), \n                  ResultType = make_set(ResultType,100)\n              by UserDisplayName, UserPrincipalName, UserId, AppDisplayName\n  ) on UserDisplayName, UserPrincipalName\n| project-away UserDisplayName1, UserPrincipalName1\n| extend IPAddressFirst = tostring(IPAddresses[0])\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "name": "Brute force attack against a Cloud PC",
         "status": "Available",
         "entityMappings": [
           {
@@ -55,14 +60,9 @@
             ]
           }
         ],
-        "queryPeriod": "1d",
         "tactics": [
           "CredentialAccess"
-        ],
-        "severity": "Medium",
-        "query": "let authenticationWindow = 20m;\nlet sensitivity = 2.5;\nSigninLogs\n| where AppDisplayName =~ \"Windows Sign In\"\n| extend FailureOrSuccess = iff(ResultType in (\"0\", \"50125\", \"50140\", \"70043\", \"70044\"), \"Success\", \"Failure\")\n| summarize FailureCount = countif(FailureOrSuccess==\"Failure\"), SuccessCount = countif(FailureOrSuccess==\"Success\"), IPAddresses = make_set(IPAddress,1000)\n                          by bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName\n| extend FailureSuccessDiff = FailureCount - SuccessCount\n| where FailureSuccessDiff > 0\n| summarize Diff = make_list(FailureSuccessDiff, 10000), TimeStamp = make_list(TimeGenerated, 10000) by UserDisplayName, UserPrincipalName//, tostring(IPAddresses)\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Diff, sensitivity, -1, 'linefit')  \n| mv-expand Diff to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)\n| where Anomalies > 0\n| summarize by UserDisplayName, UserPrincipalName, Anomalies, Score, Baseline, FailureToSuccessDiff = Diff\n| join kind=leftouter (\n      SigninLogs\n      | where AppDisplayName =~ \"Windows Sign In\"\n      | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)\n      | summarize StartTime = min(TimeGenerated), \n                  EndTime = max(TimeGenerated), \n                  IPAddresses = make_set(IPAddress,100), \n                  OS = make_set(OS,20), \n                  Browser = make_set(Browser,20), \n                  City = make_set(City,100), \n                  ResultType = make_set(ResultType,100)\n              by UserDisplayName, UserPrincipalName, UserId, AppDisplayName\n  ) on UserDisplayName, UserPrincipalName\n| project-away UserDisplayName1, UserPrincipalName1\n| extend IPAddressFirst = tostring(IPAddresses[0])\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]
