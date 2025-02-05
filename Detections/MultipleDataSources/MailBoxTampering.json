@@ -15,19 +15,25 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess",
+          "PrivilegeEscalation"
+        ],
         "query": "SecurityAlert \n| where AlertName == \"Impossible travel activity\"\n| extend Extprop = parsejson(Entities)\n| mv-expand Extprop\n| extend Extprop = parsejson(Extprop)\n| extend CmdLine = iff(Extprop['Type']==\"process\", Extprop['CommandLine'], '')\n| extend File = iff(Extprop['Type']==\"file\", Extprop['Name'], '')\n| extend Account = Extprop['Name']\n| extend Domain = Extprop['UPNSuffix']\n| extend Account = iif(isnotempty(Domain) and Extprop['Type']==\"account\", tolower(strcat(Account, \"@\", Domain)), iif(Extprop['Type']==\"account\", tolower(Account), \"\"))\n| extend IpAddress = iff(Extprop[\"Type\"] == \"ip\",Extprop['Address'], '')\n| extend Process = iff(isnotempty(CmdLine), CmdLine, File)\n| project TimeGenerated,Account,IpAddress,CompromisedEntity,Description,ProviderName,ResourceId\n| join kind=inner\n(\nOfficeActivity\n| where Operation =~ \"Add-MailboxPermission\"\n| extend value = tostring(parse_json(Parameters)[3].Value)\n| where value contains \"FullAccess\"\n| where ResultStatus == \"True\"\n| project Parameters,TimeGenerated,value,RecordType,Operation,OrganizationId,UserType,UserKey,OfficeWorkload,ResultStatus,OfficeObjectId,UserId,ClientIP,ExternalAccess,OriginatingServer,OrganizationName,TenantId,ElevationTime,SourceSystem,OfficeId,OfficeTenantId,Type,SourceRecordId\n) on $left.Account == $right.UserId\n| join kind=inner\n(\nAuditLogs\n| where ActivityDisplayName =~ \"Add eligible member to role in PIM requested (timebound)\"\n| where AADOperationType =~ \"CreateRequestEligibleRole\"\n| where TargetResources has_any (\"-PRIV\", \"Administrator\", \"Security\")\n| extend BuiltinRole = tostring(parse_json(TargetResources[0].displayName))\n| extend CustomGroup = tostring(parse_json(TargetResources[3].displayName))\n| extend TargetAccount = tostring(parse_json(TargetResources[2].displayName))\n| extend Initiatedby = Identity\n| project TimeGenerated, ActivityDisplayName, AADOperationType, Initiatedby, TargetAccount, BuiltinRole, CustomGroup, LoggedByService, Result, ResourceId, Id\n| sort by TimeGenerated desc\n) on $left.UserId == $right.Initiatedby\n| extend AccountName = tostring(split(Initiatedby, \"@\")[0]), AccountUPNSuffix = tostring(split(Initiatedby, \"@\")[1])\n| project AADOperationType, ActivityDisplayName,AccountName, AccountUPNSuffix, Id,ResourceId,IpAddress\n",
         "queryPeriod": "1d",
+        "name": "Detecting Impossible travel with mailbox permission tampering & Privilege Escalation attempt",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               }
             ]
           },
@@ -35,19 +41,13 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IpAddress"
               }
             ]
           }
         ],
         "description": "'This hunting query will alert on any Impossible travel activity in correlation with mailbox permission tampering followed by account being added to a PIM managed privileged group.\nEnsure this impossible travel incident with increase of privileges is legitimate in your environment.'\n",
-        "tactics": [
-          "InitialAccess",
-          "PrivilegeEscalation"
-        ],
-        "triggerThreshold": 0,
-        "name": "Detecting Impossible travel with mailbox permission tampering & Privilege Escalation attempt",
         "metadata": {
           "categories": {
             "domains": [
@@ -55,18 +55,18 @@
               "Identity"
             ]
           },
-          "support": {
-            "tier": "Community"
-          },
           "source": {
             "kind": "Community"
           },
           "author": {
             "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
           }
         },
-        "queryFrequency": "1d",
-        "severity": "Medium"
+        "triggerThreshold": 0,
+        "queryFrequency": "1d"
       }
     }
   ]

@@ -14,28 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Low",
-        "query": "let lookback = 1d;\nlet scriptExtensions = dynamic([\".php\", \".aspx\", \".asp\", \".cfml\", \".py\", \".sh\", \".bash\", \".pl\"]);\n//The number of URI's seen to be suspicious, higher = less likely to be suspicious\nlet uriThreshold = 1;\nlet ReqestCountThreshold = 10; // set minimum requests count to confirm repetitive connections\n// Only look at connections that were allowed through the web proxy\n_Im_WebSession (starttime=ago(lookback), eventresult='Success')\n| project\n    SrcBytes,\n    DstBytes,\n    Url,\n    TimeGenerated,\n    DstIpAddr,\n    SrcIpAddr,\n    HttpRequestMethod,\n    HttpReferrer\n| where not(ipv4_is_private(DstIpAddr)) // Only take traffic going to internet\n| extend DestHostName = tostring(parse_url(Url)[\"Host\"])\n// Only look at connections where some data was exchanged.\n| where SrcBytes > 0 and DstBytes > 0\n// Extract Domain\n| extend Domain = iif(countof(DestHostName, '.') >= 2, strcat(split(DestHostName, '.')[-2], '.', split(DestHostName, '.')[-1]), DestHostName)\n| extend GetData = iff(Url contains \"?\", 1, 0)\n| summarize\n    EventStartTime = min(TimeGenerated),\n    EventEndTime = max(TimeGenerated),\n    make_set(Url, 100),\n    make_set(DstIpAddr, 100),\n    make_set(SrcIpAddr, 100),\n    EventCount = count(),\n    make_set(HttpRequestMethod, 10),\n    max(GetData),\n    max(HttpReferrer)\n    by Domain\n// Determine the number of URIs that have been visited for the domain\n| extend destinationURICount = array_length(set_Url)\n| where destinationURICount <= uriThreshold and EventCount > ReqestCountThreshold // check for repetitive requests for single resource only.\n| where tostring(set_Url) has_any(scriptExtensions)\n//Remove matches with referer\n| where max_HttpReferrer == \"\"\n//Keep requests where data was transferred either in a GET with parameters or a POST\n| where set_HttpRequestMethod in~ (\"POST\") or max_GetData == 1\n//Defeat email click tracking, may increase FN's while decreasing FP's\n| where set_Url !has \"click\" and set_HttpRequestMethod !has \"GET\"\n| mv-expand set_Url, set_DstIpAddr, set_SrcIpAddr\n| extend\n    RequestURL = tostring(set_Url),\n    DestinationIP = tostring(set_DstIpAddr),\n    SourceIP = tostring(set_SrcIpAddr)\n| project\n    EventStartTime,\n    EventEndTime,\n    SourceIP,\n    DestinationIP,\n    EventCount,\n    RequestURL,\n    set_HttpRequestMethod\n",
+        "description": "'This detection mechanism examines connections made to a domain where only a single file is requested, which is considered unusual since most contemporary web applications require additional resources. Such activity is often associated with malware beaconing or tracking URLs delivered via emails. \nThe query includes a sample set of popular web script extensions (scriptExtensions), which should be customized to align with the specific requirements of your environment'\n",
         "name": "Detect requests for an uncommon resources on the web (ASIM Web Session)",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "status": "Available",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "User requested (TotalEvents='{{EventCount}}') for URL '{{RequestURL}}' which contains a known script extension. The domain associated with this URL has not been accessed by any other user. This activity could be a potential beaconing activity to maintain control over compromised systems, receive instructions, or exfiltrate data",
           "alertDisplayNameFormat": "User with IP '{{SourceIP}}' has been observed making request for a rare resource"
         },
-        "triggerThreshold": 0,
-        "customDetails": {
-          "EventStartTime": "EventStartTime",
-          "EventCount": "EventCount",
-          "EventEndTime": "EventEndTime"
-        },
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -65,8 +50,23 @@
             "entityType": "URL"
           }
         ],
-        "description": "'This detection mechanism examines connections made to a domain where only a single file is requested, which is considered unusual since most contemporary web applications require additional resources. Such activity is often associated with malware beaconing or tracking URLs delivered via emails. \nThe query includes a sample set of popular web script extensions (scriptExtensions), which should be customized to align with the specific requirements of your environment'\n",
-        "queryPeriod": "1d"
+        "queryFrequency": "1d",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "severity": "Low",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "customDetails": {
+          "EventStartTime": "EventStartTime",
+          "EventCount": "EventCount",
+          "EventEndTime": "EventEndTime"
+        },
+        "status": "Available",
+        "query": "let lookback = 1d;\nlet scriptExtensions = dynamic([\".php\", \".aspx\", \".asp\", \".cfml\", \".py\", \".sh\", \".bash\", \".pl\"]);\n//The number of URI's seen to be suspicious, higher = less likely to be suspicious\nlet uriThreshold = 1;\nlet ReqestCountThreshold = 10; // set minimum requests count to confirm repetitive connections\n// Only look at connections that were allowed through the web proxy\n_Im_WebSession (starttime=ago(lookback), eventresult='Success')\n| project\n    SrcBytes,\n    DstBytes,\n    Url,\n    TimeGenerated,\n    DstIpAddr,\n    SrcIpAddr,\n    HttpRequestMethod,\n    HttpReferrer\n| where not(ipv4_is_private(DstIpAddr)) // Only take traffic going to internet\n| extend DestHostName = tostring(parse_url(Url)[\"Host\"])\n// Only look at connections where some data was exchanged.\n| where SrcBytes > 0 and DstBytes > 0\n// Extract Domain\n| extend Domain = iif(countof(DestHostName, '.') >= 2, strcat(split(DestHostName, '.')[-2], '.', split(DestHostName, '.')[-1]), DestHostName)\n| extend GetData = iff(Url contains \"?\", 1, 0)\n| summarize\n    EventStartTime = min(TimeGenerated),\n    EventEndTime = max(TimeGenerated),\n    make_set(Url, 100),\n    make_set(DstIpAddr, 100),\n    make_set(SrcIpAddr, 100),\n    EventCount = count(),\n    make_set(HttpRequestMethod, 10),\n    max(GetData),\n    max(HttpReferrer)\n    by Domain\n// Determine the number of URIs that have been visited for the domain\n| extend destinationURICount = array_length(set_Url)\n| where destinationURICount <= uriThreshold and EventCount > ReqestCountThreshold // check for repetitive requests for single resource only.\n| where tostring(set_Url) has_any(scriptExtensions)\n//Remove matches with referer\n| where max_HttpReferrer == \"\"\n//Keep requests where data was transferred either in a GET with parameters or a POST\n| where set_HttpRequestMethod in~ (\"POST\") or max_GetData == 1\n//Defeat email click tracking, may increase FN's while decreasing FP's\n| where set_Url !has \"click\" and set_HttpRequestMethod !has \"GET\"\n| mv-expand set_Url, set_DstIpAddr, set_SrcIpAddr\n| extend\n    RequestURL = tostring(set_Url),\n    DestinationIP = tostring(set_DstIpAddr),\n    SourceIP = tostring(set_SrcIpAddr)\n| project\n    EventStartTime,\n    EventEndTime,\n    SourceIP,\n    DestinationIP,\n    EventCount,\n    RequestURL,\n    set_HttpRequestMethod\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        }
       }
     }
   ]
