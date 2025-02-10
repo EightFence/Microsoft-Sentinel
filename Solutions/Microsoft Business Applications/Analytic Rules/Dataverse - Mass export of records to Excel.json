@@ -14,28 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies users exporting a large amount of records from Dynamics 365 to Excel, significantly more records exported than any other recent activity by that user. Large exports from users with no recent activity are identified using a predefined threshold.",
-        "query": "// Set a mass export threshold for users who have no historical activity.\nlet mass_export_threshold = 10000;\nlet query_lookback = 14d;\nlet query_frequency = 1h;\nlet export_activity = DataverseActivity\n    | where Message == \"ExportToExcel\"\n    | extend QueryCount = iif(QueryResults has \",\", todouble(countof(tostring(QueryResults), ',') + 1), double(1));\nlet current_activity = export_activity\n    | where TimeGenerated > ago(query_frequency)\n    | extend RecordId = split(QueryResults, \",\")\n    | summarize\n        FirstEvent = min(TimeGenerated),\n        CurrentExportRate = sum(QueryCount),\n        SampleRecordIds = make_set(RecordId, 1000)\n        by UserId, InstanceUrl;\nlet historical_activity = export_activity\n    | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n    | summarize HistoricalBaseline = sum(QueryCount) by HistoricalUserId = UserId, InstanceUrl;\ncurrent_activity\n| join kind=leftouter(historical_activity) on $left.UserId == $right.HistoricalUserId, InstanceUrl\n| extend BaselineThreshold = iif(isnotnull(HistoricalBaseline), HistoricalBaseline, todouble(mass_export_threshold))\n| where CurrentExportRate > BaselineThreshold\n| join kind=inner(export_activity\n    | where TimeGenerated > ago(query_frequency)\n    | summarize EntityCount = sum(QueryCount) by UserId, ClientIp, InstanceUrl, EntityName\n    | extend Details = bag_pack(\"EntityName\", EntityName, \"EntityCount\", EntityCount)\n    | summarize Details = make_set(Details, 100) by UserId, ClientIp, InstanceUrl)\n    on UserId, InstanceUrl\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    BaselineThreshold,\n    CurrentExportRate,\n    Details,\n    SampleRecordIds,\n    InstanceUrl,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
-        "severity": "Low",
-        "name": "Dataverse - Mass export of records to Excel",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "tactics": [
-          "Exfiltration"
-        ],
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Dataverse - mass export to Excel activity in {{{InstanceUrl}} ",
-          "alertDescriptionFormat": "User {{UserId}} exported {{{CurrentExportRate}} records using the ExportToExcel function in Dataverse."
-        },
+        "name": "Dataverse - Mass export of records to Excel",
         "queryPeriod": "14d",
         "queryFrequency": "1h",
+        "description": "Identifies users exporting a large amount of records from Dynamics 365 to Excel, significantly more records exported than any other recent activity by that user. Large exports from users with no recent activity are identified using a predefined threshold.",
+        "triggerOperator": "gt",
+        "severity": "Low",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -45,10 +34,10 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "CloudAppId",
@@ -58,18 +47,29 @@
                 "columnName": "InstanceUrl",
                 "identifier": "InstanceName"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "ClientIp",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
-        ]
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - mass export to Excel activity in {{{InstanceUrl}} ",
+          "alertDescriptionFormat": "User {{UserId}} exported {{{CurrentExportRate}} records using the ExportToExcel function in Dataverse."
+        },
+        "triggerThreshold": 0,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "status": "Available",
+        "query": "// Set a mass export threshold for users who have no historical activity.\nlet mass_export_threshold = 10000;\nlet query_lookback = 14d;\nlet query_frequency = 1h;\nlet export_activity = DataverseActivity\n    | where Message == \"ExportToExcel\"\n    | extend QueryCount = iif(QueryResults has \",\", todouble(countof(tostring(QueryResults), ',') + 1), double(1));\nlet current_activity = export_activity\n    | where TimeGenerated > ago(query_frequency)\n    | extend RecordId = split(QueryResults, \",\")\n    | summarize\n        FirstEvent = min(TimeGenerated),\n        CurrentExportRate = sum(QueryCount),\n        SampleRecordIds = make_set(RecordId, 1000)\n        by UserId, InstanceUrl;\nlet historical_activity = export_activity\n    | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n    | summarize HistoricalBaseline = sum(QueryCount) by HistoricalUserId = UserId, InstanceUrl;\ncurrent_activity\n| join kind=leftouter(historical_activity) on $left.UserId == $right.HistoricalUserId, InstanceUrl\n| extend BaselineThreshold = iif(isnotnull(HistoricalBaseline), HistoricalBaseline, todouble(mass_export_threshold))\n| where CurrentExportRate > BaselineThreshold\n| join kind=inner(export_activity\n    | where TimeGenerated > ago(query_frequency)\n    | summarize EntityCount = sum(QueryCount) by UserId, ClientIp, InstanceUrl, EntityName\n    | extend Details = bag_pack(\"EntityName\", EntityName, \"EntityCount\", EntityCount)\n    | summarize Details = make_set(Details, 100) by UserId, ClientIp, InstanceUrl)\n    on UserId, InstanceUrl\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    BaselineThreshold,\n    CurrentExportRate,\n    Details,\n    SampleRecordIds,\n    InstanceUrl,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n"
       }
     }
   ]
