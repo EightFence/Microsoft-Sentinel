@@ -15,11 +15,17 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "name": "Microsoft Entra ID Role Management Permission Grant",
+        "query": "AuditLogs\n| where Category =~ \"ApplicationManagement\" and LoggedByService =~ \"Core Directory\" and OperationName in~ (\"Add delegated permission grant\", \"Add app role assignment to service principal\")\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)\n      | extend props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on\n  (\n      where Property.displayName in~ (\"AppRole.Value\",\"DelegatedPermissionGrant.Scope\")\n      | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('\"',tostring(Property.newValue))\n  )\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply Property = props on\n  (\n      where Property.displayName =~ \"ServicePrincipal.DisplayName\"\n      | extend TargetAppDisplayName = trim('\"',tostring(Property.newValue))\n  )\n| mv-apply Property = props on\n  (\n      where Property.displayName =~ \"ServicePrincipal.ObjectID\"\n      | extend TargetAppServicePrincipalId = trim('\"',tostring(Property.newValue))\n  )\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| project TimeGenerated, OperationName, Result, PermissionGrant, TargetAppDisplayName, TargetAppServicePrincipalId, InitiatingAppName, InitiatingAppServicePrincipalId,\nInitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, TargetResources, AdditionalDetails, CorrelationId\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
+        "triggerThreshold": 0,
         "queryPeriod": "2h",
-        "queryFrequency": "2h",
-        "description": "'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.\nThis permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.\nAn adversary could use this permission to add an Microsoft Entra ID object to an Admin directory role and escalate privileges.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions\nRef : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n",
+        "tactics": [
+          "Persistence",
+          "Impact"
+        ],
+        "status": "Available",
         "triggerOperator": "gt",
         "severity": "High",
+        "queryFrequency": "2h",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -83,13 +89,7 @@
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "tactics": [
-          "Persistence",
-          "Impact"
-        ],
-        "status": "Available",
-        "query": "AuditLogs\n| where Category =~ \"ApplicationManagement\" and LoggedByService =~ \"Core Directory\" and OperationName in~ (\"Add delegated permission grant\", \"Add app role assignment to service principal\")\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"ServicePrincipal\" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)\n      | extend props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on\n  (\n      where Property.displayName in~ (\"AppRole.Value\",\"DelegatedPermissionGrant.Scope\")\n      | extend DisplayName = tostring(Property.displayName), PermissionGrant = trim('\"',tostring(Property.newValue))\n  )\n| where PermissionGrant has \"RoleManagement.ReadWrite.Directory\"\n| mv-apply Property = props on\n  (\n      where Property.displayName =~ \"ServicePrincipal.DisplayName\"\n      | extend TargetAppDisplayName = trim('\"',tostring(Property.newValue))\n  )\n| mv-apply Property = props on\n  (\n      where Property.displayName =~ \"ServicePrincipal.ObjectID\"\n      | extend TargetAppServicePrincipalId = trim('\"',tostring(Property.newValue))\n  )\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| project TimeGenerated, OperationName, Result, PermissionGrant, TargetAppDisplayName, TargetAppServicePrincipalId, InitiatingAppName, InitiatingAppServicePrincipalId,\nInitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, TargetResources, AdditionalDetails, CorrelationId\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n"
+        "description": "'Identifies when the Microsoft Graph RoleManagement.ReadWrite.Directory (Delegated or Application) permission is granted to a service principal.\nThis permission allows an application to read and manage the role-based access control (RBAC) settings for your company's directory.\nAn adversary could use this permission to add an Microsoft Entra ID object to an Admin directory role and escalate privileges.\nRef : https://docs.microsoft.com/graph/permissions-reference#role-management-permissions\nRef : https://docs.microsoft.com/graph/api/directoryrole-post-members?view=graph-rest-1.0&tabs=http'\n"
       }
     }
   ]
