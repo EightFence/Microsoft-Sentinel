@@ -14,11 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "severity": "Low",
-        "query": "let timeRange = 2h;\nlet authenticationWindow = 1h;\nlet authenticationThreshold = 5;\nSecurityEvent\n| where TimeGenerated > ago(timeRange)\n| where EventID in (4624, 4625)\n| where IpAddress != \"-\" and isnotempty(Account)\n| extend Outcome = iff(EventID == 4624, \"Success\", \"Failure\")\n// bin outcomes into 10 minute windows to reduce the volume of data\n| summarize OutcomeCount=count() by bin(TimeGenerated, 10m), Account, IpAddress, Computer, Outcome\n| project TimeGenerated, Account, IpAddress, Computer, Outcome, OutcomeCount\n// sort ready for sessionizing - by account and time of the authentication outcome\n| sort by TimeGenerated asc, Account, IpAddress, Computer, Outcome, OutcomeCount\n| serialize\n// sessionize into failure groupings until either the account changes or there is a success\n| extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, Account != prev(Account) or prev(Outcome) == \"Success\")\n// count the failures in each session\n| summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == \"Failure\"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), make_list(Outcome, 128), make_set(Computer, 128), make_set(IpAddress, 128) by SessionStartedUtc, Account\n// the session must not start with a success, and must end with one\n| where array_index_of(list_Outcome, \"Success\") != 0\n| where array_index_of(list_Outcome, \"Success\") == array_length(list_Outcome) - 1\n| project-away SessionStartedUtc, list_Outcome\n// where the number of failures before the success is above the threshold\n| where FailureCountBeforeSuccess >= authenticationThreshold\n// expand out ip and computer for customer entity assignment\n| mv-expand set_IpAddress, set_Computer\n| extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)\n| extend timestamp=StartTime, NTDomain = split(Account, '\\\\', 0)[0], Name = split(Account, '\\\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
-        "status": "Available",
-        "name": "SecurityEvent - Multiple authentication failures followed by a success",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -64,13 +59,18 @@
             "entityType": "IP"
           }
         ],
-        "description": "'Identifies accounts who have failed to logon to the domain multiple times in a row, followed by a successful authentication within a short time frame. Multiple failed attempts followed by a success can be an indication of a brute force attempt or possible mis-configuration of a service account within an environment.\nThe lookback is set to 2h and the authentication window and threshold are set to 1h and 5, meaning we need to see a minimum of 5 failures followed by a success for an account within 1 hour to surface an alert.'\n",
+        "triggerThreshold": 0,
         "tactics": [
           "CredentialAccess"
         ],
         "queryFrequency": "2h",
+        "query": "let timeRange = 2h;\nlet authenticationWindow = 1h;\nlet authenticationThreshold = 5;\nSecurityEvent\n| where TimeGenerated > ago(timeRange)\n| where EventID in (4624, 4625)\n| where IpAddress != \"-\" and isnotempty(Account)\n| extend Outcome = iff(EventID == 4624, \"Success\", \"Failure\")\n// bin outcomes into 10 minute windows to reduce the volume of data\n| summarize OutcomeCount=count() by bin(TimeGenerated, 10m), Account, IpAddress, Computer, Outcome\n| project TimeGenerated, Account, IpAddress, Computer, Outcome, OutcomeCount\n// sort ready for sessionizing - by account and time of the authentication outcome\n| sort by TimeGenerated asc, Account, IpAddress, Computer, Outcome, OutcomeCount\n| serialize\n// sessionize into failure groupings until either the account changes or there is a success\n| extend SessionStartedUtc = row_window_session(TimeGenerated, timeRange, authenticationWindow, Account != prev(Account) or prev(Outcome) == \"Success\")\n// count the failures in each session\n| summarize FailureCountBeforeSuccess=sumif(OutcomeCount, Outcome == \"Failure\"), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), make_list(Outcome, 128), make_set(Computer, 128), make_set(IpAddress, 128) by SessionStartedUtc, Account\n// the session must not start with a success, and must end with one\n| where array_index_of(list_Outcome, \"Success\") != 0\n| where array_index_of(list_Outcome, \"Success\") == array_length(list_Outcome) - 1\n| project-away SessionStartedUtc, list_Outcome\n// where the number of failures before the success is above the threshold\n| where FailureCountBeforeSuccess >= authenticationThreshold\n// expand out ip and computer for customer entity assignment\n| mv-expand set_IpAddress, set_Computer\n| extend IpAddress = tostring(set_IpAddress), Computer = tostring(set_Computer)\n| extend timestamp=StartTime, NTDomain = split(Account, '\\\\', 0)[0], Name = split(Account, '\\\\', 1)[0], HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
         "triggerOperator": "gt",
-        "queryPeriod": "2h"
+        "description": "'Identifies accounts who have failed to logon to the domain multiple times in a row, followed by a successful authentication within a short time frame. Multiple failed attempts followed by a success can be an indication of a brute force attempt or possible mis-configuration of a service account within an environment.\nThe lookback is set to 2h and the authentication window and threshold are set to 1h and 5, meaning we need to see a minimum of 5 failures followed by a success for an account within 1 hour to surface an alert.'\n",
+        "queryPeriod": "2h",
+        "severity": "Low",
+        "status": "Available",
+        "name": "SecurityEvent - Multiple authentication failures followed by a success"
       }
     }
   ]
