@@ -14,30 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess",
+          "Persistence"
+        ],
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "status": "Available",
+        "name": "Sign-ins from IPs that attempt sign-ins to disabled accounts",
+        "triggerOperator": "gt",
+        "description": "'Identifies IPs with failed attempts to sign in to one or more disabled accounts using the IP through which successful signins from other accounts have happened.\nThis could indicate an attacker who obtained credentials for a list of accounts and is attempting to login with those accounts, some of which may have already been disabled.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n50057 - User account is disabled. The account has been disabled by an administrator.\nThis query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "tactics": [
-          "InitialAccess",
-          "Persistence"
-        ],
         "queryFrequency": "1d",
-        "query": "let aadFunc = (tableName: string) {\nlet failed_signins = table(tableName)\n| where ResultType == \"50057\"\n| where ResultDescription == \"User account is disabled. The account has been disabled by an administrator.\";\nlet disabled_users = failed_signins | summarize by UserPrincipalName;\ntable(tableName)\n  | where ResultType == 0\n  | where isnotempty(UserPrincipalName)\n  | where UserPrincipalName !in (disabled_users)\n| summarize\n        successfulAccountsTargettedCount = dcount(UserPrincipalName),\n        successfulAccountSigninSet = make_set(UserPrincipalName, 100),\n        successfulApplicationSet = make_set(AppDisplayName, 100)\n    by IPAddress, Type\n    // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe\n    | where successfulAccountsTargettedCount < 50\n    | where isnotempty(successfulAccountsTargettedCount)\n  | join kind=inner (failed_signins\n| summarize\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated),\n    totalDisabledAccountLoginAttempts = count(),\n    disabledAccountsTargettedCount = dcount(UserPrincipalName),\n    applicationsTargeted = dcount(AppDisplayName),\n    disabledAccountSet = make_set(UserPrincipalName, 100),\n    disabledApplicationSet = make_set(AppDisplayName, 100)\nby IPAddress, Type\n| order by totalDisabledAccountLoginAttempts desc) on IPAddress\n| project StartTime, EndTime, IPAddress, totalDisabledAccountLoginAttempts, disabledAccountsTargettedCount, disabledAccountSet, disabledApplicationSet, successfulApplicationSet, successfulAccountsTargettedCount, successfulAccountSigninSet, Type\n| order by totalDisabledAccountLoginAttempts};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n| join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where EventSource =~ \"Azure AD\"\n    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress, UserPrincipalName\n    | project-rename IPAddress = SourceIPAddress\n    | summarize\n        Users = make_set(UserPrincipalName, 100),\n        UsersInsights = make_set(UsersInsights, 100),\n        DevicesInsights = make_set(DevicesInsights, 100),\n        IPInvestigationPriority = sum(InvestigationPriority)\n    by IPAddress\n) on IPAddress\n| extend SFRatio = toreal(toreal(disabledAccountsTargettedCount)/toreal(successfulAccountsTargettedCount))\n| where SFRatio >= 0.5\n| sort by IPInvestigationPriority desc\n",
-        "triggerOperator": "gt",
-        "description": "'Identifies IPs with failed attempts to sign in to one or more disabled accounts using the IP through which successful signins from other accounts have happened.\nThis could indicate an attacker who obtained credentials for a list of accounts and is attempting to login with those accounts, some of which may have already been disabled.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n50057 - User account is disabled. The account has been disabled by an administrator.\nThis query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'\n",
-        "queryPeriod": "1d",
-        "severity": "Medium",
-        "status": "Available",
-        "name": "Sign-ins from IPs that attempt sign-ins to disabled accounts"
+        "query": "let aadFunc = (tableName: string) {\nlet failed_signins = table(tableName)\n| where ResultType == \"50057\"\n| where ResultDescription == \"User account is disabled. The account has been disabled by an administrator.\";\nlet disabled_users = failed_signins | summarize by UserPrincipalName;\ntable(tableName)\n  | where ResultType == 0\n  | where isnotempty(UserPrincipalName)\n  | where UserPrincipalName !in (disabled_users)\n| summarize\n        successfulAccountsTargettedCount = dcount(UserPrincipalName),\n        successfulAccountSigninSet = make_set(UserPrincipalName, 100),\n        successfulApplicationSet = make_set(AppDisplayName, 100)\n    by IPAddress, Type\n    // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe\n    | where successfulAccountsTargettedCount < 50\n    | where isnotempty(successfulAccountsTargettedCount)\n  | join kind=inner (failed_signins\n| summarize\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated),\n    totalDisabledAccountLoginAttempts = count(),\n    disabledAccountsTargettedCount = dcount(UserPrincipalName),\n    applicationsTargeted = dcount(AppDisplayName),\n    disabledAccountSet = make_set(UserPrincipalName, 100),\n    disabledApplicationSet = make_set(AppDisplayName, 100)\nby IPAddress, Type\n| order by totalDisabledAccountLoginAttempts desc) on IPAddress\n| project StartTime, EndTime, IPAddress, totalDisabledAccountLoginAttempts, disabledAccountsTargettedCount, disabledAccountSet, disabledApplicationSet, successfulApplicationSet, successfulAccountsTargettedCount, successfulAccountSigninSet, Type\n| order by totalDisabledAccountLoginAttempts};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n| join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where EventSource =~ \"Azure AD\"\n    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress, UserPrincipalName\n    | project-rename IPAddress = SourceIPAddress\n    | summarize\n        Users = make_set(UserPrincipalName, 100),\n        UsersInsights = make_set(UsersInsights, 100),\n        DevicesInsights = make_set(DevicesInsights, 100),\n        IPInvestigationPriority = sum(InvestigationPriority)\n    by IPAddress\n) on IPAddress\n| extend SFRatio = toreal(toreal(disabledAccountsTargettedCount)/toreal(successfulAccountsTargettedCount))\n| where SFRatio >= 0.5\n| sort by IPInvestigationPriority desc\n"
       }
     }
   ]

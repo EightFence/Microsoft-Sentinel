@@ -14,10 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "name": "Privileged User Logon from new ASN",
+        "query": "let admins=(IdentityInfo\n  | where AssignedRoles contains \"admin\" or GroupMembership has \"Admin\"\n  | summarize by tolower(AccountUPN));\n  let known_asns = (\n  SigninLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where ResultType == 0\n  | summarize by AutonomousSystemNumber);\n  SigninLogs\n  | where TimeGenerated > ago(1d)\n  | where ResultType == 0\n  | where tolower(UserPrincipalName) in (admins)\n  | where AutonomousSystemNumber !in (known_asns)\n  | project-reorder TimeGenerated, UserPrincipalName, UserAgent, IPAddress, AutonomousSystemNumber\n  | extend AccountName = tostring(split(UserPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
         "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "queryFrequency": "1d",
+        "description": "'Detects a successful logon by a privileged account from an ASN not logged in from in the last 14 days.\n  Monitor these logons to ensure they are legitimate and identify if there are any similar sign ins.'\n",
         "metadata": {
-          "source": {
-            "kind": "Community"
+          "author": {
+            "name": "Microsoft Security Research"
           },
           "categories": {
             "domains": [
@@ -25,51 +61,15 @@
               "Security - Others"
             ]
           },
-          "author": {
-            "name": "Microsoft Security Research"
+          "source": {
+            "kind": "Community"
           },
           "support": {
             "tier": "Community"
           }
         },
-        "severity": "Medium",
-        "query": "let admins=(IdentityInfo\n  | where AssignedRoles contains \"admin\" or GroupMembership has \"Admin\"\n  | summarize by tolower(AccountUPN));\n  let known_asns = (\n  SigninLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where ResultType == 0\n  | summarize by AutonomousSystemNumber);\n  SigninLogs\n  | where TimeGenerated > ago(1d)\n  | where ResultType == 0\n  | where tolower(UserPrincipalName) in (admins)\n  | where AutonomousSystemNumber !in (known_asns)\n  | project-reorder TimeGenerated, UserPrincipalName, UserAgent, IPAddress, AutonomousSystemNumber\n  | extend AccountName = tostring(split(UserPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
-        "description": "'Detects a successful logon by a privileged account from an ASN not logged in from in the last 14 days.\n  Monitor these logons to ensure they are legitimate and identify if there are any similar sign ins.'\n",
-        "queryFrequency": "1d",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPAddress"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "tactics": [
-          "DefenseEvasion"
-        ],
         "triggerThreshold": 0,
-        "queryPeriod": "7d",
-        "name": "Privileged User Logon from new ASN"
+        "queryPeriod": "7d"
       }
     }
   ]

@@ -14,78 +14,78 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "ActorUsername",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountNTDomain",
+                "identifier": "NTDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Dvc",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "DvcIpAddr",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "name": "Sdelete deployed via GPO and run recursively (ASIM Version)",
+        "query": "imProcess\n| where EventType =~ \"ProcessCreated\"\n| where Process endswith \"svchost.exe\"\n| where CommandLine has \"-k GPSvcGroup\" or CommandLine has \"-s gpsvc\"\n| extend timekey = bin(TimeGenerated, 1m)\n| project timekey, ActingProcessId, Dvc\n| join kind=inner (\n  imProcess\n  | where EventType =~ \"ProcessCreated\"\n  | where Process =~ \"sdelete.exe\" or CommandLine has \"sdelete\"\n  | where ActingProcessName endswith \"svchost.exe\"\n  | where CommandLine has_all (\"-s\", \"-r\")\n  | extend timekey = bin(TimeGenerated, 1m)\n  ) \n  on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc\n| extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\\')[0])\n| extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n| project-away DomainIndex\n",
         "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "Impact"
+        ],
+        "queryFrequency": "1d",
+        "description": "'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.\n  This query uses the Advanced Security Information Model. Parsers will need to be deployed before use: https://docs.microsoft.com/azure/sentinel/normalization'\n",
         "metadata": {
-          "source": {
-            "kind": "Community"
+          "author": {
+            "name": "Microsoft Security Research"
           },
           "categories": {
             "domains": [
               "Security - Threat Protection"
             ]
           },
-          "author": {
-            "name": "Microsoft Security Research"
+          "source": {
+            "kind": "Community"
           },
           "support": {
             "tier": "Community"
           }
         },
-        "severity": "Medium",
-        "query": "imProcess\n| where EventType =~ \"ProcessCreated\"\n| where Process endswith \"svchost.exe\"\n| where CommandLine has \"-k GPSvcGroup\" or CommandLine has \"-s gpsvc\"\n| extend timekey = bin(TimeGenerated, 1m)\n| project timekey, ActingProcessId, Dvc\n| join kind=inner (\n  imProcess\n  | where EventType =~ \"ProcessCreated\"\n  | where Process =~ \"sdelete.exe\" or CommandLine has \"sdelete\"\n  | where ActingProcessName endswith \"svchost.exe\"\n  | where CommandLine has_all (\"-s\", \"-r\")\n  | extend timekey = bin(TimeGenerated, 1m)\n  ) \n  on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc\n| extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\\')[0])\n| extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n| project-away DomainIndex\n",
-        "description": "'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.\n  This query uses the Advanced Security Information Model. Parsers will need to be deployed before use: https://docs.microsoft.com/azure/sentinel/normalization'\n",
-        "queryFrequency": "1d",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "ActorUsername"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "AccountNTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Dvc"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "DvcIpAddr"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "tactics": [
-          "Impact"
-        ],
         "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "name": "Sdelete deployed via GPO and run recursively (ASIM Version)"
+        "queryPeriod": "1d"
       }
     }
   ]
