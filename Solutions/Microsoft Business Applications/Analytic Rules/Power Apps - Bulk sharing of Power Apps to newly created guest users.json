@@ -14,17 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Power Apps - app shared with recently created external guest accounts",
-          "alertDescriptionFormat": "{{InvitedByUPN}}  shared an app with {{TargetedUsersCount}} recently added guest user accounts that are not on the list of allowed partner domains. List of domain s {{InvitedDomains}}"
-        },
-        "customDetails": {
-          "PowerAppsApp": "AppId"
-        },
-        "name": "Power Apps - Bulk sharing of Power Apps to newly created guest users",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -34,10 +26,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -47,25 +39,33 @@
                 "identifier": "InstanceName",
                 "columnName": "AppId"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
         ],
+        "triggerThreshold": 0,
+        "customDetails": {
+          "PowerAppsApp": "AppId"
+        },
+        "severity": "Medium",
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
+        "description": "Identifies unusual bulk sharing, based on a predefined threshold in the query, of Power Apps to newly created Microsoft Entra guest users.",
+        "query": "////////////\n// threshold = If the number of unique accounts that a power app is shared with is greater than\n// threshold than it'll trigger an alert. A threshold of 5 is good to start with.\n// However, if this is giving too many false positives, please adjust the threshold.\n////////////\nlet threshold = 5;\n////////////\n// Please replace the allowed_domains with a list of domains of your partners/sibling orgs\n// with whom you generally share power apps with. This will allow us to filter\n// legitimate bulk sharing attempts. Avoid using domains such as gmail, outlook, etc.\n///////////\nlet allowed_domains = pack_array(\"contoso.com\");\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nPowerPlatformAdminActivity\n| where TimeGenerated >= ago(query_frequency)\n| where EventOriginalType == \"PowerAppPermissionEdited\"\n| extend Properties = tostring(PropertyCollection)\n| extend AppId = extract(@'\"powerplatform.analytics.resource.power_app.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))\n| extend TargetPrincipalId = extract(@'\"targetuser.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| join kind=leftouter (\n    AuditLogs\n    | where ActivityDateTime >= ago(query_lookback)\n    | where SourceSystem =~ \"Azure AD\" and OperationName == \"Invite external user\"\n    | where Result =~ \"success\"\n    | extend InvitedOrgEmail = tostring(parse_json(AdditionalDetails[5])['value'])\n    | extend InvitedOrgDomain = tostring(split(InvitedOrgEmail, \"@\")[1])\n    | where not(InvitedOrgDomain has_any(allowed_domains))\n    | extend\n        InvitedById = tostring(parse_json(InitiatedBy)['user']['id']),\n        InvitedByUPN = tostring(parse_json(InitiatedBy)['user']['userPrincipalName']),\n        InvitedEmail = tostring(parse_json(TargetResources[0])['userPrincipalName']),\n        InvitedId = tostring(parse_json(TargetResources[0])['id'])\n    | summarize by InvitedById, InvitedByUPN, InvitedEmail, InvitedId, InvitedOrgDomain)\n    on $left.TargetPrincipalId == $right.InvitedId\n| where isnotempty(InvitedId)\n| summarize\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated),\n    TargetedUsersCount=dcount(TargetPrincipalId),\n    TargetedObjectIds = make_set(TargetPrincipalId, 1000),\n    InvitedDomains = make_set(InvitedOrgDomain, 1000),\n    InvitedEmailAddresses = make_set(InvitedEmail, 1000)\n    by AppId, InvitedById, InvitedByUPN\n| extend\n    PowerAppsEntityId = 27593,\n    AccountName = tostring(split(InvitedByUPN, '@')[0]),\n    UPNSuffix = tostring(split(InvitedByUPN, '@')[1])\n| project\n    StartTime,\n    EndTime,\n    InvitedByUPN,\n    InvitedById,\n    InvitedDomains,\n    InvitedEmailAddresses,\n    TargetedUsersCount,\n    TargetedObjectIds,\n    AppId,\n    PowerAppsEntityId,\n    AccountName,\n    UPNSuffix\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
         "status": "Available",
+        "name": "Power Apps - Bulk sharing of Power Apps to newly created guest users",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Power Apps - app shared with recently created external guest accounts",
+          "alertDescriptionFormat": "{{InvitedByUPN}}  shared an app with {{TargetedUsersCount}} recently added guest user accounts that are not on the list of allowed partner domains. List of domain s {{InvitedDomains}}"
+        },
         "tactics": [
           "ResourceDevelopment",
           "InitialAccess",
           "LateralMovement"
-        ],
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "queryPeriod": "14d",
-        "query": "////////////\n// threshold = If the number of unique accounts that a power app is shared with is greater than\n// threshold than it'll trigger an alert. A threshold of 5 is good to start with.\n// However, if this is giving too many false positives, please adjust the threshold.\n////////////\nlet threshold = 5;\n////////////\n// Please replace the allowed_domains with a list of domains of your partners/sibling orgs\n// with whom you generally share power apps with. This will allow us to filter\n// legitimate bulk sharing attempts. Avoid using domains such as gmail, outlook, etc.\n///////////\nlet allowed_domains = pack_array(\"contoso.com\");\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nPowerPlatformAdminActivity\n| where TimeGenerated >= ago(query_frequency)\n| where EventOriginalType == \"PowerAppPermissionEdited\"\n| extend Properties = tostring(PropertyCollection)\n| extend AppId = extract(@'\"powerplatform.analytics.resource.power_app.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))\n| extend TargetPrincipalId = extract(@'\"targetuser.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| join kind=leftouter (\n    AuditLogs\n    | where ActivityDateTime >= ago(query_lookback)\n    | where SourceSystem =~ \"Azure AD\" and OperationName == \"Invite external user\"\n    | where Result =~ \"success\"\n    | extend InvitedOrgEmail = tostring(parse_json(AdditionalDetails[5])['value'])\n    | extend InvitedOrgDomain = tostring(split(InvitedOrgEmail, \"@\")[1])\n    | where not(InvitedOrgDomain has_any(allowed_domains))\n    | extend\n        InvitedById = tostring(parse_json(InitiatedBy)['user']['id']),\n        InvitedByUPN = tostring(parse_json(InitiatedBy)['user']['userPrincipalName']),\n        InvitedEmail = tostring(parse_json(TargetResources[0])['userPrincipalName']),\n        InvitedId = tostring(parse_json(TargetResources[0])['id'])\n    | summarize by InvitedById, InvitedByUPN, InvitedEmail, InvitedId, InvitedOrgDomain)\n    on $left.TargetPrincipalId == $right.InvitedId\n| where isnotempty(InvitedId)\n| summarize\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated),\n    TargetedUsersCount=dcount(TargetPrincipalId),\n    TargetedObjectIds = make_set(TargetPrincipalId, 1000),\n    InvitedDomains = make_set(InvitedOrgDomain, 1000),\n    InvitedEmailAddresses = make_set(InvitedEmail, 1000)\n    by AppId, InvitedById, InvitedByUPN\n| extend\n    PowerAppsEntityId = 27593,\n    AccountName = tostring(split(InvitedByUPN, '@')[0]),\n    UPNSuffix = tostring(split(InvitedByUPN, '@')[1])\n| project\n    StartTime,\n    EndTime,\n    InvitedByUPN,\n    InvitedById,\n    InvitedDomains,\n    InvitedEmailAddresses,\n    TargetedUsersCount,\n    TargetedObjectIds,\n    AppId,\n    PowerAppsEntityId,\n    AccountName,\n    UPNSuffix\n",
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "description": "Identifies unusual bulk sharing, based on a predefined threshold in the query, of Power Apps to newly created Microsoft Entra guest users."
+        ]
       }
     }
   ]
