@@ -14,64 +14,64 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
+        "queryPeriod": "2d",
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "SystemId"
+              },
+              {
+                "identifier": "AppId",
+                "columnName": "ClienId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "Instance"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Host"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IP"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "description": "Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Alert synched from SAP Enterprise Threat Detection, cloud edition into Microsoft Sentinel (one way). {{PatternDescription}}",
+          "alertDisplayNameFormat": "SAP ETD - {{PatternName}} "
+        },
         "status": "Available",
+        "triggerThreshold": 0,
         "customDetails": {
           "ETD_AlertID": "AlertId",
           "SAP_User": "User"
         },
         "severity": "Medium",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "tactics": [],
-        "queryFrequency": "1h",
-        "name": "SAP ETD - Synch alerts",
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SystemId",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "ClienId",
-                "identifier": "AppId"
-              },
-              {
-                "columnName": "Instance",
-                "identifier": "InstanceName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Host",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "IP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SAP ETD - {{PatternName}} ",
-          "alertDescriptionFormat": "Alert synched from SAP Enterprise Threat Detection, cloud edition into Microsoft Sentinel (one way). {{PatternDescription}}"
-        },
-        "queryPeriod": "2d",
+        "triggerOperator": "gt",
         "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 70d;\nSAPETDAlerts_CL\n| mv-expand TriggeringEvents\n| extend sapOriginalEvent = tostring(TriggeringEvents.OriginalEvent)\n| where PatternName <> \"Logon from external with SAP standard users\"\n| summarize arg_max(TimeGenerated, *) by AlertId\n| where Threshold >= minThreshold and Score >= minScore\n| extend NewEvent= split(sapOriginalEvent, \"\\n\")\n| mv-expand NewEvent to typeof(string)\n| parse NewEvent with Key: string \":\" Value: string\n| extend Value= iff(isempty(Key) and isnotempty(NewEvent), NewEvent, Value), Key= iff(isempty(Key) and isnotempty(NewEvent), TriggeringEvents.EventLogType, Key)\n| extend KV= bag_pack(Key, Value)\n| summarize KeyValues= make_bag(KV), take_any(CreationTimestamp, MinTimestamp, MaxTimestamp, TriggeringEvents.EventLogType, Measure, PatternDescription, PatternName, Status, Threshold, TriggeringEvents.OriginalEvent) by AlertId\n| extend SystemId= KeyValues.sid, ClienId= KeyValues.client, Host= KeyValues.instance_host, Instance= KeyValues.instance_name, User= KeyValues.user_name, IP= KeyValues.user_ip\n",
-        "description": "Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)"
+        "queryFrequency": "1h",
+        "tactics": [],
+        "name": "SAP ETD - Synch alerts"
       }
     }
   ]

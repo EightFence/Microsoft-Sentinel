@@ -14,21 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let endtime = 1d;\n// Function to resolve hostname to IP address using DNS logs or a lookup table (example syntax)\nlet rdpConnections =\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n// Labeling the first RDP connection time, computer and ip\n| extend\nFirstHop = bin(TimeGenerated, 1m),\nFirstComputer = toupper(Computer),\nFirstRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n),\n(\nWindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = tostring(EventData.LogonType)\n| where LogonType == 10 // Labeling the first RDP connection time, computer and ip\n| extend Account = strcat(tostring(EventData.TargetDomainName), \"\", tostring(EventData.TargetUserName))\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend\nFirstHop = bin(TimeGenerated, 1m),\nFirstComputer = toupper(Computer),\nFirstRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n))\n| join kind=inner (\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n// Labeling the second RDP connection time, computer and ip\n| extend\nSecondHop = bin(TimeGenerated, 1m),\nSecondComputer = toupper(Computer),\nSecondRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n),\n(\nWindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = toint(EventData.LogonType)\n| where LogonType == 10 // Labeling the second RDP connection time, computer and ip\n| extend Account = strcat(tostring(EventData.TargetDomainName), \"\", tostring(EventData.TargetUserName))\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend\nSecondHop = bin(TimeGenerated, 1m),\nSecondComputer = toupper(Computer),\nSecondRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n))\n)\non Account\n| distinct\nAccount,\nFirstHop,\nFirstComputer,\nFirstRemoteIPAddress,\nSecondHop,\nSecondComputer,\nSecondRemoteIPAddress,\nAccountType,\nActivity,\nLogonTypeName,\nProcessName;\n// Resolve hostnames to IP addresses device network Ip's\nlet listOfFirstComputer = rdpConnections | distinct FirstComputer;\nlet listOfSecondComputer = rdpConnections | distinct SecondComputer;\nlet resolvedIPs =\nDeviceNetworkInfo\n| where TimeGenerated >= ago(endtime)\n| where isnotempty(ConnectedNetworks) and NetworkAdapterStatus == \"Up\"\n| extend ClientIP = tostring(parse_json(IPAddresses[0]).IPAddress)\n| where isnotempty(ClientIP)\n| where DeviceName in~ (listOfFirstComputer) or DeviceName in~ (listOfSecondComputer)\n| summarize arg_max(TimeGenerated, ClientIP) by Computer= DeviceName\n| project Computer=toupper(Computer), ResolvedIP = ClientIP;\n// Join resolved IPs with the RDP connections\nrdpConnections\n| join kind=inner (resolvedIPs) on $left.FirstComputer == $right.Computer\n| join kind=inner (resolvedIPs) on $left.SecondComputer == $right.Computer\n// | where ResolvedIP != ResolvedIP1\n| distinct\nAccount,\nFirstHop,\nFirstComputer,\nFirstComputerIP = ResolvedIP,\nFirstRemoteIPAddress,\nSecondHop,\nSecondComputer,\nSecondComputerIP = ResolvedIP1,\nSecondRemoteIPAddress,\nAccountType,\nActivity,\nLogonTypeName,\nProcessName\n// Ensure the first connection is before the second connection\n// Identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match\n// Ensure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers\n| where FirstComputer != SecondComputer\nand FirstRemoteIPAddress != SecondRemoteIPAddress\nand SecondHop > FirstHop\n// Ensure the second hop occurs within 30 minutes of the first hop\n| where SecondHop <= FirstHop + 30m\n| where SecondRemoteIPAddress == FirstComputerIP\n| summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop)\nby\nAccount,\nFirstComputer,\nFirstComputerIP,\nFirstRemoteIPAddress,\nSecondHop,\nSecondComputer,\nSecondComputerIP,\nSecondRemoteIPAddress,\nAccountType,\nActivity,\nLogonTypeName,\nProcessName\n| extend\nAccountName = tostring(split(Account, @\"\")[1]),\nAccountNTDomain = tostring(split(Account, @\"\")[0])\n| extend\nHostName1 = tostring(split(FirstComputer, \".\")[0]),\nDomainIndex = toint(indexof(FirstComputer, '.'))\n| extend HostNameDomain1 = iff(DomainIndex != -1, substring(FirstComputer, DomainIndex + 1), FirstComputer)\n| extend\nHostName2 = tostring(split(SecondComputer, \".\")[0]),\nDomainIndex = toint(indexof(SecondComputer, '.'))\n| extend HostNameDomain2 = iff(DomainIndex != -1, substring(SecondComputer, DomainIndex + 1), SecondComputer)\n| project-away DomainIndex\n",
+        "metadata": {
+          "categories": {
+            "domains": [
+              "Security - Threat Protection"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          }
+        },
+        "tactics": [
+          "LateralMovement"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Account",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Account"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountNTDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "AccountNTDomain"
               }
             ]
           },
@@ -36,16 +58,16 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "FirstComputer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "FirstComputer"
               },
               {
-                "columnName": "HostName1",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName1"
               },
               {
-                "columnName": "HostNameDomain1",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "HostNameDomain1"
               }
             ]
           },
@@ -53,16 +75,16 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SecondComputer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "SecondComputer"
               },
               {
-                "columnName": "HostName2",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName2"
               },
               {
-                "columnName": "HostNameDomain2",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "HostNameDomain2"
               }
             ]
           },
@@ -70,39 +92,17 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "FirstIPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "FirstIPAddress"
               }
             ]
           }
         ],
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Threat Protection"
-            ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "support": {
-            "tier": "Community"
-          }
-        },
-        "queryPeriod": "8d",
-        "triggerThreshold": 0,
         "name": "RDP Nesting",
-        "description": "'Query detects potential lateral movement within a network by identifying when an RDP connection (EventID 4624, LogonType 10) is made to an initial system, followed by a subsequent RDP connection from that system to another, using the same account within a 60-minute window.\n To reduce false positives, it excludes scenarios where the same account has made 5 or more connections to the same set of computers in the previous 7 days. This approach focuses on highlighting unusual RDP behaviour that suggests lateral movement, which is often associated with attacker tactics during a network breach.'\n",
-        "tactics": [
-          "LateralMovement"
-        ],
         "severity": "Medium",
-        "triggerOperator": "gt",
+        "queryPeriod": "8d",
         "queryFrequency": "1d",
-        "query": "let endtime = 1d;\n// Function to resolve hostname to IP address using DNS logs or a lookup table (example syntax)\nlet rdpConnections =\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n// Labeling the first RDP connection time, computer and ip\n| extend\nFirstHop = bin(TimeGenerated, 1m),\nFirstComputer = toupper(Computer),\nFirstRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n),\n(\nWindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = tostring(EventData.LogonType)\n| where LogonType == 10 // Labeling the first RDP connection time, computer and ip\n| extend Account = strcat(tostring(EventData.TargetDomainName), \"\", tostring(EventData.TargetUserName))\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend\nFirstHop = bin(TimeGenerated, 1m),\nFirstComputer = toupper(Computer),\nFirstRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n))\n| join kind=inner (\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and LogonType == 10\n// Labeling the second RDP connection time, computer and ip\n| extend\nSecondHop = bin(TimeGenerated, 1m),\nSecondComputer = toupper(Computer),\nSecondRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n),\n(\nWindowsEvent\n| where TimeGenerated >= ago(endtime)\n| where EventID == 4624 and EventData has (\"10\")\n| extend LogonType = toint(EventData.LogonType)\n| where LogonType == 10 // Labeling the second RDP connection time, computer and ip\n| extend Account = strcat(tostring(EventData.TargetDomainName), \"\", tostring(EventData.TargetUserName))\n| extend IpAddress = tostring(EventData.IpAddress)\n| extend\nSecondHop = bin(TimeGenerated, 1m),\nSecondComputer = toupper(Computer),\nSecondRemoteIPAddress = IpAddress,\nAccount = tolower(Account)\n))\n)\non Account\n| distinct\nAccount,\nFirstHop,\nFirstComputer,\nFirstRemoteIPAddress,\nSecondHop,\nSecondComputer,\nSecondRemoteIPAddress,\nAccountType,\nActivity,\nLogonTypeName,\nProcessName;\n// Resolve hostnames to IP addresses device network Ip's\nlet listOfFirstComputer = rdpConnections | distinct FirstComputer;\nlet listOfSecondComputer = rdpConnections | distinct SecondComputer;\nlet resolvedIPs =\nDeviceNetworkInfo\n| where TimeGenerated >= ago(endtime)\n| where isnotempty(ConnectedNetworks) and NetworkAdapterStatus == \"Up\"\n| extend ClientIP = tostring(parse_json(IPAddresses[0]).IPAddress)\n| where isnotempty(ClientIP)\n| where DeviceName in~ (listOfFirstComputer) or DeviceName in~ (listOfSecondComputer)\n| summarize arg_max(TimeGenerated, ClientIP) by Computer= DeviceName\n| project Computer=toupper(Computer), ResolvedIP = ClientIP;\n// Join resolved IPs with the RDP connections\nrdpConnections\n| join kind=inner (resolvedIPs) on $left.FirstComputer == $right.Computer\n| join kind=inner (resolvedIPs) on $left.SecondComputer == $right.Computer\n// | where ResolvedIP != ResolvedIP1\n| distinct\nAccount,\nFirstHop,\nFirstComputer,\nFirstComputerIP = ResolvedIP,\nFirstRemoteIPAddress,\nSecondHop,\nSecondComputer,\nSecondComputerIP = ResolvedIP1,\nSecondRemoteIPAddress,\nAccountType,\nActivity,\nLogonTypeName,\nProcessName\n// Ensure the first connection is before the second connection\n// Identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match\n// Ensure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers\n| where FirstComputer != SecondComputer\nand FirstRemoteIPAddress != SecondRemoteIPAddress\nand SecondHop > FirstHop\n// Ensure the second hop occurs within 30 minutes of the first hop\n| where SecondHop <= FirstHop + 30m\n| where SecondRemoteIPAddress == FirstComputerIP\n| summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop)\nby\nAccount,\nFirstComputer,\nFirstComputerIP,\nFirstRemoteIPAddress,\nSecondHop,\nSecondComputer,\nSecondComputerIP,\nSecondRemoteIPAddress,\nAccountType,\nActivity,\nLogonTypeName,\nProcessName\n| extend\nAccountName = tostring(split(Account, @\"\")[1]),\nAccountNTDomain = tostring(split(Account, @\"\")[0])\n| extend\nHostName1 = tostring(split(FirstComputer, \".\")[0]),\nDomainIndex = toint(indexof(FirstComputer, '.'))\n| extend HostNameDomain1 = iff(DomainIndex != -1, substring(FirstComputer, DomainIndex + 1), FirstComputer)\n| extend\nHostName2 = tostring(split(SecondComputer, \".\")[0]),\nDomainIndex = toint(indexof(SecondComputer, '.'))\n| extend HostNameDomain2 = iff(DomainIndex != -1, substring(SecondComputer, DomainIndex + 1), SecondComputer)\n| project-away DomainIndex\n"
+        "description": "'Query detects potential lateral movement within a network by identifying when an RDP connection (EventID 4624, LogonType 10) is made to an initial system, followed by a subsequent RDP connection from that system to another, using the same account within a 60-minute window.\n To reduce false positives, it excludes scenarios where the same account has made 5 or more connections to the same set of computers in the previous 7 days. This approach focuses on highlighting unusual RDP behaviour that suggests lateral movement, which is often associated with attacker tactics during a network breach.'\n"
       }
     }
   ]
