@@ -15,6 +15,10 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "triggerOperator": "gt",
+        "name": "MFA Spamming followed by Successful login",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -43,17 +47,13 @@
             ]
           }
         ],
-        "queryFrequency": "1d",
-        "description": "'Identifies MFA Spamming followed by Successful logins and by a successful authentication within a given time window.\nDefault Failure count is 10 and 1 successful login with default Time Window is 5 minutes.'\n",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "triggerOperator": "gt",
         "query": "// Filter for sign-in logs ingested within the last day\nSigninLogs\n| where ingestion_time() > ago(1d)\n// Filter for records with AuthenticationRequirement set to multiFactorAuthentication\n| where AuthenticationRequirement == \"multiFactorAuthentication\"\n// Extract information from dynamic columns DeviceDetail and LocationDetails\n| extend DeviceDetail = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n// Extract specific attributes from DeviceDetail and LocationDetails\n| extend\n      OS = tostring(DeviceDetail.operatingSystem),\n      Browser = tostring(DeviceDetail.browser),\n      State = tostring(LocationDetails.state),\n      City = tostring(LocationDetails.city),\n      Region = tostring(LocationDetails.countryOrRegion)\n// Expand multi-value property AuthenticationDetails into separate records\n| mv-expand todynamic(AuthenticationDetails)\n// Parse AuthResult from JSON in AuthenticationDetails and convert to string\n| extend AuthResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)\n// Summarize data by aggregating statistics for each user, IP, and AuthResult\n| summarize FailedAttempts = countif(AuthResult == \"MFA denied; user declined the authentication\" or AuthResult == \"MFA denied; user did not respond to mobile app notification\"), SuccessfulAttempts = countif(AuthResult == \"MFA successfully completed\"), InvolvedOS = make_set(OS, 5), InvolvedBrowser = make_set(Browser), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, IPAddress, State, City, Region\n// Calculate AuthenticationWindow by finding time difference between start and end times\n| extend AuthenticationWindow = (EndTime - StartTime)\n// Filter for records with more than 10 failed attempts in 5-minute window and at least 1 successful attempt\n| where FailedAttempts > 10 and AuthenticationWindow <= 5m and SuccessfulAttempts >= 1\n// Extract user's name and UPN suffix using split function\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n",
+        "status": "Available",
         "tactics": [
           "CredentialAccess"
         ],
-        "name": "MFA Spamming followed by Successful login"
+        "description": "'Identifies MFA Spamming followed by Successful logins and by a successful authentication within a given time window.\nDefault Failure count is 10 and 1 successful login with default Time Window is 5 minutes.'\n",
+        "queryFrequency": "1d"
       }
     }
   ]

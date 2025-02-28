@@ -14,7 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -70,16 +69,17 @@
             ]
           }
         ],
-        "queryFrequency": "1h",
-        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in AzureActivity.\n",
         "triggerThreshold": 0,
         "severity": "Medium",
         "triggerOperator": "gt",
+        "name": "TI Map IP Entity to AzureActivity",
         "query": "let dt_lookBack = 1h; // Look back 1 hour for AzureActivity logs\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  // Filter out indicators without relevant IP address fields\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  // Select the IP entity based on availability of different IP fields\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  // Exclude local addresses using the ipv4_is_private operator and filtering out specific address prefixes\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now();\n// Perform a join between IP indicators and AzureActivity logs to identify potential malicious activity\nIP_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack)\n    // renaming time column so it is clear the log this came from\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.CallerIpAddress\n| where AzureActivity_TimeGenerated < ExpirationDateTime\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by IndicatorId, CallerIpAddress\n| project AzureActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CallerIpAddress, \nCaller, OperationNameValue, ActivityStatusValue, CategoryValue, ResourceId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = AzureActivity_TimeGenerated\n| extend Name = iif(Caller has '@', tostring(split(Caller,'@',0)[0]), \"\")\n| extend UPNSuffix = iif(Caller has '@', tostring(split(Caller,'@',1)[0]), \"\")\n| extend AadUserId = iif(Caller !has '@', tostring(Caller), \"\")\n",
+        "queryPeriod": "14d",
         "tactics": [
           "CommandAndControl"
         ],
-        "name": "TI Map IP Entity to AzureActivity"
+        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in AzureActivity.\n",
+        "queryFrequency": "1h"
       }
     }
   ]
