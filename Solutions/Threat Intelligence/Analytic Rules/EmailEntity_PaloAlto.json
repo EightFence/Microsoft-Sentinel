@@ -14,46 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "TI map Email entity to PaloAlto CommonSecurityLog",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "description": "'Identifies a match in CommonSecurityLog table from any Email IOC from TI'\n",
         "queryFrequency": "1h",
-        "tactics": [
-          "InitialAccess"
-        ],
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "DestinationUserID",
                 "identifier": "Name"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
+        "description": "'Identifies a match in CommonSecurityLog table from any Email IOC from TI'\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "name": "TI map Email entity to PaloAlto CommonSecurityLog",
+        "severity": "Medium",
         "queryPeriod": "14d",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)\n    // Filtering PAN Logs for specific event type to match relevant email entities\n    | where DeviceVendor == \"Palo Alto Networks\" and  DeviceEventClassID == \"wildfire\" and ApplicationProtocol in (\"smtp\",\"pop3\")\n    | extend DestinationUserID = tolower(DestinationUserID)\n    | where DestinationUserID matches regex emailregex\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.DestinationUserID\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, DestinationUserID\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient,\nEmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,\nDestinationIP, DestinationPort, Protocol, ApplicationProtocol\n| extend timestamp = CommonSecurityLog_TimeGenerated\n"
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)\n    // Filtering PAN Logs for specific event type to match relevant email entities\n    | where DeviceVendor == \"Palo Alto Networks\" and  DeviceEventClassID == \"wildfire\" and ApplicationProtocol in (\"smtp\",\"pop3\")\n    | extend DestinationUserID = tolower(DestinationUserID)\n    | where DestinationUserID matches regex emailregex\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.DestinationUserID\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, DestinationUserID\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient,\nEmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,\nDestinationIP, DestinationPort, Protocol, ApplicationProtocol\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]

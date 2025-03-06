@@ -14,29 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "RecordedFuture Threat Hunting Hash All Actors",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
         "queryFrequency": "15m",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "1h",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "AllEntities"
-          }
-        },
-        "tactics": [
-          "InitialAccess",
-          "Execution",
-          "Persistence"
-        ],
         "entityMappings": [
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "Hash",
@@ -46,27 +26,47 @@
                 "columnName": "HashType",
                 "identifier": "Algorithm"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
+        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "enabled": true,
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false
+          }
+        },
+        "customDetails": {
+          "ActorInformation": "RecordedFuturePortalLink"
+        },
+        "triggerOperator": "gt",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "queryPeriod": "1d",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "{{Description}}",
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n",
           "alertDynamicProperties": [
             {
               "alertProperty": "AlertLink",
               "value": "RecordedFuturePortalLink"
             }
           ],
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n"
+          "alertDisplayNameFormat": "{{Description}}"
         },
-        "customDetails": {
-          "ActorInformation": "RecordedFuturePortalLink"
-        },
-        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash=FileHashValue, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n"
+        "name": "RecordedFuture Threat Hunting Hash All Actors",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryPeriod": "1d",
+        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash=FileHashValue, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
+        "tactics": [
+          "InitialAccess",
+          "Execution",
+          "Persistence"
+        ]
       }
     }
   ]
