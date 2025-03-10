@@ -14,24 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Dataverse - Honeypot instance activity",
-        "queryFrequency": "1h",
-        "tactics": [
-          "Discovery",
-          "Exfiltration"
-        ],
-        "severity": "Medium",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "triggerThreshold": 0,
-        "description": "Identifies activities in a predefined Honeypot Dataverse instance. Alerts when either sign-in to the Honeypot is detected or when monitored Dataverse tables in the Honeypot are accessed.\n\nNote: Requires a dedicated Honeypot Dataverse instance in Power Platform with auditing enabled.\n",
-        "query": "let honeypot_dataverse_instances = dynamic([\"https://myinstance.crm.dynamics.com/\"]);\nlet honeypot_authorized_users = dynamic([\"scanner@mydomain.com\"]);\nlet monitored_dataverse_entities = dynamic([\"contact\", \"account\", \"opportunity\", \"lead\", \"competitor\"]);\nlet query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where InstanceUrl in (honeypot_dataverse_instances)\n| where UserId !in (honeypot_authorized_users)\n| where UserId !endswith \"@onmicrosoft.com\"\n    and UserId != \"Unknown\"\n    and isnotempty(ClientIp)\n| where Message in (\"UserSignIn\") or EntityName in (monitored_dataverse_entities)\n| summarize\n    TimeStart = min(TimeGenerated),\n    TimeEnd = max(TimeGenerated),\n    Entities = make_set(EntityName, 10),\n    Messages = make_set(Message, 10)\n    by UserId, ClientIp, InstanceUrl\n| extend Severity = iif(array_length(set_difference(Messages, dynamic([\"UserSignIn\"]))) > 0, \"Medium\", \"Low\")\n| extend CloudAppId = int(32780)\n| extend AccountName = tostring(split(UserId, '@')[0])\n| extend UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeStart,\n    TimeEnd,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    Messages,\n    Entities,\n    Severity,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "status": "Available",
-        "queryPeriod": "1d",
         "triggerOperator": "gt",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -41,19 +27,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -63,15 +49,29 @@
                 "identifier": "InstanceName",
                 "columnName": "InstanceUrl"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
+        "triggerThreshold": 0,
+        "status": "Available",
+        "description": "Identifies activities in a predefined Honeypot Dataverse instance. Alerts when either sign-in to the Honeypot is detected or when monitored Dataverse tables in the Honeypot are accessed.\n\nNote: Requires a dedicated Honeypot Dataverse instance in Power Platform with auditing enabled.\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "1d",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "query": "let honeypot_dataverse_instances = dynamic([\"https://myinstance.crm.dynamics.com/\"]);\nlet honeypot_authorized_users = dynamic([\"scanner@mydomain.com\"]);\nlet monitored_dataverse_entities = dynamic([\"contact\", \"account\", \"opportunity\", \"lead\", \"competitor\"]);\nlet query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where InstanceUrl in (honeypot_dataverse_instances)\n| where UserId !in (honeypot_authorized_users)\n| where UserId !endswith \"@onmicrosoft.com\"\n    and UserId != \"Unknown\"\n    and isnotempty(ClientIp)\n| where Message in (\"UserSignIn\") or EntityName in (monitored_dataverse_entities)\n| summarize\n    TimeStart = min(TimeGenerated),\n    TimeEnd = max(TimeGenerated),\n    Entities = make_set(EntityName, 10),\n    Messages = make_set(Message, 10)\n    by UserId, ClientIp, InstanceUrl\n| extend Severity = iif(array_length(set_difference(Messages, dynamic([\"UserSignIn\"]))) > 0, \"Medium\", \"Low\")\n| extend CloudAppId = int(32780)\n| extend AccountName = tostring(split(UserId, '@')[0])\n| extend UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeStart,\n    TimeEnd,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    Messages,\n    Entities,\n    Severity,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "tactics": [
+          "Discovery",
+          "Exfiltration"
+        ],
+        "name": "Dataverse - Honeypot instance activity",
         "alertDetailsOverride": {
           "alertSeverityColumnName": "Severity",
-          "alertDescriptionFormat": "{{UserId}} from {{ClientIp}} was detected in the Dataverse honeypot instance: {{InstanceUrl}}",
-          "alertDisplayNameFormat": "Dataverse - Honeytoken activity detected in {{InstanceUrl}} "
-        }
+          "alertDisplayNameFormat": "Dataverse - Honeytoken activity detected in {{InstanceUrl}} ",
+          "alertDescriptionFormat": "{{UserId}} from {{ClientIp}} was detected in the Dataverse honeypot instance: {{InstanceUrl}}"
+        },
+        "severity": "Medium"
       }
     }
   ]
