@@ -14,13 +14,85 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "TargetUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "TargetAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "TargetAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "InitiatingAadUserId"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "TargetAadUserId"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "InitiatingIPAddress"
+              }
+            ]
+          }
+        ],
         "tactics": [
           "Persistence"
         ],
         "queryPeriod": "14d",
+        "query": "let inviting_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend InitiatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | where isnotempty(InitiatingUserPrincipalName)\n  | summarize by InitiatingUserPrincipalName);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend InitiatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | where isnotempty(InitiatingUserPrincipalName) and InitiatingUserPrincipalName !in (inviting_users)\n  | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n  | extend TargetAadUserId = tostring(TargetResources[0].id)\n  | extend invitingUser = InitiatingUserPrincipalName, invitedUserPrincipalName = TargetUserPrincipalName\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\")[1])\n  | project-reorder TimeGenerated, OperationName, Result, TargetUserPrincipalName, TargetAadUserId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress\n",
+        "description": "'Detects when a Guest User is added by a user account that has not been seen adding a guest in the previous 14 days.\n  Monitoring guest accounts and the access they are provided is important to detect potential account abuse.\n  Accounts added should be investigated to ensure the activity was legitimate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
+        "severity": "Medium",
         "metadata": {
           "support": {
             "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
           },
           "source": {
             "kind": "Community"
@@ -30,81 +102,9 @@
               "Security - Others",
               "Identity"
             ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           }
         },
-        "name": "Guest Users Invited to Tenant by New Inviters",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "let inviting_users = (AuditLogs\n  | where TimeGenerated between(ago(14d)..ago(1d))\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend InitiatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | where isnotempty(InitiatingUserPrincipalName)\n  | summarize by InitiatingUserPrincipalName);\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Invite external user\"\n  | where Result =~ \"success\"\n  | extend InitiatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | where isnotempty(InitiatingUserPrincipalName) and InitiatingUserPrincipalName !in (inviting_users)\n  | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n  | extend TargetAadUserId = tostring(TargetResources[0].id)\n  | extend invitingUser = InitiatingUserPrincipalName, invitedUserPrincipalName = TargetUserPrincipalName\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\")[1])\n  | project-reorder TimeGenerated, OperationName, Result, TargetUserPrincipalName, TargetAadUserId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress\n",
-        "description": "'Detects when a Guest User is added by a user account that has not been seen adding a guest in the previous 14 days.\n  Monitoring guest accounts and the access they are provided is important to detect potential account abuse.\n  Accounts added should be investigated to ensure the activity was legitimate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
-        "queryFrequency": "1d",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingUserPrincipalName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "InitiatingAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "InitiatingAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "TargetUserPrincipalName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "TargetAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "TargetAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingAadUserId",
-                "identifier": "AadUserId"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "TargetAadUserId",
-                "identifier": "AadUserId"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingIPAddress",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ]
+        "name": "Guest Users Invited to Tenant by New Inviters"
       }
     }
   ]
