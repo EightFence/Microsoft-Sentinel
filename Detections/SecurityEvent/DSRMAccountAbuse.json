@@ -14,83 +14,11 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Computer"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "User"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "AccountNTDomain"
-              }
-            ]
-          },
-          {
-            "entityType": "Process",
-            "fieldMappings": [
-              {
-                "identifier": "ProcessId",
-                "columnName": "ProcessId"
-              }
-            ]
-          },
-          {
-            "entityType": "File",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "ImageFileName"
-              },
-              {
-                "identifier": "Directory",
-                "columnName": "ImageDirectory"
-              }
-            ]
-          },
-          {
-            "entityType": "RegistryKey",
-            "fieldMappings": [
-              {
-                "identifier": "Key",
-                "columnName": "TargetObject"
-              }
-            ]
-          }
-        ],
+        "name": "DSRM Account Abuse",
         "tactics": [
           "Persistence"
         ],
-        "queryPeriod": "1h",
-        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID in (13)\n| parse EventData with * 'ProcessId\">' ProcessId \"<\"* 'Image\">' Image \"<\" * 'TargetObject\">' TargetObject \"<\" * 'Details\">' Details \"<\" * 'User\">' User \"<\" * \n| where TargetObject has (\"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\") and Details == \"DWORD (0x00000002)\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(User, \"\\\\\")[1]), AccountNTDomain = tostring(split(User, \"\\\\\")[0])\n| extend ImageFileName = tostring(split(Image, \"\\\\\")[-1])\n| extend ImageDirectory = replace_string(Image, ImageFileName, \"\")\n| project-away DomainIndex\n",
-        "description": "'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.\nRef: https://adsecurity.org/?p=1785'\n",
-        "severity": "High",
+        "queryFrequency": "1h",
         "metadata": {
           "support": {
             "tier": "Community"
@@ -107,7 +35,79 @@
             ]
           }
         },
-        "name": "DSRM Account Abuse"
+        "description": "'This query detects an abuse of the DSRM account in order to maintain persistence and access to the organization's Active Directory.\nRef: https://adsecurity.org/?p=1785'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Computer"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "HostNameDomain"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "User"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "AccountNTDomain"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "ProcessId",
+                "columnName": "ProcessId"
+              }
+            ],
+            "entityType": "Process"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "ImageFileName"
+              },
+              {
+                "identifier": "Directory",
+                "columnName": "ImageDirectory"
+              }
+            ],
+            "entityType": "File"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Key",
+                "columnName": "TargetObject"
+              }
+            ],
+            "entityType": "RegistryKey"
+          }
+        ],
+        "severity": "High",
+        "query": "Event\n| where EventLog == \"Microsoft-Windows-Sysmon/Operational\" and EventID in (13)\n| parse EventData with * 'ProcessId\">' ProcessId \"<\"* 'Image\">' Image \"<\" * 'TargetObject\">' TargetObject \"<\" * 'Details\">' Details \"<\" * 'User\">' User \"<\" * \n| where TargetObject has (\"HKLM\\\\System\\\\CurrentControlSet\\\\Control\\\\Lsa\\\\DsrmAdminLogonBehavior\") and Details == \"DWORD (0x00000002)\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ProcessId, Image, TargetObject, Details, _ResourceId\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(User, \"\\\\\")[1]), AccountNTDomain = tostring(split(User, \"\\\\\")[0])\n| extend ImageFileName = tostring(split(Image, \"\\\\\")[-1])\n| extend ImageDirectory = replace_string(Image, ImageFileName, \"\")\n| project-away DomainIndex\n",
+        "triggerOperator": "gt"
       }
     }
   ]
