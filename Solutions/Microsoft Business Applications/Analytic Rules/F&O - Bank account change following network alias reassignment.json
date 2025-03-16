@@ -14,19 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "F&O - Bank account change following network alias reassignment",
-        "queryFrequency": "15m",
+        "severity": "Low",
+        "tactics": [
+          "CredentialAccess",
+          "LateralMovement",
+          "PrivilegeEscalation"
+        ],
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AliasChangedBy",
                 "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -36,38 +43,31 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Username",
                 "identifier": "FullName"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
         "triggerOperator": "gt",
+        "description": "Identifies changes to user accounts where the network alias was modified to a new value. Shortly afterwards, the updated alias is used to update a bank account number.",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "F&O - Suspicious bank account changes",
           "alertDescriptionFormat": "A user account alias was reassigned for {{Username}} by {{AliasChangedBy}} and shortly afterwards, bank account {{AccountId}} was modified."
         },
-        "tactics": [
-          "CredentialAccess",
-          "LateralMovement",
-          "PrivilegeEscalation"
-        ],
-        "description": "Identifies changes to user accounts where the network alias was modified to a new value. Shortly afterwards, the updated alias is used to update a bank account number.",
-        "queryPeriod": "1d",
-        "severity": "Low",
-        "query": "let query_frequency = 15m;\nFinanceOperationsActivity_CL\n| where LogType == \"Update\" and TableName == \"UserInfo\"\n| extend UserId = tostring(parse_json(tostring(FormattedData.[\"03::id\"])).NewData)\n| extend NetworkAlias = parse_json(tostring(FormattedData.networkAlias))\n| extend\n    CurrentAlias = tostring(NetworkAlias.NewData),\n    PreviousAlias = tostring(NetworkAlias.OldData)\n| where CurrentAlias != PreviousAlias\n| extend\n    AliasUpdated = LogCreatedDateTime,\n    AliasChangedBy = Username\n| join kind=inner(FinanceOperationsActivity_CL\n    | where TimeGenerated >= ago (query_frequency)\n    | where LogType == \"Update\" and TableName == \"BankAccountTable\"\n    | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)\n    | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))\n    | extend\n        CurrentAccountNum = tostring(AccountNum.NewData),\n        OldAccountNum = tostring(AccountNum.OldData)\n    | where CurrentAccountNum != OldAccountNum\n    | extend BankUpdated = LogCreatedDateTime)\n    on $left.UserId == $right.Username\n| where BankUpdated > AliasUpdated\n| extend\n    FinOpsAppId = 32780,\n    AccountName = tostring(split(CurrentAlias, \"@\")[0]),\n    UPNSuffix = tostring(split(CurrentAlias, \"@\")[1])\n| project\n    AliasUpdated,\n    AliasChangedBy,\n    Username,\n    AccountId,\n    CurrentAccountNum,\n    OldAccountNum,\n    CurrentAlias,\n    PreviousAlias,\n    FinOpsAppId,\n    AccountName,\n    UPNSuffix\n",
-        "triggerThreshold": 0
+        "name": "F&O - Bank account change following network alias reassignment",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "status": "Available",
+        "queryFrequency": "15m",
+        "query": "let query_frequency = 15m;\nFinanceOperationsActivity_CL\n| where LogType == \"Update\" and TableName == \"UserInfo\"\n| extend UserId = tostring(parse_json(tostring(FormattedData.[\"03::id\"])).NewData)\n| extend NetworkAlias = parse_json(tostring(FormattedData.networkAlias))\n| extend\n    CurrentAlias = tostring(NetworkAlias.NewData),\n    PreviousAlias = tostring(NetworkAlias.OldData)\n| where CurrentAlias != PreviousAlias\n| extend\n    AliasUpdated = LogCreatedDateTime,\n    AliasChangedBy = Username\n| join kind=inner(FinanceOperationsActivity_CL\n    | where TimeGenerated >= ago (query_frequency)\n    | where LogType == \"Update\" and TableName == \"BankAccountTable\"\n    | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)\n    | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))\n    | extend\n        CurrentAccountNum = tostring(AccountNum.NewData),\n        OldAccountNum = tostring(AccountNum.OldData)\n    | where CurrentAccountNum != OldAccountNum\n    | extend BankUpdated = LogCreatedDateTime)\n    on $left.UserId == $right.Username\n| where BankUpdated > AliasUpdated\n| extend\n    FinOpsAppId = 32780,\n    AccountName = tostring(split(CurrentAlias, \"@\")[0]),\n    UPNSuffix = tostring(split(CurrentAlias, \"@\")[1])\n| project\n    AliasUpdated,\n    AliasChangedBy,\n    Username,\n    AccountId,\n    CurrentAccountNum,\n    OldAccountNum,\n    CurrentAlias,\n    PreviousAlias,\n    FinOpsAppId,\n    AccountName,\n    UPNSuffix\n"
       }
     }
   ]
