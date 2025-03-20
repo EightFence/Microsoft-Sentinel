@@ -14,31 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "name": "F&O - Unusual sign-in activity using single factor authentication",
+        "status": "Available",
+        "triggerOperator": "gt",
         "tactics": [
           "CredentialAccess",
           "InitialAccess"
         ],
+        "triggerThreshold": 0,
         "query": "// Dynamics Lifecycle services: 913c6de4-2a4a-4a61-a9ce-945d2b2ce2e0\n// Microsoft Dynamics ERP: 00000015-0000-0000-c000-000000000000\nlet appid_list = dynamic([\"913c6de4-2a4a-4a61-a9ce-945d2b2ce2e0\", \"00000015-0000-0000-c000-000000000000\"]);\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nlet historical_sign_in_activity = SigninLogs\n    | where TimeGenerated between (ago(query_lookback) .. ago(query_frequency));\nlet historical_sign_in_locations = historical_sign_in_activity\n    | summarize by Location;\nlet multifactor_sign_in_count = toscalar(historical_sign_in_activity\n    | where AppId in (appid_list) and ResultType == 0\n    | where AuthenticationRequirement == \"multiFactorAuthentication\"\n    | summarize count());\nSigninLogs\n| where TimeGenerated >= ago(query_frequency)\n| where AppId in (appid_list) and ResultType == 0\n| where multifactor_sign_in_count > 0\n| where Location !in (historical_sign_in_locations)\n| where NetworkLocationDetails !has \"trustedNamedLocation\"\n| summarize by UserPrincipalName, AppDisplayName, IPAddress, Location\n| extend\n    CloudAppId = 32780,\n    AccountName = tostring(split(UserPrincipalName, \"@\")[0]),\n    UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n| project\n    UserPrincipalName,\n    AppDisplayName,\n    IPAddress,\n    Location,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Successful sign in by {{UserPrincipalName}} to {{AppDisplayName}} from location {{Location}} which has not been seen before in the last 14 days.",
-          "alertDisplayNameFormat": "Dynamics 365 F&O - Unusual sign-in without multi-factor authentication"
-        },
-        "triggerOperator": "gt",
-        "severity": "Low",
-        "status": "Available",
-        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -46,8 +39,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
             ],
             "entityType": "IP"
@@ -55,18 +48,25 @@
           {
             "fieldMappings": [
               {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
               }
             ],
             "entityType": "CloudApplication"
           }
         ],
-        "triggerThreshold": 0,
-        "description": "Identifies sucessful sign-in events to Finance & Operations and Lifecycle Services using single factor/password authentication. Sign-in events from tenants not using MFA, coming from a Microsoft Entra trusted network location, or from geolocations seen previously in the last 14 days are excluded.",
+        "queryPeriod": "14d",
+        "severity": "Low",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
-        }
+        },
+        "queryFrequency": "1h",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dynamics 365 F&O - Unusual sign-in without multi-factor authentication",
+          "alertDescriptionFormat": "Successful sign in by {{UserPrincipalName}} to {{AppDisplayName}} from location {{Location}} which has not been seen before in the last 14 days."
+        },
+        "name": "F&O - Unusual sign-in activity using single factor authentication",
+        "description": "Identifies sucessful sign-in events to Finance & Operations and Lifecycle Services using single factor/password authentication. Sign-in events from tenants not using MFA, coming from a Microsoft Entra trusted network location, or from geolocations seen previously in the last 14 days are excluded."
       }
     }
   ]

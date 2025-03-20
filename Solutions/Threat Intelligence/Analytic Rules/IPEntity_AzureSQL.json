@@ -14,27 +14,27 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "name": "TI Map IP Entity to Azure SQL Security Audit Events",
+        "triggerOperator": "gt",
         "tactics": [
           "CommandAndControl"
         ],
+        "triggerThreshold": 0,
         "query": "let dt_lookBack = 1h; // Look back 1 hour for AzureDiagnostics logs\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now();\n// Perform a join between IP indicators and AzureDiagnostics logs for SQL Security Audit events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      AzureDiagnostics\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where ResourceProvider == 'MICROSOFT.SQL'\n      | where Category == 'SQLSecurityAuditEvents'\n      | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated\n      | extend ClientIP = column_ifexists(\"client_ip_s\", \"Not Available\")\n      | extend Action = column_ifexists(\"action_name_s\", \"Not Available\")\n      | extend Application = column_ifexists(\"application_name_s\", \"Not Available\")\n      | extend HostName = column_ifexists(\"host_name_s\", \"Not Available\")\n  )\n  on $left.TI_ipEntity == $right.ClientIP\n  // Filter out logs that occurred after the expiration of the corresponding indicator\n  | where SQLSecurityAuditEvents_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and ClientIP, and keep the log entry with the latest timestamp\n  | summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by IndicatorId, ClientIP\n  // Select the desired output fields\n  | project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, ResourceId, ClientIP, Action, Application, HostName, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n  // Rename the timestamp field\n  | extend timestamp = SQLSecurityAuditEvents_TimeGenerated\n",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "ClientIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIP"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "name": "TI Map IP Entity to Azure SQL Security Audit Events",
         "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SQL Security Audit Events.\n"
       }
     }
