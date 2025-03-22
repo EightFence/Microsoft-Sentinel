@@ -14,46 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies distributed password cracking attempts from the Microsoft Entra ID SigninLogs.\nThe query looks for unusually high number of failed password attempts coming from multiple locations for a user account.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n50053   Account is locked because the user tried to sign in too many times with an incorrect user ID or password.\n50055   Invalid password, entered expired password.\n50056   Invalid or null password - Password does not exist in store for this user.\n50126   Invalid username or password, or invalid on-premises username or password.'\n",
+        "queryFrequency": "1d",
+        "name": "Distributed Password cracking attempts in Microsoft Entra ID",
+        "status": "Available",
+        "queryPeriod": "1d",
+        "severity": "Medium",
         "query": "let s_threshold = 30;\nlet l_threshold = 3;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where OperationName =~ \"Sign-in activity\"\n// Error codes that we want to look at as they are related to the use of incorrect password.\n| where ResultType in (\"50126\", \"50053\" , \"50055\", \"50056\")\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend LocationString = strcat(tostring(LocationDetails.countryOrRegion), \"/\", tostring(LocationDetails.state), \"/\", tostring(LocationDetails.city))\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), LocationCount=dcount(LocationString), Location = make_set(LocationString,100),\nIPAddress = make_set(IPAddress,100), IPAddressCount = dcount(IPAddress), AppDisplayName = make_set(AppDisplayName,100), ResultDescription = make_set(ResultDescription,50),\nBrowser = make_set(Browser,20), OS = make_set(OS,20), SigninCount = count() by UserPrincipalName, Type\n// Setting a generic threshold - Can be different for different environment\n| where SigninCount > s_threshold and LocationCount >= l_threshold\n| extend Location = tostring(Location), IPAddress = tostring(IPAddress), AppDisplayName = tostring(AppDisplayName), ResultDescription = tostring(ResultDescription), Browser = tostring(Browser), OS = tostring(OS)\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "triggerThreshold": 0,
         "tactics": [
           "CredentialAccess"
         ],
-        "status": "Available",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "name": "Distributed Password cracking attempts in Microsoft Entra ID",
-        "triggerOperator": "gt",
-        "queryPeriod": "1d"
+        "description": "'Identifies distributed password cracking attempts from the Microsoft Entra ID SigninLogs.\nThe query looks for unusually high number of failed password attempts coming from multiple locations for a user account.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n50053   Account is locked because the user tried to sign in too many times with an incorrect user ID or password.\n50055   Invalid password, entered expired password.\n50056   Invalid or null password - Password does not exist in store for this user.\n50126   Invalid username or password, or invalid on-premises username or password.'\n"
       }
     }
   ]
