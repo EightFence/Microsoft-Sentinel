@@ -14,23 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "Awake Security - High Match Counts By Device",
+        "queryPeriod": "1h",
         "queryFrequency": "1h",
+        "status": "Available",
         "customDetails": {
-          "Matches_Dest_IPs": "DestinationIPs",
-          "Device": "SourceHostName",
-          "Matches_Max_Severity": "MaxSeverity",
-          "Matches_Count": "ModelMatchCount",
           "Matched_Models": "Models",
+          "Matches_Count": "ModelMatchCount",
+          "Device": "SourceHostName",
+          "Matches_Dest_IPs": "DestinationIPs",
+          "Matches_Max_Severity": "MaxSeverity",
           "Matches_ASP_URLs": "ASPMatchURLs"
         },
+        "tactics": [],
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "3d",
+            "reopenClosedIncident": true,
+            "enabled": true,
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": [
+              "Device"
+            ],
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Host"
+            ]
+          }
+        },
+        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SourceHostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SourceHostName"
               }
             ]
           },
@@ -38,41 +60,19 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIPs",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIPs"
               }
             ]
           }
         ],
-        "status": "Available",
-        "tactics": [],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Host"
-            ],
-            "groupByCustomDetails": [
-              "Device"
-            ],
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": true,
-            "lookbackDuration": "3d",
-            "enabled": true,
-            "groupByAlertDetails": []
-          },
-          "createIncident": true
+        "alertDetailsOverride": {
+          "alertTacticsColumnName": null,
+          "alertDisplayNameFormat": "Awake Security - High Model Match Counts On Device {{SourceHostName}}",
+          "alertDescriptionFormat": "The following Awake model(s):\n\n{{Models}}\n\nmatched {{ModelMatchCount}} activities, an unexpectedly large number. The destination IPs associated with these matches were:\n\n{{DestinationIPs}}",
+          "alertSeverityColumnName": "SeverityName"
         },
         "description": "This query searches for devices with unexpectedly large number of activity match.",
-        "severity": "Medium",
-        "queryPeriod": "1h",
-        "name": "Awake Security - High Match Counts By Device",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Awake Security - High Model Match Counts On Device {{SourceHostName}}",
-          "alertSeverityColumnName": "SeverityName",
-          "alertTacticsColumnName": null,
-          "alertDescriptionFormat": "The following Awake model(s):\n\n{{Models}}\n\nmatched {{ModelMatchCount}} activities, an unexpectedly large number. The destination IPs associated with these matches were:\n\n{{DestinationIPs}}"
-        },
         "query": "CommonSecurityLog\n| where DeviceVendor == \"Arista Networks\" and DeviceProduct == \"Awake Security\"\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), Models=make_set(Activity), ASPMatchURLs=make_set(DeviceCustomString2), SourceIPs=make_set(SourceIP),\n  DestinationIPs=make_set(DestinationIP), ModelMatchCount=sum(EventCount), MaxSeverity=max(toint(LogSeverity)) by SourceHostName\n| where ModelMatchCount > 1000 and MaxSeverity > 2\n| extend SeverityName=iff(MaxSeverity == 0, \"Informational\", iff(MaxSeverity < 5, \"Low\", iff(MaxSeverity < 8, \"Medium\", \"High\")))\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
