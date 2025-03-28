@@ -15,45 +15,45 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "queryPeriod": "14d",
-        "query": "let starttime = 14d;\nlet timeframe = 1d;\nlet scorethreshold = 3;\nlet baselinethreshold = 5;\nlet aadFunc = (tableName:string){\n    IdentityInfo\n    | where TimeGenerated > ago(starttime)\n    | summarize arg_max(TimeGenerated, *) by AccountUPN\n    | mv-expand AssignedRoles\n    | where AssignedRoles contains 'Admin' or GroupMembership has \"Admin\"\n    | summarize Roles = make_list(AssignedRoles) by AccountUPN = tolower(AccountUPN)\n    | join kind=inner (\n        table(tableName)\n        | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))\n        | where ResultType != 0\n        | extend UserPrincipalName = tolower(UserPrincipalName)\n    ) on $left.AccountUPN == $right.UserPrincipalName\n    | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, Roles = tostring(Roles)\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet allSignins = union isfuzzy=true aadSignin, aadNonInt;\nlet TimeSeriesAlerts = \n    allSignins\n    | make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step 1h by UserPrincipalName, Roles\n    | extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')\n    | mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n    // Filtering low count events per baselinethreshold\n    | where anomalies > 0 and baseline > baselinethreshold\n    | extend AnomalyHour = TimeGenerated\n    | project UserPrincipalName, Roles, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;\n// Filter the alerts for specified timeframe\nTimeSeriesAlerts\n| where TimeGenerated > startofday(ago(timeframe))\n| join kind=inner ( \n    allSignins\n    | where TimeGenerated > startofday(ago(timeframe))\n    // create a new column and round to hour\n    | extend DateHour = bin(TimeGenerated, 1h)\n    | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, Roles, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName\n) on UserPrincipalName, $left.AnomalyHour == $right.DateHour\n| project LatestAnomalyTime, OperationName, Category, UserPrincipalName, Roles = todynamic(Roles), UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = HourlyCount, baseline, anomalies, score\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
-        "triggerOperator": "gt",
-        "status": "Available",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "Name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPAddress"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "severity": "High",
-        "queryFrequency": "1d",
+        "description": "' Identifies spike in failed sign-ins from Privileged accounts. Privileged accounts list can be based on IdentityInfo UEBA table.\nSpike is determined based on Time series anomaly which will look at historical baseline values.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'\n",
         "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "name": "Privileged Accounts - Sign in Failure Spikes",
+        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess"
         ],
-        "description": "' Identifies spike in failed sign-ins from Privileged accounts. Privileged accounts list can be based on IdentityInfo UEBA table.\nSpike is determined based on Time series anomaly which will look at historical baseline values.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor'\n",
-        "name": "Privileged Accounts - Sign in Failure Spikes"
+        "query": "let starttime = 14d;\nlet timeframe = 1d;\nlet scorethreshold = 3;\nlet baselinethreshold = 5;\nlet aadFunc = (tableName:string){\n    IdentityInfo\n    | where TimeGenerated > ago(starttime)\n    | summarize arg_max(TimeGenerated, *) by AccountUPN\n    | mv-expand AssignedRoles\n    | where AssignedRoles contains 'Admin' or GroupMembership has \"Admin\"\n    | summarize Roles = make_list(AssignedRoles) by AccountUPN = tolower(AccountUPN)\n    | join kind=inner (\n        table(tableName)\n        | where TimeGenerated between (startofday(ago(starttime))..startofday(now()))\n        | where ResultType != 0\n        | extend UserPrincipalName = tolower(UserPrincipalName)\n    ) on $left.AccountUPN == $right.UserPrincipalName\n    | extend timestamp = TimeGenerated, AccountCustomEntity = UserPrincipalName, Roles = tostring(Roles)\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nlet allSignins = union isfuzzy=true aadSignin, aadNonInt;\nlet TimeSeriesAlerts = \n    allSignins\n    | make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step 1h by UserPrincipalName, Roles\n    | extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')\n    | mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)\n    // Filtering low count events per baselinethreshold\n    | where anomalies > 0 and baseline > baselinethreshold\n    | extend AnomalyHour = TimeGenerated\n    | project UserPrincipalName, Roles, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;\n// Filter the alerts for specified timeframe\nTimeSeriesAlerts\n| where TimeGenerated > startofday(ago(timeframe))\n| join kind=inner ( \n    allSignins\n    | where TimeGenerated > startofday(ago(timeframe))\n    // create a new column and round to hour\n    | extend DateHour = bin(TimeGenerated, 1h)\n    | summarize PartialFailedSignins = count(), LatestAnomalyTime = arg_max(TimeGenerated, *) by bin(TimeGenerated, 1h), OperationName, Category, ResultType, ResultDescription, UserPrincipalName, Roles, UserDisplayName, AppDisplayName, ClientAppUsed, IPAddress, ResourceDisplayName\n) on UserPrincipalName, $left.AnomalyHour == $right.DateHour\n| project LatestAnomalyTime, OperationName, Category, UserPrincipalName, Roles = todynamic(Roles), UserDisplayName, ResultType, ResultDescription, AppDisplayName, ClientAppUsed, UserAgent, IPAddress, Location, AuthenticationRequirement, ConditionalAccessStatus, ResourceDisplayName, PartialFailedSignins, TotalFailedSignins = HourlyCount, baseline, anomalies, score\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "status": "Available"
       }
     }
   ]
