@@ -14,17 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "{{Description}}",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "AlertLink",
+              "value": "RecordedFuturePortalLink"
+            }
+          ],
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n"
         },
-        "tactics": [
-          "InitialAccess",
-          "Execution",
-          "Persistence"
-        ],
-        "severity": "Medium",
+        "triggerThreshold": 0,
+        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash=FileHashValue, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
+        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          }
+        },
         "entityMappings": [
           {
+            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "Hash",
@@ -34,39 +48,25 @@
                 "columnName": "HashType",
                 "identifier": "Algorithm"
               }
-            ],
-            "entityType": "FileHash"
+            ]
           }
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "1h"
-          },
-          "createIncident": true
-        },
-        "name": "RecordedFuture Threat Hunting Hash All Actors",
-        "triggerOperator": "gt",
-        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  \nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look for IOCs\n| where isnotempty(FileHashValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerHash=tolower(FileHashValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project Hash=FileHashValue, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
-        "queryPeriod": "1d",
-        "queryFrequency": "15m",
-        "triggerThreshold": 0,
-        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
         "customDetails": {
           "ActorInformation": "RecordedFuturePortalLink"
         },
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n",
-          "alertDynamicProperties": [
-            {
-              "alertProperty": "AlertLink",
-              "value": "RecordedFuturePortalLink"
-            }
-          ],
-          "alertDisplayNameFormat": "{{Description}}"
-        }
+        "tactics": [
+          "InitialAccess",
+          "Execution",
+          "Persistence"
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "queryFrequency": "15m",
+        "name": "RecordedFuture Threat Hunting Hash All Actors",
+        "severity": "Medium"
       }
     }
   ]

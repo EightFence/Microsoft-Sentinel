@@ -14,27 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Detects the redirect URL of an app being changed.\n  Applications associated with URLs not controlled by the organization can pose a security risk.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#application-configuration-changes'\n",
         "triggerOperator": "gt",
-        "name": "Application Redirect URL Update",
-        "queryPeriod": "1d",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "AuditLogs\n  | where Category =~ \"ApplicationManagement\"\n  | where Result =~ \"success\"\n  | where OperationName =~ 'Update Application'\n  | where TargetResources has \"AppAddress\"\n  | mv-expand TargetResources\n  | mv-expand TargetResources.modifiedProperties\n  | where TargetResources_modifiedProperties.displayName =~ \"AppAddress\"\n  | extend Key = tostring(TargetResources_modifiedProperties.displayName)\n  | extend NewValue = TargetResources_modifiedProperties.newValue\n  | extend OldValue = TargetResources_modifiedProperties.oldValue\n  | where isnotempty(Key) and isnotempty(NewValue)\n  | project-reorder Key, NewValue, OldValue\n  | extend NewUrls = extract_all('\"Address\":([^,]*)', tostring(NewValue))\n  | extend OldUrls = extract_all('\"Address\":([^,]*)', tostring(OldValue))\n  | extend AddedUrls = set_difference(NewUrls, OldUrls)\n  | where array_length(AddedUrls) > 0\n  | extend UserAgent = iif(tostring(AdditionalDetails[0].key) == \"User-Agent\", tostring(AdditionalDetails[0].value), \"\")\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend AddedBy = iif(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)\n  | extend TargetAppName = tostring(TargetResources.displayName)\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | project-reorder TimeGenerated, TargetAppName, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, AddedUrls, AddedBy, UserAgent\n",
-        "queryFrequency": "1d",
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
+        "description": "'Detects the redirect URL of an app being changed.\n  Applications associated with URLs not controlled by the organization can pose a security risk.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#application-configuration-changes'\n",
         "metadata": {
+          "author": {
+            "name": "Microsoft Security Research"
+          },
           "support": {
             "tier": "Community"
           },
           "source": {
             "kind": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           },
           "categories": {
             "domains": [
@@ -42,59 +32,69 @@
             ]
           }
         },
+        "query": "AuditLogs\n  | where Category =~ \"ApplicationManagement\"\n  | where Result =~ \"success\"\n  | where OperationName =~ 'Update Application'\n  | where TargetResources has \"AppAddress\"\n  | mv-expand TargetResources\n  | mv-expand TargetResources.modifiedProperties\n  | where TargetResources_modifiedProperties.displayName =~ \"AppAddress\"\n  | extend Key = tostring(TargetResources_modifiedProperties.displayName)\n  | extend NewValue = TargetResources_modifiedProperties.newValue\n  | extend OldValue = TargetResources_modifiedProperties.oldValue\n  | where isnotempty(Key) and isnotempty(NewValue)\n  | project-reorder Key, NewValue, OldValue\n  | extend NewUrls = extract_all('\"Address\":([^,]*)', tostring(NewValue))\n  | extend OldUrls = extract_all('\"Address\":([^,]*)', tostring(OldValue))\n  | extend AddedUrls = set_difference(NewUrls, OldUrls)\n  | where array_length(AddedUrls) > 0\n  | extend UserAgent = iif(tostring(AdditionalDetails[0].key) == \"User-Agent\", tostring(AdditionalDetails[0].value), \"\")\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend AddedBy = iif(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)\n  | extend TargetAppName = tostring(TargetResources.displayName)\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n  | project-reorder TimeGenerated, TargetAppName, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, AddedUrls, AddedBy, UserAgent\n",
+        "queryPeriod": "1d",
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "severity": "Medium",
+        "name": "Application Redirect URL Update",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "AddedUrls"
+                "columnName": "AddedUrls",
+                "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "InitiatingUserPrincipalName"
+                "columnName": "InitiatingUserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "InitiatingAccountName"
+                "columnName": "InitiatingAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "InitiatingAccountUPNSuffix"
+                "columnName": "InitiatingAccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAadUserId"
+                "columnName": "InitiatingAadUserId",
+                "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "InitiatingAppServicePrincipalId"
+                "columnName": "InitiatingAppServicePrincipalId",
+                "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "InitiatingIPAddress"
+                "columnName": "InitiatingIPAddress",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ]
       }
