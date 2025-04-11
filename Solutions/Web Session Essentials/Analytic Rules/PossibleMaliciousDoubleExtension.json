@@ -16,50 +16,42 @@
       "properties": {
         "name": "Detect potential presence of a malicious file with a double extension (ASIM Web Session)",
         "queryFrequency": "1h",
-        "tactics": [
-          "DefenseEvasion",
-          "Persistence",
-          "CommandAndControl"
-        ],
-        "customDetails": {
-          "EventStartTime": "EventStartTime",
-          "DstHostname": "DstHostname",
-          "EventCount": "EventCount",
-          "EventEndTime": "EventEndTime"
+        "status": "Available",
+        "severity": "Medium",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' has been observed with posting potentially risky dual extension file",
+          "alertDescriptionFormat": "User posted file '{{FileWithdualextension}}' which potentially contain dual extensions. This type of activity could be malicious and performed to bypass file upload filters or security measures implemented by the application. Destination server name this request was targetted to - '{{DstHostname}}'"
         },
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "queryPeriod": "1h",
         "entityMappings": [
           {
-            "entityType": "File",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "FileWithdualextension"
               }
-            ]
+            ],
+            "entityType": "File"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SrcIpAddr"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -69,29 +61,37 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "SrcHostname"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
-        "severity": "Medium",
-        "query": "let common_file_ext_list = dynamic([\".txt\", \".xlsx\", \".doc\", \".docx\", \".csv\", \".pdf\", \".png\", \".jpg\", \".jpeg\"]); // Add list of common files as per your environment\n_Im_WebSession (starttime=ago(1h), eventresult='Success')\n| where HttpRequestMethod in~ (\"POST\", \"PUT\") \n| project\n    Url,\n    SrcIpAddr,\n    SrcUsername,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber,\n    DstHostname,\n    TimeGenerated\n| extend requestedFileName=tostring(split(tostring(parse_url(Url)[\"Path\"]), '/')[-1])\n| extend FileWithdualextension = extract(@'([\\w-]+\\.\\w+\\.\\w+)$', 1, requestedFileName, typeof(string))\n| extend SecondExt = tostring(split(FileWithdualextension, '.')[-1])\n| where strcat('.', SecondExt) in~ (common_file_ext_list) // Second extension is mostly from the common files\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by\n    SrcIpAddr,\n    Url,\n    FileWithdualextension,\n    SrcUsername,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber,\n    DstHostname\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "User posted file '{{FileWithdualextension}}' which potentially contain dual extensions. This type of activity could be malicious and performed to bypass file upload filters or security measures implemented by the application. Destination server name this request was targetted to - '{{DstHostname}}'",
-          "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' has been observed with posting potentially risky dual extension file"
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "DstHostname": "DstHostname",
+          "EventCount": "EventCount",
+          "EventEndTime": "EventEndTime",
+          "EventStartTime": "EventStartTime"
         },
+        "description": "'Double extension vulnerability is a significant concern in file uploads, as it can lead to various issues if an attacker successfully uploads a virus-infected file.'\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "description": "'Double extension vulnerability is a significant concern in file uploads, as it can lead to various issues if an attacker successfully uploads a virus-infected file.'\n",
-        "status": "Available"
+        "tactics": [
+          "DefenseEvasion",
+          "Persistence",
+          "CommandAndControl"
+        ],
+        "query": "let common_file_ext_list = dynamic([\".txt\", \".xlsx\", \".doc\", \".docx\", \".csv\", \".pdf\", \".png\", \".jpg\", \".jpeg\"]); // Add list of common files as per your environment\n_Im_WebSession (starttime=ago(1h), eventresult='Success')\n| where HttpRequestMethod in~ (\"POST\", \"PUT\") \n| project\n    Url,\n    SrcIpAddr,\n    SrcUsername,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber,\n    DstHostname,\n    TimeGenerated\n| extend requestedFileName=tostring(split(tostring(parse_url(Url)[\"Path\"]), '/')[-1])\n| extend FileWithdualextension = extract(@'([\\w-]+\\.\\w+\\.\\w+)$', 1, requestedFileName, typeof(string))\n| extend SecondExt = tostring(split(FileWithdualextension, '.')[-1])\n| where strcat('.', SecondExt) in~ (common_file_ext_list) // Second extension is mostly from the common files\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by\n    SrcIpAddr,\n    Url,\n    FileWithdualextension,\n    SrcUsername,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber,\n    DstHostname\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n"
       }
     }
   ]
