@@ -14,37 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "5m",
-        "query": "// Edit this variable to only keep the tactics where an incident needs to be created (Defaults are: \"COMMAND & CONTROL\", \"BOTNET ACTIVITY\", \"EXFILTRATION\", \"LATERAL MOVEMENT\", \"RECONNAISSANCE\")   \nlet configured_tactics = dynamic([\"COMMAND & CONTROL\", \"BOTNET ACTIVITY\", \"EXFILTRATION\", \"LATERAL MOVEMENT\", \"RECONNAISSANCE\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\" and DeviceEventClassID != \"hsc\" and DeviceEventClassID != \"audit\" and DeviceEventClassID != \"health\" and DeviceEventClassID != \"asc\" \n| extend Category = coalesce(\n                          column_ifexists(\"DeviceEventCategory\", \"\"), \n                          extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n                          \"\"\n                      )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\"\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| extend Tactic = case( Category == \"COMMAND & CONTROL\", \"CommandAndControl\",\n                        Category == \"BOTNET ACTIVITY\" , \"Impact\",\n                        Category == \"EXFILTRATION\", \"Exfiltration\",\n                        Category == \"LATERAL MOVEMENT\", \"LateralMovement\",\n                        Category == \"RECONNAISSANCE\", \"Discovery\",\n                        \"UNKNOWN\")\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                       threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                       threat_score >= 50 and certainty_score <= 50, \"High\", \n                       threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                       \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| extend account = extract(\"account=(.+?);\", 1, AdditionalExtensions)\n| extend upn = iff(account matches regex \":\", tostring(split(account,\":\")[1]) ,tostring(split(account,\":\")[0]))\n| extend name = tostring(split(upn, \"@\")[0])\n| extend upn_suffix = tostring(split(upn, \"@\")[1])\n| extend source_entity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where Category in (configured_tactics) \n| summarize arg_max(threat_score, *) by source_entity , Activity\n| sort by TimeGenerated\n",
-        "name": "Vectra AI Detect - Suspicious Behaviors by Category",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "value": "vectra_URL",
-              "alertProperty": "AlertLink"
-            },
-            {
-              "value": "DeviceProduct",
-              "alertProperty": "ProductName"
-            },
-            {
-              "value": "DeviceVendor",
-              "alertProperty": "ProviderName"
-            },
-            {
-              "value": "certainty_score",
-              "alertProperty": "ConfidenceScore"
-            }
-          ],
-          "alertDisplayNameFormat": "Vectra AI Detect - {{Activity}} detected",
-          "alertDescriptionFormat": "Source entity is {{source_entity}} and category is {{Category}}. Threat score is {{threat_score}}.",
-          "alertSeverityColumnName": "Severity"
-        },
-        "severity": "Informational",
         "queryPeriod": "5m",
+        "description": "'Create an incident for each new malicious behavior detected by Vectra Detect for a specific Category. \nBy default, it looks through all tactics. This can be modified to create incident only for a subset of tactics.'\n",
+        "triggerThreshold": 0,
+        "status": "Available",
+        "name": "Vectra AI Detect - Suspicious Behaviors by Category",
+        "triggerOperator": "gt",
+        "customDetails": {
+          "AttackCategory": "Category",
+          "AttackType": "Activity"
+        },
+        "query": "// Edit this variable to only keep the tactics where an incident needs to be created (Defaults are: \"COMMAND & CONTROL\", \"BOTNET ACTIVITY\", \"EXFILTRATION\", \"LATERAL MOVEMENT\", \"RECONNAISSANCE\")   \nlet configured_tactics = dynamic([\"COMMAND & CONTROL\", \"BOTNET ACTIVITY\", \"EXFILTRATION\", \"LATERAL MOVEMENT\", \"RECONNAISSANCE\"]);\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\" and DeviceEventClassID != \"hsc\" and DeviceEventClassID != \"audit\" and DeviceEventClassID != \"health\" and DeviceEventClassID != \"asc\" \n| extend Category = coalesce(\n                          column_ifexists(\"DeviceEventCategory\", \"\"), \n                          extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n                          \"\"\n                      )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\"\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| extend Tactic = case( Category == \"COMMAND & CONTROL\", \"CommandAndControl\",\n                        Category == \"BOTNET ACTIVITY\" , \"Impact\",\n                        Category == \"EXFILTRATION\", \"Exfiltration\",\n                        Category == \"LATERAL MOVEMENT\", \"LateralMovement\",\n                        Category == \"RECONNAISSANCE\", \"Discovery\",\n                        \"UNKNOWN\")\n| extend level = case( threat_score <  50 and certainty_score < 50, \"Low\",\n                       threat_score < 50 and certainty_score >= 50 , \"Medium\", \n                       threat_score >= 50 and certainty_score <= 50, \"High\", \n                       threat_score >= 50 and certainty_score >= 50, \"Critical\",\n                       \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| extend account = extract(\"account=(.+?);\", 1, AdditionalExtensions)\n| extend upn = iff(account matches regex \":\", tostring(split(account,\":\")[1]) ,tostring(split(account,\":\")[0]))\n| extend name = tostring(split(upn, \"@\")[0])\n| extend upn_suffix = tostring(split(upn, \"@\")[1])\n| extend source_entity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| where Category in (configured_tactics) \n| summarize arg_max(threat_score, *) by source_entity , Activity\n| sort by TimeGenerated\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "tactics": [
           "CredentialAccess",
           "Discovery",
@@ -54,37 +37,54 @@
           "Exfiltration",
           "Impact"
         ],
-        "description": "'Create an incident for each new malicious behavior detected by Vectra Detect for a specific Category. \nBy default, it looks through all tactics. This can be modified to create incident only for a subset of tactics.'\n",
-        "customDetails": {
-          "AttackType": "Activity",
-          "AttackCategory": "Category"
-        },
+        "severity": "Informational",
+        "queryFrequency": "5m",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "SourceHostName"
+                "columnName": "SourceHostName",
+                "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "name"
+                "columnName": "name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "upn_suffix"
+                "columnName": "upn_suffix",
+                "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Source entity is {{source_entity}} and category is {{Category}}. Threat score is {{threat_score}}.",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "AlertLink",
+              "value": "vectra_URL"
+            },
+            {
+              "alertProperty": "ProductName",
+              "value": "DeviceProduct"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "DeviceVendor"
+            },
+            {
+              "alertProperty": "ConfidenceScore",
+              "value": "certainty_score"
+            }
+          ],
+          "alertDisplayNameFormat": "Vectra AI Detect - {{Activity}} detected",
+          "alertSeverityColumnName": "Severity"
         }
       }
     }
