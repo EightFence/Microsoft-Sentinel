@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "1h"
+          }
+        },
+        "customDetails": {
+          "ActorInformation": "RecordedFuturePortalLink"
+        },
         "entityMappings": [
           {
+            "entityType": "DNS",
             "fieldMappings": [
               {
-                "columnName": "Domain",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "Domain"
               }
-            ],
-            "entityType": "DNS"
+            ]
           }
         ],
         "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "{{Description}}",
-          "alertDynamicProperties": [
-            {
-              "alertProperty": "AlertLink",
-              "value": "RecordedFuturePortalLink"
-            }
-          ],
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{DomainName}} from the {{Type}} table.\\n"
+        "queryPeriod": "1d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
+        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing domain/dns data.\n// The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns  \nimDns\n| where isnotempty(Domain)\n| extend lowerDomain=tolower(Domain)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look at Domain IOCs\n| where isnotempty(DomainName)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerDomain=tolower(DomainName)\n) on lowerDomain \n// select column from the source table to match with Recorded Future $left.Domain\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project DomainName, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
         "queryFrequency": "15m",
-        "description": "'Recorded Future Threat Hunting domain correlation for all actors.'\n",
         "tactics": [
           "InitialAccess",
           "CommandAndControl"
         ],
-        "triggerOperator": "gt",
-        "query": "let ioc_lookBack = 1d;\n// The source table (imDns) can be replaced by any infrastructure table containing domain/dns data.\n// The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns  \nimDns\n| where isnotempty(Domain)\n| extend lowerDomain=tolower(Domain)\n| join kind=inner (\nThreatIntelligenceIndicator\n// Only look at Domain IOCs\n| where isnotempty(DomainName)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators  \n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| extend lowerDomain=tolower(DomainName)\n) on lowerDomain \n// select column from the source table to match with Recorded Future $left.Domain\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']\n| project DomainName, Description, Type, TimeGenerated, RecordedFuturePortalLink\n",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "1h",
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          }
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "alertDetailsOverride": {
+          "alertDynamicProperties": [
+            {
+              "value": "RecordedFuturePortalLink",
+              "alertProperty": "AlertLink"
+            }
+          ],
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{DomainName}} from the {{Type}} table.\\n",
+          "alertDisplayNameFormat": "{{Description}}"
         },
         "name": "RecordedFuture Threat Hunting Domain All Actors",
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "customDetails": {
-          "ActorInformation": "RecordedFuturePortalLink"
-        }
+        "description": "'Recorded Future Threat Hunting domain correlation for all actors.'\n"
       }
     }
   ]
