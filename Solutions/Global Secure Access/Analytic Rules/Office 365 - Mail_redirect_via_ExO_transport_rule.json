@@ -14,23 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "severity": "Medium",
+        "query": "// OfficeActivity Query\nlet officeActivityQuery = OfficeActivity\n    | where OfficeWorkload == \"Exchange\"\n    | where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n    | mv-apply DynamicParameters = todynamic(Parameters) on (\n        summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value))\n    )\n    | extend RuleName = case(\n        Operation =~ \"Set-TransportRule\", OfficeObjectId,\n        Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n        \"Unknown\"\n    )\n    | mv-expand ExpandedParameters = todynamic(Parameters)\n    | where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n    | extend RedirectTo = tostring(ExpandedParameters.Value)  // Cast to string\n    | extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n    | extend From = ParsedParameters.From\n    | project\n        TimeGenerated,\n        RedirectTo,\n        IPAddress = tostring(ClientIPValues[0]),\n        Port = tostring(ClientIPValues[1]),\n        UserId,\n        From,\n        Operation,\n        RuleName,\n        Parameters\n    | extend\n        AccountName = tostring(split(UserId, \"@\")[0]),\n        AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n    // EnrichedMicrosoft365AuditLogs Query\n    let enrichedLogsQuery = EnrichedMicrosoft365AuditLogs\n    | where Workload == \"Exchange\"\n    | where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n    | extend AdditionalProps = parse_json(AdditionalProperties)\n    | mv-apply DynamicParameters = todynamic(AdditionalProps.Parameters) on (\n        summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value))\n    )\n    | extend RuleName = case(\n        Operation =~ \"Set-TransportRule\", ObjectId,\n        Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n        \"Unknown\"\n    )\n    | mv-expand ExpandedParameters = todynamic(AdditionalProps.Parameters)\n    | where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n    | extend RedirectTo = tostring(ExpandedParameters.Value)  // Cast to string\n    | extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIp)[0]\n    | extend From = ParsedParameters.From\n    | extend UserAgent = tostring(AdditionalProps.UserAgent)\n    | project\n        TimeGenerated,\n        RedirectTo,\n        IPAddress = tostring(ClientIPValues[0]),\n        Port = tostring(ClientIPValues[1]),\n        UserId,\n        From,\n        Operation,\n        RuleName,\n        Parameters = tostring(AdditionalProps.Parameters),\n        UserAgent\n    | extend\n        AccountName = tostring(split(UserId, \"@\")[0]),\n        AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n    // Combine both queries\n    union isfuzzy=true officeActivityQuery, enrichedLogsQuery\n    | summarize arg_min(TimeGenerated, *) by RuleName, RedirectTo\n    | project\n        TimeGenerated,\n        RedirectTo,\n        IPAddress,\n        Port,\n        UserId,\n        From,\n        Operation,\n        RuleName,\n        Parameters,\n        AccountName,\n        AccountUPNSuffix\n        | order by TimeGenerated desc\n",
+        "description": "Identifies when an Exchange Online transport rule is configured to forward emails.\nThis could indicate an adversary mailbox configured to collect mail from multiple user accounts.\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserId"
+                "columnName": "UserId",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -38,23 +38,23 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
         "queryPeriod": "1h",
-        "query": "// OfficeActivity Query\nlet officeActivityQuery = OfficeActivity\n    | where OfficeWorkload == \"Exchange\"\n    | where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n    | mv-apply DynamicParameters = todynamic(Parameters) on (\n        summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value))\n    )\n    | extend RuleName = case(\n        Operation =~ \"Set-TransportRule\", OfficeObjectId,\n        Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n        \"Unknown\"\n    )\n    | mv-expand ExpandedParameters = todynamic(Parameters)\n    | where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n    | extend RedirectTo = tostring(ExpandedParameters.Value)  // Cast to string\n    | extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n    | extend From = ParsedParameters.From\n    | project\n        TimeGenerated,\n        RedirectTo,\n        IPAddress = tostring(ClientIPValues[0]),\n        Port = tostring(ClientIPValues[1]),\n        UserId,\n        From,\n        Operation,\n        RuleName,\n        Parameters\n    | extend\n        AccountName = tostring(split(UserId, \"@\")[0]),\n        AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n    // EnrichedMicrosoft365AuditLogs Query\n    let enrichedLogsQuery = EnrichedMicrosoft365AuditLogs\n    | where Workload == \"Exchange\"\n    | where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n    | extend AdditionalProps = parse_json(AdditionalProperties)\n    | mv-apply DynamicParameters = todynamic(AdditionalProps.Parameters) on (\n        summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value))\n    )\n    | extend RuleName = case(\n        Operation =~ \"Set-TransportRule\", ObjectId,\n        Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n        \"Unknown\"\n    )\n    | mv-expand ExpandedParameters = todynamic(AdditionalProps.Parameters)\n    | where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n    | extend RedirectTo = tostring(ExpandedParameters.Value)  // Cast to string\n    | extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIp)[0]\n    | extend From = ParsedParameters.From\n    | extend UserAgent = tostring(AdditionalProps.UserAgent)\n    | project\n        TimeGenerated,\n        RedirectTo,\n        IPAddress = tostring(ClientIPValues[0]),\n        Port = tostring(ClientIPValues[1]),\n        UserId,\n        From,\n        Operation,\n        RuleName,\n        Parameters = tostring(AdditionalProps.Parameters),\n        UserAgent\n    | extend\n        AccountName = tostring(split(UserId, \"@\")[0]),\n        AccountUPNSuffix = tostring(split(UserId, \"@\")[1]);\n    // Combine both queries\n    union isfuzzy=true officeActivityQuery, enrichedLogsQuery\n    | summarize arg_min(TimeGenerated, *) by RuleName, RedirectTo\n    | project\n        TimeGenerated,\n        RedirectTo,\n        IPAddress,\n        Port,\n        UserId,\n        From,\n        Operation,\n        RuleName,\n        Parameters,\n        AccountName,\n        AccountUPNSuffix\n        | order by TimeGenerated desc\n",
         "queryFrequency": "1h",
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "name": "GSA Enriched Office 365 - Mail Redirect via ExO Transport Rule",
         "tactics": [
           "Collection",
           "Exfiltration"
-        ],
-        "name": "GSA Enriched Office 365 - Mail Redirect via ExO Transport Rule",
-        "description": "Identifies when an Exchange Online transport rule is configured to forward emails.\nThis could indicate an adversary mailbox configured to collect mail from multiple user accounts.\n",
-        "status": "Available"
+        ]
       }
     }
   ]
