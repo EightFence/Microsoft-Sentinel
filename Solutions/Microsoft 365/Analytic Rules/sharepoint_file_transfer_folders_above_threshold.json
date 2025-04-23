@@ -14,20 +14,49 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let threshold = 500;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_SourceRelativeUrl=dcount(SourceRelativeUrl), dirlist=make_set(SourceRelativeUrl, 10000) by UserId,ClientIP,UserAgent,bin(TimeGenerated, 15m)\n| where count_distinct_SourceRelativeUrl >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "customDetails": {
+          "FilesList": "dirlist",
+          "TransferCount": "count_distinct_SourceRelativeUrl"
+        },
+        "triggerThreshold": 0,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "groupByEntities": [
+              "Account"
+            ],
+            "groupByAlertDetails": [],
+            "matchingMethod": "Selected",
+            "groupByCustomDetails": []
+          },
+          "createIncident": true
+        },
+        "name": "Office365 Sharepoint File transfer Folders above threshold",
+        "triggerOperator": "gt",
+        "description": "'Identifies Office365 Sharepoint File Transfers with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
+        "severity": "Medium",
+        "queryPeriod": "15m",
+        "queryFrequency": "15m",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserId"
+                "columnName": "UserId",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -35,8 +64,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ClientIP"
+                "columnName": "ClientIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -44,42 +73,13 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "DirSample"
+                "columnName": "DirSample",
+                "identifier": "Name"
               }
             ],
             "entityType": "File"
           }
-        ],
-        "name": "Office365 Sharepoint File transfer Folders above threshold",
-        "queryPeriod": "15m",
-        "triggerOperator": "gt",
-        "query": "let threshold = 500;\nOfficeActivity\n| where EventSource == \"SharePoint\" and OfficeWorkload has_any(\"SharePoint\", \"OneDrive\") and Operation has_any (\"FileDownloaded\", \"FileSyncDownloadedFull\", \"FileSyncUploadedFull\", \"FileUploaded\")\n| summarize count_distinct_SourceRelativeUrl=dcount(SourceRelativeUrl), dirlist=make_set(SourceRelativeUrl, 10000) by UserId,ClientIP,UserAgent,bin(TimeGenerated, 15m)\n| where count_distinct_SourceRelativeUrl >= threshold\n| extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat(\"SeeDirListField\",\"_\", tostring(hash(tostring(dirlist)))))\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
-        "tactics": [
-          "Exfiltration"
-        ],
-        "queryFrequency": "15m",
-        "customDetails": {
-          "TransferCount": "count_distinct_SourceRelativeUrl",
-          "FilesList": "dirlist"
-        },
-        "description": "'Identifies Office365 Sharepoint File Transfers with distinct folder count above certain threshold in a 15min time period.\n Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'\n",
-        "triggerThreshold": 0,
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByCustomDetails": [],
-            "groupByAlertDetails": [],
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "PT5H",
-            "enabled": true
-          }
-        },
-        "severity": "Medium"
+        ]
       }
     }
   ]

@@ -14,56 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "AppId",
-                "columnName": "PowerAppsEntityId"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AppName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          }
-        ],
-        "name": "Power Apps - App activity from unauthorized geo",
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "User {{ActorName}} activity associated with app {{AppName}} from an unauthorized geolocation: {{Location}}",
-          "alertDisplayNameFormat": "Power Apps activity from an unauthorized location"
-        },
-        "tactics": [
-          "InitialAccess"
-        ],
-        "queryFrequency": "1h",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
+          "alertDisplayNameFormat": "Power Apps activity from an unauthorized location",
+          "alertDescriptionFormat": "User {{ActorName}} activity associated with app {{AppName}} from an unauthorized geolocation: {{Location}}"
         },
         "query": "let unauthorized_country_codes = dynamic([\n    // Specify the disallowed two letter country codes\n    // example: disallowed_country_codes = dynamic([\"RU\", \"KP\", \"IR\"])\n    ]);\nlet query_frequency = 1h;\nlet query_lookback = 14d;\nlet powerapps_events = dynamic([\"LaunchPowerApp\", \"AppDlpEvaluationResultChange\", \"UpdatePowerApp\", \"PublishPowerApp\", \"RecordScopesConsent\", \"CreatePowerApp\", \"PowerAppPermissionEdited\", \"PowerAppPermissionDeleted\", \"ImportExistingCanvasApp\", \"DeletePowerApp\", \"ImportNewCanvasApp\", \"PromotePowerAppVersion\", \"RemoveHeroApp\", \"DeletePowerAppVersion\", \"PublishSolutionCanvasAppVersion\", \"AdminModifyAppPermissions\", \"AdminModifyAppOwner\", \"AdminQuarantineApp\", \"AdminDeleteApp\", \"AdminSetAppBypassConsent\", \"PatchPowerApp\"]);\nPowerPlatformAdminActivity\n| where TimeGenerated >= ago(query_frequency)\n| where EventOriginalType in (powerapps_events)\n| extend Properties = tostring(PropertyCollection)\n| extend SrcIpAddr = extract(@'\"enduser.ip_address\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)\n| extend AppId = extract(@'\"powerplatform.analytics.resource.power_app.id\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))\n| extend\n    AppName = extract(@'\"powerplatform.analytics.resource.power_app.display_name\",\"Value\":\"([^\"]+)\"', 1, Properties),\n    EnvironmentId = extract(@'\"powerplatform.analytics.resource.environment.id\",\"Value\":\"([^\"]+)\"', 1, Properties),\n    EnvironmentName = extract(@'\"powerplatform.analytics.resource.environment.name\",\"Value\":\"([^\"]+)\"', 1, Properties)\n| summarize FirstEvent = min(TimeGenerated) by ActorName, SrcIpAddr, AppName, AppId, EnvironmentId, EnvironmentName\n| join kind=inner (\n    SigninLogs\n    | where TimeGenerated >= ago(query_lookback)\n    | where Location in (unauthorized_country_codes)\n    | summarize by IPAddress, Location)\n    on $left.SrcIpAddr == $right.IPAddress\n| extend\n    PowerAppsEntityId = 27593,\n    DataverseId = 32780,\n    AccountName = tostring(split(ActorName, '@')[0]),\n    UPNSuffix = tostring(split(ActorName, '@')[1])\n| project\n    FirstEvent,\n    ActorName,\n    SrcIpAddr,\n    Location,\n    AppName,\n    AppId,\n    EnvironmentId,\n    EnvironmentName,\n    PowerAppsEntityId,\n    AccountName,\n    UPNSuffix\n",
         "customDetails": {
@@ -71,10 +24,57 @@
           "App": "AppId",
           "Environment": "EnvironmentId"
         },
-        "description": "Identifies Power Apps activity from countries in a predefined list of unauthorized countries.",
-        "status": "Available",
         "triggerThreshold": 0,
-        "severity": "Low"
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Power Apps - App activity from unauthorized geo",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "description": "Identifies Power Apps activity from countries in a predefined list of unauthorized countries.",
+        "severity": "Low",
+        "queryPeriod": "14d",
+        "status": "Available",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "PowerAppsEntityId",
+                "identifier": "AppId"
+              },
+              {
+                "columnName": "AppName",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ]
       }
     }
   ]
