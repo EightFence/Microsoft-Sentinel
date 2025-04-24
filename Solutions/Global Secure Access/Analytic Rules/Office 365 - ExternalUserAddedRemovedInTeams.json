@@ -14,17 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let TeamsAddDelOffice = (Op:string){\n  OfficeActivity\n  | where OfficeWorkload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where Members has (\"#EXT#\")\n  | mv-expand Members\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP\n};\nlet TeamsAddDelEnriched = (Op:string){\n  EnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), ClientIP = SourceIp\n};\nlet TeamsAddOffice = TeamsAddDelOffice(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelOffice = TeamsAddDelOffice(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAddEnriched = TeamsAddDelEnriched(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelEnriched = TeamsAddDelEnriched(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAdd = TeamsAddOffice\n  | union TeamsAddEnriched\n  | project TimeAdded, Operation, MemberAdded, UserWhoAdded, TeamName, ClientIP;\nlet TeamsDel = TeamsDelOffice\n  | union TeamsDelEnriched\n  | project TimeDeleted, Operation, MemberRemoved, UserWhoDeleted, TeamName, ClientIP;\nTeamsAdd\n| join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
-        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "description": "This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.\n",
+        "triggerOperator": "gt",
+        "severity": "Low",
+        "name": "GSA Enriched Office 365 - External User Added and Removed in Short Timeframe",
+        "queryFrequency": "1h",
         "tactics": [
           "Persistence"
         ],
-        "name": "GSA Enriched Office 365 - External User Added and Removed in Short Timeframe",
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "description": "This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.\n",
-        "severity": "Low",
-        "queryPeriod": "1h",
+        "query": "let TeamsAddDelOffice = (Op:string){\n  OfficeActivity\n  | where OfficeWorkload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where Members has (\"#EXT#\")\n  | mv-expand Members\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP\n};\nlet TeamsAddDelEnriched = (Op:string){\n  EnrichedMicrosoft365AuditLogs\n  | where Workload =~ \"MicrosoftTeams\"\n  | where Operation == Op\n  | where tostring(AdditionalProperties.Members) has (\"#EXT#\")\n  | mv-expand Members = parse_json(tostring(AdditionalProperties.Members))\n  | extend UPN = tostring(Members.UPN)\n  | where UPN has (\"#EXT#\")\n  | project TimeGenerated, Operation, UPN, UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), ClientIP = SourceIp\n};\nlet TeamsAddOffice = TeamsAddDelOffice(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelOffice = TeamsAddDelOffice(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAddEnriched = TeamsAddDelEnriched(\"MemberAdded\")\n  | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;\nlet TeamsDelEnriched = TeamsAddDelEnriched(\"MemberRemoved\")\n  | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;\nlet TeamsAdd = TeamsAddOffice\n  | union TeamsAddEnriched\n  | project TimeAdded, Operation, MemberAdded, UserWhoAdded, TeamName, ClientIP;\nlet TeamsDel = TeamsDelOffice\n  | union TeamsDelEnriched\n  | project TimeDeleted, Operation, MemberRemoved, UserWhoDeleted, TeamName, ClientIP;\nTeamsAdd\n| join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved\n| where TimeDeleted > TimeAdded\n| project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP\n| extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, \"@\")[0]), MemberAdded_RemovedAccountUPNSuffix = tostring(split(MemberAdded_Removed, \"@\")[1])\n| extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n| extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n",
         "status": "Available",
         "entityMappings": [
           {
@@ -87,7 +86,8 @@
             ],
             "entityType": "IP"
           }
-        ]
+        ],
+        "triggerThreshold": 0
       }
     }
   ]

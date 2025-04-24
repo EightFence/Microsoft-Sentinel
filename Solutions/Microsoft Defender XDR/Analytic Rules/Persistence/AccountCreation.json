@@ -14,17 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "DeviceProcessEvents\n// Pro-tip: \n// There are many different ways to run a process from a file - e.g. by using full path, env. variables, ~1 annotation, more...\n// So, to find executions of a known filename, better filter on the filename (and possibly on folder path) than on the commandline.\n| where FileName in~ (\"net.exe\", \"net1.exe\")\n// Parse the user name from the commandline.\n// To have case-insensitive parsing use the i flag, to have non-greedy match (e.g. CreatedUser as short as possible), specify U flag:\n// \"kind=regex flags=i\"\n| parse kind=regex flags=iU ProcessCommandLine with * \"user \" CreatedUser \" \" * \"/ad\"\n// Filter rows where user could not be parsed - e.g. because it was not a user command, or the /add commandline switch was not specified.\n| where isnotempty(CreatedUser)\n// Every net.exe executed will run net1.exe with the same commandline.\n// in this where clause we remove such rows, as they duplicate the number of results we have without adding any value.\n| where not (FileName =~ \"net1.exe\" and InitiatingProcessFileName =~ \"net.exe\" and replace(\"net\", \"net1\", InitiatingProcessCommandLine) =~ ProcessCommandLine)\n// If /domain is specified, so the user is created on the domain controller.\n// Also, any prefix that's longer than 1 char will also do the same, e.g. /do, /dom, /doma, ....\n| extend CreatedOnLocalMachine=(ProcessCommandLine !contains \"/do\")\n| where ProcessCommandLine !contains \"/add\" or (CreatedOnLocalMachine == 0 and ProcessCommandLine !contains \"/domain\")\n| summarize MachineCount=dcount(DeviceName) by CreatedUser, CreatedOnLocalMachine, InitiatingProcessFileName, FileName, ProcessId, ProcessCommandLine, InitiatingProcessCommandLine, DeviceId, DeviceName\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n",
-        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "description": "User accounts may be created to achieve persistence on a machine.\nRead more here: https://attack.mitre.org/wiki/Technique/T1136.\nTags: #CreateAccount.\nQuery #1: Query for users being created using \"net user\" command.\n\"net user\" commands are noisy, so needs to be joined with another signal -.\nE.g. in this example we look for use of uncommon & undocumented commandline switches (e.g. /ad instead of /add).\n",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "name": "Account Creation",
+        "queryFrequency": "1h",
         "tactics": [
           "Persistence"
         ],
-        "name": "Account Creation",
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "description": "User accounts may be created to achieve persistence on a machine.\nRead more here: https://attack.mitre.org/wiki/Technique/T1136.\nTags: #CreateAccount.\nQuery #1: Query for users being created using \"net user\" command.\n\"net user\" commands are noisy, so needs to be joined with another signal -.\nE.g. in this example we look for use of uncommon & undocumented commandline switches (e.g. /ad instead of /add).\n",
-        "severity": "Medium",
-        "queryPeriod": "1h",
+        "query": "DeviceProcessEvents\n// Pro-tip: \n// There are many different ways to run a process from a file - e.g. by using full path, env. variables, ~1 annotation, more...\n// So, to find executions of a known filename, better filter on the filename (and possibly on folder path) than on the commandline.\n| where FileName in~ (\"net.exe\", \"net1.exe\")\n// Parse the user name from the commandline.\n// To have case-insensitive parsing use the i flag, to have non-greedy match (e.g. CreatedUser as short as possible), specify U flag:\n// \"kind=regex flags=i\"\n| parse kind=regex flags=iU ProcessCommandLine with * \"user \" CreatedUser \" \" * \"/ad\"\n// Filter rows where user could not be parsed - e.g. because it was not a user command, or the /add commandline switch was not specified.\n| where isnotempty(CreatedUser)\n// Every net.exe executed will run net1.exe with the same commandline.\n// in this where clause we remove such rows, as they duplicate the number of results we have without adding any value.\n| where not (FileName =~ \"net1.exe\" and InitiatingProcessFileName =~ \"net.exe\" and replace(\"net\", \"net1\", InitiatingProcessCommandLine) =~ ProcessCommandLine)\n// If /domain is specified, so the user is created on the domain controller.\n// Also, any prefix that's longer than 1 char will also do the same, e.g. /do, /dom, /doma, ....\n| extend CreatedOnLocalMachine=(ProcessCommandLine !contains \"/do\")\n| where ProcessCommandLine !contains \"/add\" or (CreatedOnLocalMachine == 0 and ProcessCommandLine !contains \"/domain\")\n| summarize MachineCount=dcount(DeviceName) by CreatedUser, CreatedOnLocalMachine, InitiatingProcessFileName, FileName, ProcessId, ProcessCommandLine, InitiatingProcessCommandLine, DeviceId, DeviceName\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n",
         "status": "Available",
         "entityMappings": [
           {
@@ -57,7 +56,8 @@
             ],
             "entityType": "Process"
           }
-        ]
+        ],
+        "triggerThreshold": 0
       }
     }
   ]
