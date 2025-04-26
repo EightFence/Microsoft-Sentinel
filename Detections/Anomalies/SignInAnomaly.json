@@ -14,33 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "metadata": {
-          "author": {
-            "name": "Juanse"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Identity"
-            ]
-          }
-        },
-        "customDetails": {
-          "UserList": "UserList",
-          "AppName": "AppName",
-          "PasswordResult": "PasswordResult",
-          "Score": "Score",
-          "UserCount": "UserCount",
-          "Baseline": "Baseline"
-        },
-        "tactics": [
-          "InitialAccess"
-        ],
+        "queryPeriod": "1h",
+        "severity": "Medium",
+        "description": "'Identifies sign-in anomalies from an IP in the last hour, targeting multiple users where the password is correct after multiple attempts'\n",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -52,14 +29,37 @@
             "entityType": "IP"
           }
         ],
+        "customDetails": {
+          "AppName": "AppName",
+          "Baseline": "Baseline",
+          "UserList": "UserList",
+          "UserCount": "UserCount",
+          "PasswordResult": "PasswordResult",
+          "Score": "Score"
+        },
+        "name": "Anomaly Sign In Event from an IP",
         "queryFrequency": "1h",
         "query": "let LookBack = 1h;\nlet Data = (\nSigninLogs\n| where TimeGenerated >= ago(LookBack)\n| where parse_json(NetworkLocationDetails)[0].networkType != \"trustedNamedLocation\" // Excludes known tagged networks\n// Counts the number of sign in events in the last hour every 15 minutes by IP\n| make-series EventCounts = count() on TimeGenerated from ago(LookBack) to now() step 15m by IPAddress \n);\nlet AnomalyAlert = (\nData\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(EventCounts,1.5,-1,'linefit')\n| mv-expand EventCounts,TimeGenerated,Anomalies to typeof(double),Baseline to typeof(long),Score to typeof(double)\n| where Anomalies > 0\n);\nAnomalyAlert\n| join kind = inner (SigninLogs\n| where TimeGenerated between (ago(LookBack) .. now())\n| where parse_json(NetworkLocationDetails)[0].networkType != \"trustedNamedLocation\"\n| extend PasswordResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)\n| summarize UserCount = dcount(UserPrincipalName), UserList = make_set(UserPrincipalName), AppName = make_set(AppDisplayName), PasswordResult = make_list(PasswordResult) by IPAddress) on IPAddress\n| where PasswordResult has \"Correct Password\"\n| where UserCount > 1 // looks for events targeting more than one user.\n",
-        "description": "'Identifies sign-in anomalies from an IP in the last hour, targeting multiple users where the password is correct after multiple attempts'\n",
-        "name": "Anomaly Sign In Event from an IP",
-        "queryPeriod": "1h",
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "triggerOperator": "gt"
+        "metadata": {
+          "categories": {
+            "domains": [
+              "Identity"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Juanse"
+          }
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerThreshold": 0
       }
     }
   ]
