@@ -14,29 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_ = materialize(EmailUrlInfo\n    | where isnotempty(Url)\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend Url = tolower(Url)\n    | extend EmailUrlInfo_TimeGenerated = TimeGenerated);\nlet EmailUrls = EmailUrlInfo_ | distinct Url | summarize make_list(Url);\nlet EmailUrlDomains = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);\nlet EmailEvents_ = materialize(EmailEvents\n    | where TimeGenerated >= ago(dt_lookBack));\nlet TI = materialize(ThreatIntelIndicators\n   //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| where isnotempty(Url)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | where (isnotempty(Url) or isnotempty(Url)) \n    | where tolower(Url) in (EmailUrls) or tolower(Url) in (EmailUrlDomains)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n    | where IsActive == true and ValidUntil > now());\n(union\n    (TI | join kind=innerunique (EmailUrlInfo_) on Url),\n    (TI | join kind=innerunique (EmailUrlInfo_) on $left.Url == $right.UrlDomain))\n| where EmailUrlInfo_TimeGenerated < ValidUntil\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, Type, ValidUntil, Confidence, Url, UrlDomain, UrlLocation, NetworkMessageId\n| extend timestamp = EmailUrlInfo_TimeGenerated\n| join kind=inner (EmailEvents_) on NetworkMessageId\n| where DeliveryAction !has \"Blocked\"\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n",
         "queryFrequency": "1h",
-        "queryPeriod": "14d",
+        "name": "TI Map URL Entity to EmailUrlInfo",
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "severity": "Medium",
         "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in EmailUrlInfo.'\n",
-        "name": "TI Map URL Entity to EmailUrlInfo",
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "RecipientEmailAddress",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "RecipientEmailAddress"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -44,15 +46,13 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ],
             "entityType": "URL"
           }
-        ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_ = materialize(EmailUrlInfo\n    | where isnotempty(Url)\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend Url = tolower(Url)\n    | extend EmailUrlInfo_TimeGenerated = TimeGenerated);\nlet EmailUrls = EmailUrlInfo_ | distinct Url | summarize make_list(Url);\nlet EmailUrlDomains = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);\nlet EmailEvents_ = materialize(EmailEvents\n    | where TimeGenerated >= ago(dt_lookBack));\nlet TI = materialize(ThreatIntelIndicators\n   //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| where isnotempty(Url)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | where (isnotempty(Url) or isnotempty(Url)) \n    | where tolower(Url) in (EmailUrls) or tolower(Url) in (EmailUrlDomains)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n    | where IsActive == true and ValidUntil > now());\n(union\n    (TI | join kind=innerunique (EmailUrlInfo_) on Url),\n    (TI | join kind=innerunique (EmailUrlInfo_) on $left.Url == $right.UrlDomain))\n| where EmailUrlInfo_TimeGenerated < ValidUntil\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, Type, ValidUntil, Confidence, Url, UrlDomain, UrlLocation, NetworkMessageId\n| extend timestamp = EmailUrlInfo_TimeGenerated\n| join kind=inner (EmailEvents_) on NetworkMessageId\n| where DeliveryAction !has \"Blocked\"\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n",
-        "severity": "Medium"
+        ]
       }
     }
   ]
