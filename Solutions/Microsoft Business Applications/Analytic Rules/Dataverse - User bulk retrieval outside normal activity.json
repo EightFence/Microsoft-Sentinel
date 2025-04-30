@@ -14,24 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{UserId}} exported {{CurrentExportRate}} records, far beyond the historical baseline of {{{HistoricalBaseline}}.",
-          "alertDisplayNameFormat": "Dataverse - Bulk record retrieval outside of normal activity"
-        },
-        "customDetails": {},
+        "description": "Identifies users retrieving significantly more records from Dataverse than they have previously in the past 2 weeks.",
         "status": "Available",
-        "queryFrequency": "1d",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "triggerOperator": "gt",
-        "severity": "Low",
-        "queryPeriod": "14d",
+        "customDetails": {},
         "tactics": [
           "Exfiltration"
         ],
+        "triggerThreshold": 0,
+        "severity": "Low",
+        "name": "Dataverse - User bulk retrieval outside normal activity",
+        "query": "let baseline_time = 14d;\nlet detection_time = 1d;\nDataverseActivity\n| where TimeGenerated between(ago(baseline_time) .. ago(detection_time - 1d))\n| where Message == \"RetrieveMultiple\"\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| summarize sum(QueryCount) by UserId\n| extend HistoricalBaseline = sum_QueryCount\n| join kind=inner (\n    DataverseActivity\n    | where TimeGenerated > ago(detection_time)\n    | where Message == \"RetrieveMultiple\"\n    | extend numQueryCount = todouble(QueryResults)\n    | extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n    | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n    | summarize sum(QueryCount) by UserId\n    | extend CurrentExportRate = sum_QueryCount)\n    on UserId\n| where CurrentExportRate > HistoricalBaseline\n| project UserId, HistoricalBaseline, CurrentExportRate\n| join kind=inner(\n    DataverseActivity\n    | where TimeGenerated > ago(detection_time)\n    | where Message == \"RetrieveMultiple\"\n    | extend numQueryCount = todouble(QueryResults)\n    | extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n    | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1)))\n    on UserId\n| summarize\n    QuerySizes = make_set(QueryCount),\n    MostRecentQuery = max(TimeGenerated),\n    IPs = make_set(ClientIp),\n    UserAgents = make_set(UserAgent),\n    Entities = make_set(EntityName),\n    Queries = make_set(Query)\n    by UserId, InstanceUrl, HistoricalBaseline, CurrentExportRate\n| extend\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1]),\n    CloudAppId = int(32780)\n| project\n    MostRecentQuery,\n    UserId,\n    IPs,\n    UserAgents,\n    InstanceUrl,\n    Queries,\n    QuerySizes,\n    Entities,\n    HistoricalBaseline,\n    CurrentExportRate,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -41,10 +39,10 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "CloudAppId",
@@ -54,14 +52,16 @@
                 "columnName": "InstanceUrl",
                 "identifier": "InstanceName"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "description": "Identifies users retrieving significantly more records from Dataverse than they have previously in the past 2 weeks.",
-        "name": "Dataverse - User bulk retrieval outside normal activity",
-        "triggerThreshold": 0,
-        "query": "let baseline_time = 14d;\nlet detection_time = 1d;\nDataverseActivity\n| where TimeGenerated between(ago(baseline_time) .. ago(detection_time - 1d))\n| where Message == \"RetrieveMultiple\"\n| extend numQueryCount = todouble(QueryResults)\n| extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n| extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n| summarize sum(QueryCount) by UserId\n| extend HistoricalBaseline = sum_QueryCount\n| join kind=inner (\n    DataverseActivity\n    | where TimeGenerated > ago(detection_time)\n    | where Message == \"RetrieveMultiple\"\n    | extend numQueryCount = todouble(QueryResults)\n    | extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n    | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1))\n    | summarize sum(QueryCount) by UserId\n    | extend CurrentExportRate = sum_QueryCount)\n    on UserId\n| where CurrentExportRate > HistoricalBaseline\n| project UserId, HistoricalBaseline, CurrentExportRate\n| join kind=inner(\n    DataverseActivity\n    | where TimeGenerated > ago(detection_time)\n    | where Message == \"RetrieveMultiple\"\n    | extend numQueryCount = todouble(QueryResults)\n    | extend QueryCount = iif(QueryResults contains \",\", todouble(countof(tostring(QueryResults), ',') + 1), numQueryCount)\n    | extend QueryCount = iif(isnotempty(QueryCount), QueryCount, double(1)))\n    on UserId\n| summarize\n    QuerySizes = make_set(QueryCount),\n    MostRecentQuery = max(TimeGenerated),\n    IPs = make_set(ClientIp),\n    UserAgents = make_set(UserAgent),\n    Entities = make_set(EntityName),\n    Queries = make_set(Query)\n    by UserId, InstanceUrl, HistoricalBaseline, CurrentExportRate\n| extend\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1]),\n    CloudAppId = int(32780)\n| project\n    MostRecentQuery,\n    UserId,\n    IPs,\n    UserAgents,\n    InstanceUrl,\n    Queries,\n    QuerySizes,\n    Entities,\n    HistoricalBaseline,\n    CurrentExportRate,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - Bulk record retrieval outside of normal activity",
+          "alertDescriptionFormat": "{{UserId}} exported {{CurrentExportRate}} records, far beyond the historical baseline of {{{HistoricalBaseline}}."
+        },
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "queryPeriod": "14d"
       }
     }
   ]
