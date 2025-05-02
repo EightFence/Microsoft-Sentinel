@@ -14,20 +14,44 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "1d",
+        "metadata": {
+          "author": {
+            "name": "Microsoft Security Resarch"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Network"
+            ]
+          }
+        },
+        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
+        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect and could indicate credential compromise for the user account.'\n",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -35,40 +59,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIP"
+                "columnName": "SourceIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect and could indicate credential compromise for the user account.'\n",
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Network"
-            ]
-          },
-          "author": {
-            "name": "Microsoft Security Resarch"
-          },
-          "support": {
-            "tier": "Community"
-          }
-        },
-        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
-        "queryPeriod": "1d",
         "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt"
+        "triggerOperator": "gt",
+        "queryFrequency": "1d"
       }
     }
   ]
