@@ -14,9 +14,11 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_ = DeviceNetworkEvents\n| where isnotempty(RemoteIP)\n| where TimeGenerated > ago(dt_lookBack)\n| where ActionType !has \"ConnectionFailed\"\n| extend isPrivate = ipv4_is_private(RemoteIP)\n| where isPrivate != true;\nlet IPs = DeviceNetworkEvents_ | distinct RemoteIP | summarize make_list(RemoteIP);\nThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where isnotempty(IndicatorType) and IndicatorType == \"ipv4-addr\"\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where isnotempty(NetworkSourceIP) \n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_ipEntity = NetworkSourceIP\n| where TI_ipEntity in (IPs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceNetworkEvents_) on $left.TI_ipEntity == $right.RemoteIP\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by Id, TI_ipEntity, DeviceName\n| extend timestamp = TimeGenerated, Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])\n| project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n",
         "description": "'Identifies a match in DeviceNetworkEvents Event data from any IP Indicator from TI.'\n",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
@@ -59,13 +61,11 @@
             ]
           }
         ],
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "tactics": [
-          "CommandAndControl"
-        ],
         "name": "TI Map IP Entity to DeviceNetworkEvents",
+        "queryPeriod": "14d",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceNetworkEvents_ = DeviceNetworkEvents\n| where isnotempty(RemoteIP)\n| where TimeGenerated > ago(dt_lookBack)\n| where ActionType !has \"ConnectionFailed\"\n| extend isPrivate = ipv4_is_private(RemoteIP)\n| where isPrivate != true;\nlet IPs = DeviceNetworkEvents_ | distinct RemoteIP | summarize make_list(RemoteIP);\nThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where isnotempty(IndicatorType) and IndicatorType == \"ipv4-addr\"\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where isnotempty(NetworkSourceIP) \n| where TimeGenerated >= ago(ioc_lookBack)\n| extend TI_ipEntity = NetworkSourceIP\n| where TI_ipEntity in (IPs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (DeviceNetworkEvents_) on $left.TI_ipEntity == $right.RemoteIP\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by Id, TI_ipEntity, DeviceName\n| extend timestamp = TimeGenerated, Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])\n| project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "queryFrequency": "1h"
       }
     }
