@@ -18,32 +18,32 @@
         "tactics": [
           "Execution"
         ],
-        "triggerThreshold": 0,
+        "queryFrequency": "7d",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UPN"
+                "columnName": "UPN",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           }
         ],
-        "name": "Insider Risk_High User Security Alert Correlations",
-        "queryPeriod": "7d",
         "query": "let AlertLinks = SecurityAlert\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| summarize AlertLinks=make_set(AlertLink) by UPN;\nlet LastTimeObserved = SecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| project UPN, AlertName, Severity, ProductName, TimeGenerated | summarize arg_max(AlertName, Severity, ProductName, TimeGenerated) by UPN;\nSecurityIncident\n| summarize hint.strategy = shuffle arg_max(LastModifiedTime, *) by IncidentNumber\n| mv-expand AlertIds\n| extend AlertId = tostring(AlertIds)\n| join kind= innerunique ( \n          SecurityAlert \n          )\n          on $left.AlertId == $right.SystemAlertId\n| summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId\n| mv-expand todynamic(Entities)\n| where Entities[\"Type\"] =~ \"account\"\n| extend Name = tostring(tolower(Entities[\"Name\"])), NTDomain = tostring(Entities[\"NTDomain\"]), UPNSuffix = tostring(Entities[\"UPNSuffix\"]), AadUserId = tostring(Entities[\"AadUserId\"]), AadTenantId = tostring(Entities[\"AadTenantId\"]), \n          Sid = tostring(Entities[\"Sid\"]), IsDomainJoined = tobool(Entities[\"IsDomainJoined\"]), Host = tostring(Entities[\"Host\"])\n| extend UPN = iff(Name != \"\" and UPNSuffix != \"\", strcat(Name, \"@\", UPNSuffix), \"\")\n| extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)\n| where UPN <> \"\"\n| project UPN, AlertName, Severity, ProductName\n| evaluate basket(0.001)\n| where UPN <> \"\"\n// | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UPN == $right.SearchKey\n| project UPN, Percent, AlertName, Severity, ProductName\n| join (LastTimeObserved) on UPN\n| sort by Percent desc\n| extend LastObserved = TimeGenerated\n| join kind=inner (AlertLinks) on UPN\n| project UPN, AlertName, Severity, ProductName, Percent, LastObserved, AlertLinks\n| extend AccountName = tostring(split(UPN, \"@\")[0]), AccountUPNSuffix = tostring(split(UPN, \"@\")[1])\n",
         "severity": "Medium",
+        "triggerThreshold": 0,
+        "queryPeriod": "7d",
         "triggerOperator": "gt",
-        "queryFrequency": "7d"
+        "name": "Insider Risk_High User Security Alert Correlations"
       }
     }
   ]

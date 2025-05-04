@@ -15,26 +15,27 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'Identifies when Exchange Online transport rule configured to forward emails.\nThis could be an adversary mailbox configured to collect mail from multiple user accounts.'\n",
+        "status": "Available",
         "tactics": [
           "Collection",
           "Exfiltration"
         ],
-        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserId"
+                "columnName": "UserId",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -42,19 +43,18 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "name": "Mail redirect via ExO transport rule",
-        "queryPeriod": "1h",
         "query": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\n| extend RuleName = case(\n    Operation =~ \"Set-TransportRule\", OfficeObjectId,\n    Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n    \"Unknown\")\n| mv-expand ExpandedParameters = todynamic(Parameters)\n| where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n| extend RedirectTo = ExpandedParameters.Value\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n| extend From = ParsedParameters.From\n| project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
         "severity": "Medium",
-        "status": "Available",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
         "triggerOperator": "gt",
-        "queryFrequency": "1h"
+        "name": "Mail redirect via ExO transport rule"
       }
     }
   ]
