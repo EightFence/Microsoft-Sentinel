@@ -14,7 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "1d",
+        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
         "metadata": {
+          "author": {
+            "name": "Microsoft Security Resarch"
+          },
           "source": {
             "kind": "Community"
           },
@@ -25,13 +30,12 @@
             "domains": [
               "Security - Network"
             ]
-          },
-          "author": {
-            "name": "Microsoft Security Resarch"
           }
         },
-        "queryPeriod": "1d",
         "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess"
+        ],
         "entityMappings": [
           {
             "fieldMappings": [
@@ -60,15 +64,11 @@
             "entityType": "IP"
           }
         ],
-        "name": "Cisco - firewall block but success logon to Microsoft Entra ID",
         "description": "'Correlate IPs blocked by a Cisco firewall appliance with successful Microsoft Entra ID signins.\nBecause the IP was blocked by the firewall, that same IP logging on successfully to Entra ID is potentially suspect and could indicate credential compromise for the user account.'\n",
-        "queryFrequency": "1d",
         "severity": "Medium",
-        "query": "let aadFunc = (tableName:string){\nCommonSecurityLog\n| where DeviceVendor =~ \"Cisco\"\n| where DeviceAction =~ \"denied\"\n| where ipv4_is_private(SourceIP) == false\n| summarize count() by SourceIP\n| join (\n    // Successful signins from IPs blocked by the firewall solution are suspect\n    // Include fully successful sign-ins, but also ones that failed only at MFA stage\n    // as that supposes the password was sucessfully guessed.\n  table(tableName)\n  | where ResultType in (\"0\", \"50074\", \"50076\")\n) on $left.SourceIP == $right.IPAddress\n| extend AccountName = tostring(split(Account, \"@\")[0]), AccountUPNSuffix = tostring(split(Account, \"@\")[1])\n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "queryFrequency": "1d",
         "triggerThreshold": 0,
-        "tactics": [
-          "InitialAccess"
-        ]
+        "name": "Cisco - firewall block but success logon to Microsoft Entra ID"
       }
     }
   ]
