@@ -14,24 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "name": "Privilege escalation via EC2 policy",
+        "severity": "Medium",
+        "status": "Available",
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on EC2 policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
         "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:RunInstances\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"ec2:Run*\")) or (Action contains \"ec2:*\") or (Action contains \"ec2:ListInstances\" and Action contains \"ec2:StartInstance\" and Action contains \"ec2:ModifyInstanceAttribute\") or (Action contains \"ec2:List*\" and Action contains \"ec2:Start*\" and Action contains \"ec2:Modify*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, RecipientAccountId, AccountName, AccountUPNSuffix\n  | extend timestamp = TimeGenerated\n",
-        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -39,21 +46,14 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
         "triggerOperator": "gt",
-        "status": "Available",
-        "name": "Privilege escalation via EC2 policy",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "queryPeriod": "1d",
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on EC2 policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
-        "severity": "Medium"
+        "queryFrequency": "1d"
       }
     }
   ]

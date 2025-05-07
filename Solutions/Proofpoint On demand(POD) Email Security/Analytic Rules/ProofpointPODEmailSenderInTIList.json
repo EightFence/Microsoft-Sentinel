@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "tactics": [
+          "Exfiltration",
+          "InitialAccess"
+        ],
+        "name": "ProofpointPOD - Email sender in TI list",
+        "severity": "Medium",
+        "description": "'Email sender in TI list.'\n",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n| where isnotempty(EmailSenderAddress)\n| extend TI_emailEntity = EmailSenderAddress\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n       ProofpointPOD\n       | where TimeGenerated >= ago(dt_lookBack)\n       | where isnotempty(SrcUserUpn)\n       | extend ProofpointPOD_TimeGenerated = TimeGenerated, ClientEmail = SrcUserUpn\n)\non $left.TI_emailEntity == $right.ClientEmail\n| where ProofpointPOD_TimeGenerated < ExpirationDateTime\n| summarize ProofpointPOD_TimeGenerated = arg_max(ProofpointPOD_TimeGenerated, *) by IndicatorId, ClientEmail\n| project ProofpointPOD_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, ClientEmail\n| extend timestamp = ProofpointPOD_TimeGenerated\n",
-        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "ClientEmail"
+                "columnName": "ClientEmail",
+                "identifier": "FullName"
               }
             ]
           }
         ],
         "triggerOperator": "gt",
-        "name": "ProofpointPOD - Email sender in TI list",
-        "tactics": [
-          "Exfiltration",
-          "InitialAccess"
-        ],
-        "queryPeriod": "14d",
-        "description": "'Email sender in TI list.'\n",
-        "severity": "Medium"
+        "queryFrequency": "1d"
       }
     }
   ]

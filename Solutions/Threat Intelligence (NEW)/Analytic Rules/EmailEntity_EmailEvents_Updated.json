@@ -14,36 +14,36 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "TI map Email entity to EmailEvents",
+        "severity": "Medium",
+        "description": "'Identifies a match in EmailEvents table from any Email IOC from TI'\n",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailEvents_ = materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress) and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has \"Blocked\" | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromAddress = tolower(SenderFromAddress) | extend RecipientEmailAddress = tolower(RecipientEmailAddress));\nlet SenderAddresses = EmailEvents_ | distinct  SenderFromAddress | summarize make_list(SenderFromAddress);\nlet RecipientAddresses = EmailEvents_ | distinct  RecipientEmailAddress | summarize make_list(RecipientEmailAddress);\nlet TI = materialize(ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where isnotempty(EmailSenderAddress)\n| extend TI_EmailAddress = tolower(EmailSenderAddress)\n| where TI_EmailAddress in (SenderAddresses) or TI_EmailAddress in (RecipientAddresses)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now());\n(union\n  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.SenderFromAddress),\n  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.RecipientEmailAddress))\n| where EmailEvents_TimeGenerated < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(\"ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n| summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by Id, TI_EmailAddress\n| extend DomainName = EmailSourceDomain\n| extend Url = DomainName\n| project EmailEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Url, Type, TI_EmailAddress, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n| extend timestamp = EmailEvents_TimeGenerated\n| project-reorder *, TrafficLightProtocolLevel, DomainName, Type, TI_EmailAddress\n",
-        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "RecipientEmailAddress"
+                "columnName": "RecipientEmailAddress",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           }
         ],
         "triggerOperator": "gt",
-        "name": "TI map Email entity to EmailEvents",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in EmailEvents table from any Email IOC from TI'\n",
-        "severity": "Medium"
+        "queryFrequency": "1h"
       }
     }
   ]

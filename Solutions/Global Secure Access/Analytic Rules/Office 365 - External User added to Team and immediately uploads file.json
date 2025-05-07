@@ -14,24 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "GSA Enriched Office 365 - Accessed files shared by temporary external user",
+        "severity": "Low",
+        "status": "Available",
+        "description": "'This detection identifies when an external user is added to a Team or Teams chat and shares a file which is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of suspicious activity.'\n",
         "query": "let fileAccessThreshold = 10;\n// OfficeActivity Query\nlet OfficeEvents = OfficeActivity\n    | where OfficeWorkload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"MemberAdded\"\n    | extend MemberAdded = tostring(parse_json(Members)[0].UPN)\n    | where MemberAdded contains \"#EXT#\"\n    | project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName\n    | join kind=inner (\n        OfficeActivity\n        | where OfficeWorkload =~ \"MicrosoftTeams\"\n        | where Operation =~ \"MemberRemoved\"\n        | extend MemberAdded = tostring(parse_json(Members)[0].UPN)\n        | where MemberAdded contains \"#EXT#\"\n        | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName\n    ) on MemberAdded\n    | where TimeDeleted > TimeAdded\n    | join kind=inner (\n        OfficeActivity\n        | where RecordType == \"SharePointFileOperation\"\n        | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n        | where Operation == \"FileUploaded\"\n        | extend MemberAdded = UserId\n        | join kind=inner (\n            OfficeActivity\n            | where RecordType == \"SharePointFileOperation\"\n            | where Operation == \"FileAccessed\"\n            | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n            | summarize FileAccessCount = count() by OfficeObjectId\n            | where FileAccessCount > fileAccessThreshold\n        ) on OfficeObjectId\n    ) on MemberAdded\n    | project TimeAdded, TimeDeleted, MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName;\n// EnrichedMicrosoft365AuditLogs Query\nlet EnrichedEvents = EnrichedMicrosoft365AuditLogs\n    | where Workload =~ \"MicrosoftTeams\"\n    | where Operation =~ \"MemberAdded\"\n    | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)\n    | where MemberAdded contains \"#EXT#\"\n    | project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n    | join kind=inner (\n        EnrichedMicrosoft365AuditLogs\n        | where Workload =~ \"MicrosoftTeams\"\n        | where Operation =~ \"MemberRemoved\"\n        | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)\n        | where MemberAdded contains \"#EXT#\"\n        | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n    ) on MemberAdded, TeamName\n    | where TimeDeleted > TimeAdded\n    | join kind=inner (\n        EnrichedMicrosoft365AuditLogs\n        | where RecordType == \"SharePointFileOperation\"\n        | where Operation == \"FileUploaded\"\n        | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n        | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n        | join kind=inner (\n            EnrichedMicrosoft365AuditLogs\n            | where RecordType == \"SharePointFileOperation\"\n            | where Operation == \"FileAccessed\"\n            | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)\n            | where SourceRelativeUrl has \"Microsoft Teams Chat Files\"\n            | summarize FileAccessCount = count() by ObjectId, TeamName\n            | where FileAccessCount > fileAccessThreshold\n        ) on ObjectId, TeamName\n    ) on MemberAdded, TeamName\n    | project TimeAdded, TimeDeleted, MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName;\n// Combine Office and Enriched Events and Deduplicate\nlet CombinedEvents = OfficeEvents\n    | union EnrichedEvents\n    | summarize arg_min(TimeAdded, *) by MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName;\n// Project Final Output\nCombinedEvents\n    | extend MemberAddedAccountName = tostring(split(MemberAdded, \"@\")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, \"@\")[1])\n    | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, \"@\")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, \"@\")[1])\n    | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, \"@\")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, \"@\")[1])\n    | project TimeAdded, TimeDeleted, MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, MemberAddedAccountName, MemberAddedAccountUPNSuffix, UserWhoAddedAccountName, UserWhoAddedAccountUPNSuffix, UserWhoDeletedAccountName, UserWhoDeletedAccountUPNSuffix\n",
-        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "MemberAdded"
+                "columnName": "MemberAdded",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "MemberAddedAccountName"
+                "columnName": "MemberAddedAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "MemberAddedAccountUPNSuffix"
+                "columnName": "MemberAddedAccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -39,16 +46,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserWhoAdded"
+                "columnName": "UserWhoAdded",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "UserWhoAddedAccountName"
+                "columnName": "UserWhoAddedAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UserWhoAddedAccountUPNSuffix"
+                "columnName": "UserWhoAddedAccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -56,29 +63,22 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserWhoDeleted"
+                "columnName": "UserWhoDeleted",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "UserWhoDeletedAccountName"
+                "columnName": "UserWhoDeletedAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UserWhoDeletedAccountUPNSuffix"
+                "columnName": "UserWhoDeletedAccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           }
         ],
         "triggerOperator": "gt",
-        "status": "Available",
-        "name": "GSA Enriched Office 365 - Accessed files shared by temporary external user",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "queryPeriod": "1h",
-        "description": "'This detection identifies when an external user is added to a Team or Teams chat and shares a file which is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of suspicious activity.'\n",
-        "severity": "Low"
+        "queryFrequency": "1h"
       }
     }
   ]
