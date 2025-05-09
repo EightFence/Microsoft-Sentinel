@@ -14,10 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailEvents_ = materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress) and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has \"Blocked\" | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromAddress = tolower(SenderFromAddress) | extend RecipientEmailAddress = tolower(RecipientEmailAddress));\nlet SenderAddresses = EmailEvents_ | distinct  SenderFromAddress | summarize make_list(SenderFromAddress);\nlet RecipientAddresses = EmailEvents_ | distinct  RecipientEmailAddress | summarize make_list(RecipientEmailAddress);\nlet TI = materialize(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n| where isnotempty(EmailSenderAddress)\n| extend TI_EmailAddress = tolower(EmailSenderAddress)\n| where TI_EmailAddress in (SenderAddresses) or TI_EmailAddress in (RecipientAddresses)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now());\n(union\n  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.SenderFromAddress),\n  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.RecipientEmailAddress))\n| where EmailEvents_TimeGenerated < ExpirationDateTime\n| summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, TI_EmailAddress\n| project EmailEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Url, Type, TI_EmailAddress, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n| extend timestamp = EmailEvents_TimeGenerated\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "RecipientEmailAddress",
@@ -31,19 +29,21 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "name": "TI map Email entity to EmailEvents",
-        "triggerOperator": "gt",
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in EmailEvents table from any Email IOC from TI'\n",
-        "severity": "Medium",
-        "queryFrequency": "1h",
         "triggerThreshold": 0,
         "tactics": [
           "InitialAccess"
-        ]
+        ],
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "name": "TI map Email entity to EmailEvents",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "description": "'Identifies a match in EmailEvents table from any Email IOC from TI'\n",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailEvents_ = materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress) and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has \"Blocked\" | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromAddress = tolower(SenderFromAddress) | extend RecipientEmailAddress = tolower(RecipientEmailAddress));\nlet SenderAddresses = EmailEvents_ | distinct  SenderFromAddress | summarize make_list(SenderFromAddress);\nlet RecipientAddresses = EmailEvents_ | distinct  RecipientEmailAddress | summarize make_list(RecipientEmailAddress);\nlet TI = materialize(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n| where isnotempty(EmailSenderAddress)\n| extend TI_EmailAddress = tolower(EmailSenderAddress)\n| where TI_EmailAddress in (SenderAddresses) or TI_EmailAddress in (RecipientAddresses)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now());\n(union\n  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.SenderFromAddress),\n  (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.RecipientEmailAddress))\n| where EmailEvents_TimeGenerated < ExpirationDateTime\n| summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, TI_EmailAddress\n| project EmailEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Url, Type, TI_EmailAddress, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n| extend timestamp = EmailEvents_TimeGenerated\n"
       }
     }
   ]
