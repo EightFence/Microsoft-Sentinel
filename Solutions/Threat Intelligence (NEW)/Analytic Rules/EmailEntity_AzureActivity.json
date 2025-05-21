@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n//Filtering the table for Email related IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| project-reorder *, IsActive, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Caller)\n    | extend Caller = tolower(Caller)\n    | where Caller matches regex emailregex\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.Caller\n| where AzureActivity_TimeGenerated < ValidUntil\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by Id, Caller\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project AzureActivity_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, EmailSourceDomain, Caller, CallerIpAddress, Url\n| extend Name = tostring(split(Caller, '@', 0)[0]), UPNSuffix = tostring(split(Caller, '@', 1)[0])\n| extend timestamp = AzureActivity_TimeGenerated\n",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "description": "'Identifies a match in AzureActivity table from any Email IOC from TI'\n",
         "name": "TI map Email entity to AzureActivity",
-        "tactics": [
-          "InitialAccess"
-        ],
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
         "queryPeriod": "14d",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Caller"
+                "columnName": "Caller",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "queryFrequency": "1h"
+        "description": "'Identifies a match in AzureActivity table from any Email IOC from TI'\n",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]
