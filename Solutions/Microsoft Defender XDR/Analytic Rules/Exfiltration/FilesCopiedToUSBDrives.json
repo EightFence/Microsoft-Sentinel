@@ -14,15 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let UsbDriveMount = DeviceEvents\n| where ActionType==\"UsbDriveMounted\"\n| extend ParsedFields=parse_json(AdditionalFields)\n| project DeviceId, DeviceName, DriveLetter=ParsedFields.DriveLetter, MountTime=TimeGenerated,\nProductName=ParsedFields.ProductName,SerialNumber=ParsedFields.SerialNumber,Manufacturer=ParsedFields.Manufacturer\n| order by DeviceId asc, MountTime desc;\nlet FileCreation = DeviceFileEvents\n| where InitiatingProcessAccountName != \"system\"\n| where ActionType == \"FileCreated\"\n| where FolderPath !startswith \"C:\\\\\"\n| where FolderPath !startswith \"\\\\\"\n| project ReportId,DeviceId,InitiatingProcessAccountDomain,\nInitiatingProcessAccountName,InitiatingProcessAccountUpn,\nFileName, FolderPath, SHA256, TimeGenerated, SensitivityLabel, IsAzureInfoProtectionApplied\n| order by DeviceId asc, TimeGenerated desc;\nFileCreation | lookup kind=inner (UsbDriveMount) on DeviceId\n| where FolderPath startswith DriveLetter\n| where TimeGenerated >= MountTime\n| partition hint.strategy=native by ReportId ( top 1 by MountTime )\n| order by DeviceId asc, TimeGenerated desc\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n| extend FileHashAlgorithm = 'SHA256'\n",
+        "tactics": [
+          "Exfiltration"
+        ],
+        "status": "Available",
         "name": "Files Copied to USB Drives",
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
         "queryPeriod": "1h",
-        "severity": "High",
         "entityMappings": [
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
@@ -36,10 +35,10 @@
                 "columnName": "DnsDomain",
                 "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "File",
             "fieldMappings": [
               {
                 "columnName": "FileName",
@@ -49,10 +48,10 @@
                 "columnName": "FolderPath",
                 "identifier": "Directory"
               }
-            ]
+            ],
+            "entityType": "File"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "FileHashAlgorithm",
@@ -62,15 +61,16 @@
                 "columnName": "SHA256",
                 "identifier": "Value"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
-        "status": "Available",
+        "query": "let UsbDriveMount = DeviceEvents\n| where ActionType==\"UsbDriveMounted\"\n| extend ParsedFields=parse_json(AdditionalFields)\n| project DeviceId, DeviceName, DriveLetter=ParsedFields.DriveLetter, MountTime=TimeGenerated,\nProductName=ParsedFields.ProductName,SerialNumber=ParsedFields.SerialNumber,Manufacturer=ParsedFields.Manufacturer\n| order by DeviceId asc, MountTime desc;\nlet FileCreation = DeviceFileEvents\n| where InitiatingProcessAccountName != \"system\"\n| where ActionType == \"FileCreated\"\n| where FolderPath !startswith \"C:\\\\\"\n| where FolderPath !startswith \"\\\\\"\n| project ReportId,DeviceId,InitiatingProcessAccountDomain,\nInitiatingProcessAccountName,InitiatingProcessAccountUpn,\nFileName, FolderPath, SHA256, TimeGenerated, SensitivityLabel, IsAzureInfoProtectionApplied\n| order by DeviceId asc, TimeGenerated desc;\nFileCreation | lookup kind=inner (UsbDriveMount) on DeviceId\n| where FolderPath startswith DriveLetter\n| where TimeGenerated >= MountTime\n| partition hint.strategy=native by ReportId ( top 1 by MountTime )\n| order by DeviceId asc, TimeGenerated desc\n| extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), \"\")\n| extend FileHashAlgorithm = 'SHA256'\n",
+        "triggerOperator": "gt",
+        "severity": "High",
         "description": "This query lists files copied to USB external drives with USB drive information based on FileCreated events associated with most recent USBDriveMount events befor file creations. But be aware that Advanced Hunting is not monitoring all the file types.\n",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Exfiltration"
-        ]
+        "queryFrequency": "1h",
+        "triggerThreshold": 0
       }
     }
   ]
