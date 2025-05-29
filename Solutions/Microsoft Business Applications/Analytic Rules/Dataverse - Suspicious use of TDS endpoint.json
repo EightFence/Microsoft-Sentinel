@@ -14,10 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let query_frequency = 1h;\nlet query_lookback = 14d;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message == 'ExecutePowerBISql'\n| summarize FirstEvent = min(TimeGenerated) by UserId, ClientIp, InstanceUrl\n| join kind=inner(\n    DataverseActivity\n    | where TimeGenerated >= ago(query_lookback)\n    | where Message == 'ExecutePowerBISql'\n    | summarize UniqueUsers = dcount(UserId, 4) by InstanceUrl)\n    on InstanceUrl\n| where UniqueUsers == 1\n| join kind=inner (\n    SecurityAlert\n    | where Entities has ('\"Type\":\"ip\"')\n    | project AlertName, SystemAlertId, Entities\n    | mv-expand todynamic(Entities)\n    | where Entities.Type == \"ip\"\n    | extend IPAddress = tostring(Entities.Address)\n    | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by IPAddress)\n    on $left.ClientIp == $right.IPAddress\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| join kind = inner (\n    SecurityAlert\n    | where Entities has ('Type\":\"account\"')\n    | project AlertName, SystemAlertId, Entities\n    | mv-expand todynamic(Entities)\n    | where Entities.Type == \"account\"\n    | extend\n        UPNSuffix = tostring(Entities.UPNSuffix),\n        AccountName = tostring(Entities.Name)\n    | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by AccountName, UPNSuffix\n    | where isnotempty(AccountName) and isnotempty(UPNSuffix))\n    on AccountName, UPNSuffix\n| summarize SystemAlerts = make_set(SystemAlerts, 100), Alerts = make_set(Alerts, 100) by FirstEvent, UserId, ClientIp, InstanceUrl, AccountName, UPNSuffix\n| extend CloudAppId = int(32780)\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    Alerts,\n    SystemAlerts,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "queryFrequency": "1h",
+        "name": "Dataverse - Suspicious use of TDS endpoint",
+        "tactics": [
+          "Exfiltration",
+          "InitialAccess"
+        ],
         "status": "Available",
-        "severity": "Low",
         "triggerThreshold": 0,
+        "description": "Identifies Dataverse TDS (Tabular Data Stream) protocol based queries where the source user or IP address has recent security alerts and the TDS protocol has not been used previously in the target environment.",
+        "queryPeriod": "14d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "The TDS endpoint was used to query Dataverse instance {{InstanceUrl}} . The use of this protocol was not seen previously and the following alerts were associated with the caller: {{Alerts}}",
+          "alertDisplayNameFormat": "Dataverse - Suspicious use of TDS endpoint in {{InstanceUrl}} "
+        },
+        "severity": "Low",
+        "query": "let query_frequency = 1h;\nlet query_lookback = 14d;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message == 'ExecutePowerBISql'\n| summarize FirstEvent = min(TimeGenerated) by UserId, ClientIp, InstanceUrl\n| join kind=inner(\n    DataverseActivity\n    | where TimeGenerated >= ago(query_lookback)\n    | where Message == 'ExecutePowerBISql'\n    | summarize UniqueUsers = dcount(UserId, 4) by InstanceUrl)\n    on InstanceUrl\n| where UniqueUsers == 1\n| join kind=inner (\n    SecurityAlert\n    | where Entities has ('\"Type\":\"ip\"')\n    | project AlertName, SystemAlertId, Entities\n    | mv-expand todynamic(Entities)\n    | where Entities.Type == \"ip\"\n    | extend IPAddress = tostring(Entities.Address)\n    | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by IPAddress)\n    on $left.ClientIp == $right.IPAddress\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| join kind = inner (\n    SecurityAlert\n    | where Entities has ('Type\":\"account\"')\n    | project AlertName, SystemAlertId, Entities\n    | mv-expand todynamic(Entities)\n    | where Entities.Type == \"account\"\n    | extend\n        UPNSuffix = tostring(Entities.UPNSuffix),\n        AccountName = tostring(Entities.Name)\n    | summarize SystemAlerts = make_set(SystemAlertId, 100), Alerts = make_set(AlertName, 100) by AccountName, UPNSuffix\n    | where isnotempty(AccountName) and isnotempty(UPNSuffix))\n    on AccountName, UPNSuffix\n| summarize SystemAlerts = make_set(SystemAlerts, 100), Alerts = make_set(Alerts, 100) by FirstEvent, UserId, ClientIp, InstanceUrl, AccountName, UPNSuffix\n| extend CloudAppId = int(32780)\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    Alerts,\n    SystemAlerts,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -54,23 +70,7 @@
               }
             ]
           }
-        ],
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "tactics": [
-          "Exfiltration",
-          "InitialAccess"
-        ],
-        "name": "Dataverse - Suspicious use of TDS endpoint",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The TDS endpoint was used to query Dataverse instance {{InstanceUrl}} . The use of this protocol was not seen previously and the following alerts were associated with the caller: {{Alerts}}",
-          "alertDisplayNameFormat": "Dataverse - Suspicious use of TDS endpoint in {{InstanceUrl}} "
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "description": "Identifies Dataverse TDS (Tabular Data Stream) protocol based queries where the source user or IP address has recent security alerts and the TDS protocol has not been used previously in the target environment.",
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]

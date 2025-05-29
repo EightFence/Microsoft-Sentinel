@@ -14,7 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1h",
+        "name": "Preview - TI map Domain entity to Cloud App Events",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerThreshold": 0,
+        "description": "'Identifies compromises and attacks and detect malicious activities in one's domain entity from TI.'\n",
+        "queryPeriod": "14d",
+        "severity": "Medium",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d; \nlet list_tlds =\n  ThreatIntelligenceIndicator\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n    | where Active == true and ExpirationDateTime > now()\n    | where isnotempty(DomainName)\n    | extend DomainName = tolower(DomainName)\n    | extend parts = split(DomainName, '.')\n    | extend tld = parts[(array_length(parts) - 1)]\n    | summarize count() by tostring(tld)\n    | summarize make_set(tld);\nlet Domain_Indicators =\n  ThreatIntelligenceIndicator\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n    | where Active == true and ExpirationDateTime > now()\n    | extend TI_DomainEntity = DomainName\n    | where isnotempty(TI_DomainEntity);\n  Domain_Indicators\n    | join kind=innerunique (\n  CloudAppEvents\n    | extend IngestionTime = ingestion_time()\n    | where IngestionTime > ago(dt_lookBack)\n    | extend PAUrl = columnifexists(\"RequestURL\", \"None\")\n    | extend Domain = trim('\"', tostring(parseurl(PAUrl).Host))\n    | extend Domain = tolower(Domain)\n    | extend parts = split(Domain, '.')\n    | extend tld = parts[(array_length(parts) - 1)]\n    | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_DomainEntity == $right.Domain\n    | where CloudAppEvents_TimeGenerated < ExpirationDateTime\n    | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId\n    | extend Description = max_CloudAppEvents_TimeGenerated_Description, ActivityGroupNames = max_CloudAppEvents_TimeGenerated_ActivityGroupNames, ThreatType = max_CloudAppEvents_TimeGenerated_ThreatType, ExpirationDateTime = max_CloudAppEvents_TimeGenerated_ExpirationDateTime, ConfidenceScore = max_CloudAppEvents_TimeGenerated_ConfidenceScore, DomainName = max_CloudAppEvents_TimeGenerated_DomainName, ProviderName = max_CloudAppEvents_TimeGenerated_IndicatorProvider, AlertSeverity = max_CloudAppEvents_TimeGenerated_ThreatSeverity, IPAddress = max_CloudAppEvents_TimeGenerated_IPAddress\n    | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, ProviderName, AlertSeverity, IPAddress\n",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "DNS",
@@ -34,17 +44,7 @@
               }
             ]
           }
-        ],
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "name": "Preview - TI map Domain entity to Cloud App Events",
-        "description": "'Identifies compromises and attacks and detect malicious activities in one's domain entity from TI.'\n",
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]
