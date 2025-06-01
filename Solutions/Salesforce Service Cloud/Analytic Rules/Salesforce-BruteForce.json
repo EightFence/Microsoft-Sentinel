@@ -15,32 +15,32 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "queryFrequency": "1h",
-        "queryPeriod": "1h",
-        "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'\n",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "status": "Available",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "query": "let failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\nSalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses\n",
+        "description": "'Identifies evidence of brute force activity against a user based on multiple authentication failures and at least one successful authentication within a given time window. This query limits IPAddresses to 100 and may not potentially cover all IPAddresses.\nThe default failure threshold is 10, success threshold is 1, and the default time window is 20 minutes.'\n",
+        "triggerOperator": "gt",
+        "name": "Brute force attack against user credentials",
+        "customDetails": {
+          "EventEndTime": "SuccessEndTime",
+          "EventStartTime": "FailureStartTime",
+          "IPAddresses": "IpAddresses"
+        },
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "User",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "User"
               }
             ],
             "entityType": "Account"
           }
-        ],
-        "customDetails": {
-          "IPAddresses": "IpAddresses",
-          "EventStartTime": "FailureStartTime",
-          "EventEndTime": "SuccessEndTime"
-        },
-        "query": "let failureCountThreshold = 10;\nlet successCountThreshold = 1;\nlet Failures =\nSalesforceServiceCloud\n| where EventType == \"Login\" and LoginStatus != \"LOGIN_NO_ERROR\"\n| summarize\n      FailureStartTime = min(TimeGenerated),\n      FailureEndTime = max(TimeGenerated),\n      IpAddresses = make_set (ClientIp, 100),\n      FailureCount = count() by User, UserId, UserType;\n  SalesforceServiceCloud\n  | where EventType == \"Login\" and LoginStatus == \"LOGIN_NO_ERROR\"\n  | summarize\n          SuccessStartTime = min(TimeGenerated),\n          SuccessEndTime = max(TimeGenerated),\n          IpAddresses = make_set (ClientIp, 100),\n          SuccessCount = count() by User, UserId, UserType\n  | join kind=leftouter Failures on UserId\n  | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n  | where FailureEndTime < SuccessStartTime\n  | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses\n",
-        "name": "Brute force attack against user credentials",
-        "tactics": [
-          "CredentialAccess"
         ]
       }
     }
