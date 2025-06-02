@@ -14,32 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
         "status": "Available",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "query": "let riskScoreCutoff = 3; //Adjust this score threshold based on volume of results. Activities identified as the most abnormal receive the highest scores (on a scale of 0-10)\nSigninLogs\n| where ResultType == 500121\n| extend additionalDetails_ = tostring(Status.additionalDetails)\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| where additionalDetails_ =~ \"MFA denied; user declined the authentication\" or additionalDetails_ has \"fraud\"\n| summarize StartTime = min(TimeGenerated), EndTIme = max(TimeGenerated) by UserPrincipalName, UserId, AADTenantId, FailedIPAddress = IPAddress\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n| join kind=leftouter (\n    IdentityInfo\n    | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN\n    | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled\n    | summarize\n        Tags = make_set(Tags, 1000),\n        GroupMembership = make_set(GroupMembership, 1000),\n        AssignedRoles = make_set(AssignedRoles, 1000),\n        UserType = make_set(UserType, 1000),\n        UserAccountControl = make_set(UserType, 1000)\n    by AccountUPN\n    | extend UserPrincipalName=tolower(AccountUPN)\n) on UserPrincipalName\n//Below it will be joined with BehaviorAnalytics table to the Failed IP Addresses\n| join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where isnotempty(SourceIPAddress)\n    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress, UserName\n    | project-rename FailedIPAddress = SourceIPAddress, Name = UserName\n    | summarize\n      MaxInvestigationScore = max(InvestigationPriority)  // Only retrieve maximum Investigation Property score for both FailedIP and User\n    by FailedIPAddress, Name)\non FailedIPAddress, Name  // Joining on both IP and User so as to only return context associated with same user\n| extend UEBARiskScore = MaxInvestigationScore\n| project-away *1 // removing duplicate columns post outer join from output\n| where  UEBARiskScore > riskScoreCutoff\n| sort by UEBARiskScore desc \n",
+        "queryFrequency": "1h",
         "description": "'Identifies occurances where a user has rejected an MFA prompt. This could be an indicator that a threat actor has compromised the username and password of this user account and is using it to try and log into the account.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins\nThis query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results. \nPlease note, MFA Failed logons from known IP ranges can be benign depending on the conditional access policies. In case of noisy behavior, consider tuning the source IP ranges or location filter after careful consideration'\n",
-        "triggerOperator": "gt",
-        "name": "MFA Rejected by User",
-        "severity": "Medium",
         "triggerThreshold": 0,
-        "queryPeriod": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -47,8 +39,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "UserId"
+                "columnName": "UserId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -56,13 +48,21 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "FailedIPAddress"
+                "columnName": "FailedIPAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
-        ]
+        ],
+        "queryPeriod": "1h",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "query": "let riskScoreCutoff = 3; //Adjust this score threshold based on volume of results. Activities identified as the most abnormal receive the highest scores (on a scale of 0-10)\nSigninLogs\n| where ResultType == 500121\n| extend additionalDetails_ = tostring(Status.additionalDetails)\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| where additionalDetails_ =~ \"MFA denied; user declined the authentication\" or additionalDetails_ has \"fraud\"\n| summarize StartTime = min(TimeGenerated), EndTIme = max(TimeGenerated) by UserPrincipalName, UserId, AADTenantId, FailedIPAddress = IPAddress\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])\n| join kind=leftouter (\n    IdentityInfo\n    | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN\n    | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled\n    | summarize\n        Tags = make_set(Tags, 1000),\n        GroupMembership = make_set(GroupMembership, 1000),\n        AssignedRoles = make_set(AssignedRoles, 1000),\n        UserType = make_set(UserType, 1000),\n        UserAccountControl = make_set(UserType, 1000)\n    by AccountUPN\n    | extend UserPrincipalName=tolower(AccountUPN)\n) on UserPrincipalName\n//Below it will be joined with BehaviorAnalytics table to the Failed IP Addresses\n| join kind=leftouter (\n    BehaviorAnalytics\n    | where ActivityType in (\"FailedLogOn\", \"LogOn\")\n    | where isnotempty(SourceIPAddress)\n    | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress, UserName\n    | project-rename FailedIPAddress = SourceIPAddress, Name = UserName\n    | summarize\n      MaxInvestigationScore = max(InvestigationPriority)  // Only retrieve maximum Investigation Property score for both FailedIP and User\n    by FailedIPAddress, Name)\non FailedIPAddress, Name  // Joining on both IP and User so as to only return context associated with same user\n| extend UEBARiskScore = MaxInvestigationScore\n| project-away *1 // removing duplicate columns post outer join from output\n| where  UEBARiskScore > riskScoreCutoff\n| sort by UEBARiskScore desc \n",
+        "severity": "Medium",
+        "name": "MFA Rejected by User"
       }
     }
   ]
