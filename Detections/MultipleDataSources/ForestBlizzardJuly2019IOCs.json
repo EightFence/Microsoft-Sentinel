@@ -14,8 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1d",
+        "description": "'Matches domain name IOCs related to Forest Blizzard group activity published July 2019 with CommonSecurityLog, DnsEvents and VMConnection dataTypes.\nReferences: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'\n",
+        "severity": "High",
+        "name": "Known Forest Blizzard group domains - July 2019",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -29,10 +34,10 @@
                 "identifier": "NTDomain",
                 "columnName": "AccountDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -46,46 +51,41 @@
                 "identifier": "NTDomain",
                 "columnName": "HostNameDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "description": "'Matches domain name IOCs related to Forest Blizzard group activity published July 2019 with CommonSecurityLog, DnsEvents and VMConnection dataTypes.\nReferences: https://blogs.microsoft.com/on-the-issues/2019/07/17/new-cyberthreats-require-new-ways-to-protect-democracy/.'\n",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "tactics": [
+          "CommandAndControl"
+        ],
         "query": "let DomainNames = dynamic([\"irf.services\",\"microsoft-onthehub.com\",\"msofficelab.com\",\"com-mailbox.com\",\"my-sharefile.com\",\"my-sharepoints.com\",\n\"accounts-web-mail.com\",\"customer-certificate.com\",\"session-users-activities.com\",\"user-profile-credentials.com\",\"verify-linke.com\",\"support-servics.net\",\n\"onedrive-sharedfile.com\",\"onedrv-live.com\",\"transparencyinternational-my-sharepoint.com\",\"transparencyinternational-my-sharepoints.com\",\"soros-my-sharepoint.com\"]);\n(union isfuzzy=true\n  (CommonSecurityLog\n  | where Message has_any (DomainNames)\n  | parse Message with * '(' DNSName ')' *\n  | extend AccountName = SourceUserID, DeviceName, IPAddress = SourceIP\n  ),\n  (_Im_Dns(domain_has_any=DomainNames)\n  | where DnsQuery has_any (DomainNames)\n  | extend IPAddress = SrcIpAddr, DeviceName = Dvc\n  ),\n  (VMConnection\n  | where RemoteDnsCanonicalNames has_any (DomainNames)\n  | parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n  | extend IPAddress = RemoteIp, DeviceName = Computer\n  ),\n  (AzureDiagnostics \n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallApplicationRule\"\n  | parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n  | where DestinationHost has_any (DomainNames)\n  | extend DNSName = DestinationHost \n  | extend IPAddress = SourceHost\n  ),\n  (AzureDiagnostics\n  | where ResourceType == \"AZUREFIREWALLS\"\n  | where Category == \"AzureFirewallDnsProxy\"\n  | project TimeGenerated,Resource, msg_s, Type\n  | parse msg_s with \"DNS Request: \" ClientIP \":\" ClientPort \" - \" QueryID \" \" Request_Type \" \" Request_Class \" \" Request_Name \". \" Request_Protocol \" \" Request_Size \" \" EDNSO_DO \" \" EDNS0_Buffersize \" \" Responce_Code \" \" Responce_Flags \" \" Responce_Size \" \" Response_Duration\n  | where Request_Name  has_any (DomainNames)\n  | extend DNSName = Request_Name\n  | extend IPAddress = ClientIP\n  ),\n  (AZFWApplicationRule\n  | where isnotempty(Fqdn)\n  | where Fqdn has_any (DomainNames)  \n  | extend DNSName = Fqdn \n  | extend IPAddress = SourceIp\n  ),\n  (AZFWDnsQuery\n  | where isnotempty(QueryName)\n  | where QueryName has_any (DomainNames)\n  | extend DNSName = QueryName\n  | extend IPAddress = SourceIp\n  ),\n  (\n    _Im_WebSession(url_has_any=DomainNames)\n    | extend IPAddress=IpAddr, DeviceName=Hostname, AccountName = tostring(split(User, \"@\")[0]), AccountDomain = tostring(split(User, \"@\")[1])\n  )\n)\n| where DNSName has_any (DomainNames)\n| extend timestamp = TimeGenerated\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n",
+        "triggerThreshold": 0,
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
           "support": {
             "tier": "Community"
           },
-          "author": {
-            "name": "Microsoft Security Research"
+          "source": {
+            "kind": "Community"
           },
           "categories": {
             "domains": [
               "Security - 0-day Vulnerability"
             ]
+          },
+          "author": {
+            "name": "Microsoft Security Research"
           }
-        },
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "name": "Known Forest Blizzard group domains - July 2019",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "severity": "High"
+        }
       }
     }
   ]
