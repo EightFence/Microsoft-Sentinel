@@ -14,36 +14,36 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "Actor",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IPaddress",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
-        "queryFrequency": "1h",
         "name": "TI map IP entity to GitHub_CL",
         "triggerThreshold": 0,
-        "description": "'Identifies a match in GitHub_CL table from any IP IOC from TI'\n",
-        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Actor"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPaddress"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
         "queryPeriod": "14d",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\nThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where isnotempty(IndicatorType) and IndicatorType == \"ipv4-addr\"\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkSourceIP)\n// | where Action == true\n| where TimeGenerated >= ago(ioc_lookBack)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n  | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n| join (\n  GitHubAudit\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend GitHubAudit_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.IPaddress\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkSourceIP\n",
+        "triggerOperator": "gt",
+        "description": "'Identifies a match in GitHub_CL table from any IP IOC from TI'\n",
         "tactics": [
           "CommandAndControl"
         ],
+        "queryFrequency": "1h",
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\nThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where isnotempty(IndicatorType) and IndicatorType == \"ipv4-addr\"\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkSourceIP)\n// | where Action == true\n| where TimeGenerated >= ago(ioc_lookBack)\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n  | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n| join (\n  GitHubAudit\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend GitHubAudit_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.IPaddress\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project LatestIndicatorTime, Description, ActivityGroupNames, Id, ValidUntil, Confidence, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkSourceIP\n",
         "severity": "Medium"
       }
     }
