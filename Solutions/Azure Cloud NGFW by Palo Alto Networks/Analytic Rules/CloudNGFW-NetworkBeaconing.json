@@ -14,24 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Palo Alto - potential beaconing detected",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerOperator": "gt",
+        "severity": "Low",
         "description": "'Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns.\nThe query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing.\nThis outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.\nReference Blog:\nhttp://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/\nhttps://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586'\n",
-        "triggerThreshold": 0,
+        "queryPeriod": "2d",
+        "status": "Available",
+        "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nfluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where ipv4_is_private(tostring(parse_json(Message).dst_ip)) == false\n| project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport,Message\n| sort by tostring(parse_json(Message).src_ip) asc, TimeGenerated asc, tostring(parse_json(Message).dst_ip) asc, tostring(parse_json(Message).dport) asc\n| extend src_ip=tostring(parse_json(Message).src_ip)\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(src_ip, 1)\n| extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)\n| where parse_json(Message).src_ip == nextSourceIP\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)\nby bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend IPAddress = tostring(parse_json(Message).dst_ip)\n| extend HostName = tostring(split(FirewallName_s, \".\")[0]), DomainIndex = toint(indexof(FirewallName_s, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(FirewallName_s, DomainIndex + 1), FirewallName_s)\n",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "FirewallName_s"
+                "columnName": "FirewallName_s",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
               }
             ]
           },
@@ -39,21 +45,15 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "queryPeriod": "2d",
-        "severity": "Low",
-        "triggerOperator": "gt",
-        "status": "Available",
-        "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nfluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where ipv4_is_private(tostring(parse_json(Message).dst_ip)) == false\n| project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport,Message\n| sort by tostring(parse_json(Message).src_ip) asc, TimeGenerated asc, tostring(parse_json(Message).dst_ip) asc, tostring(parse_json(Message).dport) asc\n| extend src_ip=tostring(parse_json(Message).src_ip)\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(src_ip, 1)\n| extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)\n| where parse_json(Message).src_ip == nextSourceIP\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)\nby bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend IPAddress = tostring(parse_json(Message).dst_ip)\n| extend HostName = tostring(split(FirewallName_s, \".\")[0]), DomainIndex = toint(indexof(FirewallName_s, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(FirewallName_s, DomainIndex + 1), FirewallName_s)\n",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "queryFrequency": "1d"
+        "name": "Palo Alto - potential beaconing detected",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0
       }
     }
   ]

@@ -14,43 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Power Platform - DLP policy updated or removed",
-        "description": "Identifies changes to DLP policy, specifically policies which are updated or removed.",
-        "queryPeriod": "1d",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerOperator": "gt",
+        "severity": "Low",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           }
         ],
-        "severity": "Low",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
+        "description": "Identifies changes to DLP policy, specifically policies which are updated or removed.",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "PowerPlatform - DLP policy {{EventType}} event detected.",
+          "alertDescriptionFormat": "A DLP policy {{PolicyName}} was as modfiied or deleted. Event type {{EventType}}"
         },
+        "queryPeriod": "1d",
         "status": "Available",
         "query": "let create_policy_ignore_time_window = 10m;\nlet query_frequency = 1h;\nlet dlp_policy_events = PowerPlatformAdminActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where EventOriginalType == \"GovernanceApiPolicyOperation\"\n    | where PropertyCollection has_any (\"DeleteDlpPolicy\", \"UpdateDlpPolicy\", \"CreateDlpPolicy\")\n    | mv-expand PropertyCollection\n    | extend\n        Name = tostring(PropertyCollection.Name),\n        Value = tostring(PropertyCollection.Value)\n    | summarize Properties = make_bag(bag_pack(Name, Value))\n        by\n        TimeGenerated,\n        EventOriginalUid\n    | extend\n        PolicyName = tostring(Properties['powerplatform.analytics.resource.display_name']),\n        EventType = tostring(Properties['powerplatform.analytics.resource.tenant.governance.api_policy.operation_name']),\n        ActorName = tostring(Properties['enduser.principal_name']),\n        PolicyId = tostring(Properties['powerplatform.analytics.resource.id']),\n        AdditionalInfo = Properties['powerplatform.analytics.resource.tenant.governance.api_policy.additional_resources'];\nlet delete_events = dlp_policy_events\n    | where EventType == \"DeleteDlpPolicy\";\nlet update_events = dlp_policy_events\n    | where EventType == \"UpdateDlpPolicy\";\nlet create_events = dlp_policy_events\n    | where EventType == \"CreateDlpPolicy\"\n    | extend ignore_time = TimeGenerated + create_policy_ignore_time_window;\nunion\n    delete_events,\n    (update_events\n    | join kind=leftouter (\n        create_events\n        | project-away TimeGenerated\n        )\n        on PolicyId\n    | where isempty(ignore_time) or TimeGenerated > ignore_time\n    | project-away ignore_time)\n| where TimeGenerated >= ago(query_frequency)\n| extend\n    AccountName = tostring(split(ActorName, \"@\")[0]),\n    UPNSuffix = tostring(split(ActorName, \"@\")[1])\n| project\n    TimeGenerated,\n    ActorName,\n    EventType,\n    PolicyName,\n    PolicyId,\n    AccountName,\n    UPNSuffix,\n    AdditionalInfo\n",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "A DLP policy {{PolicyName}} was as modfiied or deleted. Event type {{EventType}}",
-          "alertDisplayNameFormat": "PowerPlatform - DLP policy {{EventType}} event detected."
-        },
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "queryFrequency": "1h",
         "customDetails": {
           "PolicyName": "PolicyName",
           "Policy": "PolicyId"
+        },
+        "name": "Power Platform - DLP policy updated or removed",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
         }
       }
     }
