@@ -14,15 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "UserAgent": "UserAgent",
-          "AWSUser": "UserIdentityArn",
-          "SourceIpAddress": "SourceIpAddress"
-        },
-        "queryPeriod": "1d",
-        "severity": "Medium",
         "name": "Suspicious AWS EC2 Compute Resource Deployments",
-        "description": "'This detection focused on Suspicious deployment of AWS EC2 resource (virtual machine) scale sets was detected. This behavior might indicate that the threat actor is deploying computing resources for cryptocurrency mining activities.This detection centers around identifying suspicious instances of AWS EC2 resource deployment, particularly scale sets. Such behavior raises concerns of potential threat actor involvement, potentially indicative of efforts to deploy computing resources for the purpose of cryptocurrency mining activities.\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
@@ -54,10 +47,17 @@
         "tactics": [
           "Impact"
         ],
-        "queryFrequency": "1d",
-        "query": "// Retrieve AWS CloudTrail events generated within the last day\nAWSCloudTrail\n// Filter events related to instance creation\n| where EventName =~ \"RunInstances\"\n// Exclude events with error messages\n| where isempty(ErrorMessage)\n// Extract the event source type\n| extend EventSourceSplit = split(EventSource, \".\")\n| extend Type = tostring(EventSourceSplit[0])\n// Extract instance-related details from the event data\n| extend instance = tostring(parse_json(RequestParameters).instanceType),platform = tostring(parse_json(ResponseElements).instancesSet.items[0].platform)\n// Determine the operating system platform\n| extend OSplatform = iff(isempty(platform), tostring(\"Linux\"), platform),CPU = tostring(parse_json(ResponseElements).instancesSet.items[0].cpuOptions),core = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.coreCount),corThread = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.threadsPerCore),InstanceId = tostring(parse_json(ResponseElements).instancesSet.items[0].instanceId)\n// Filter out instances with empty core values\n| where isnotempty(core)\n// Calculate the total compute based on core and thread counts\n| extend totalCorecompute = core * corThread\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n// Summarize relevant information for analysis\n| summarize Start= min(TimeGenerated),\n  end=   max(TimeGenerated),\n  totalgpu= sum(totalCorecompute)\n  by SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserAgent\n// Filter results based on total GPU compute and time duration\n| where totalgpu > 800\n| where datetime_diff('hour', end, Start) < 8\n",
         "triggerOperator": "gt",
-        "triggerThreshold": 0
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "description": "'This detection focused on Suspicious deployment of AWS EC2 resource (virtual machine) scale sets was detected. This behavior might indicate that the threat actor is deploying computing resources for cryptocurrency mining activities.This detection centers around identifying suspicious instances of AWS EC2 resource deployment, particularly scale sets. Such behavior raises concerns of potential threat actor involvement, potentially indicative of efforts to deploy computing resources for the purpose of cryptocurrency mining activities.\n",
+        "customDetails": {
+          "UserAgent": "UserAgent",
+          "SourceIpAddress": "SourceIpAddress",
+          "AWSUser": "UserIdentityArn"
+        },
+        "query": "// Retrieve AWS CloudTrail events generated within the last day\nAWSCloudTrail\n// Filter events related to instance creation\n| where EventName =~ \"RunInstances\"\n// Exclude events with error messages\n| where isempty(ErrorMessage)\n// Extract the event source type\n| extend EventSourceSplit = split(EventSource, \".\")\n| extend Type = tostring(EventSourceSplit[0])\n// Extract instance-related details from the event data\n| extend instance = tostring(parse_json(RequestParameters).instanceType),platform = tostring(parse_json(ResponseElements).instancesSet.items[0].platform)\n// Determine the operating system platform\n| extend OSplatform = iff(isempty(platform), tostring(\"Linux\"), platform),CPU = tostring(parse_json(ResponseElements).instancesSet.items[0].cpuOptions),core = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.coreCount),corThread = toint(parse_json(ResponseElements).instancesSet.items[0].cpuOptions.threadsPerCore),InstanceId = tostring(parse_json(ResponseElements).instancesSet.items[0].instanceId)\n// Filter out instances with empty core values\n| where isnotempty(core)\n// Calculate the total compute based on core and thread counts\n| extend totalCorecompute = core * corThread\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n// Summarize relevant information for analysis\n| summarize Start= min(TimeGenerated),\n  end=   max(TimeGenerated),\n  totalgpu= sum(totalCorecompute)\n  by SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserAgent\n// Filter results based on total GPU compute and time duration\n| where totalgpu > 800\n| where datetime_diff('hour', end, Start) < 8\n"
       }
     }
   ]
