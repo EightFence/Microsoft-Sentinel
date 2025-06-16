@@ -14,18 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies suspicious behaviors in hierarchy security including:\n- Hierarchy security disabled.\n- User assigns themselves as a manager.\n- User assigns themselves to a monitored position.\n",
-        "queryFrequency": "1h",
         "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Dataverse - Suspicious hierarchy security modifications in {{InstanceUrl}} ",
-          "alertDescriptionFormat": "{{Message}}. Events detected for user {{UserId}}."
+        "queryPeriod": "1d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
+        "severity": "Medium",
+        "query": "let monitored_position_ids = dynamic([\n    // Enter a list of monitored position ID (guids)\n    //\"79380ac5-da2a-ed11-9db1-000d3a58d546\"\n    ]);\nlet query_frequency = 1h;\nlet security_disabled_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Update\" and EntityName == \"organization\"\n    | mv-expand Fields\n    | where Fields.Name == \"ishierarchicalsecuritymodelenabled\"\n    | where Fields.Value == \"False\"\n    | extend Message = \"Hierarchy security has been disabled\"\n    | project TimeGenerated, UserId, ClientIp, InstanceUrl, Message;\nlet assign_self_as_manager_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Update\" and EntityName == \"systemuser\"\n    | mv-expand Fields\n    | where Fields.Name == \"parentsystemuserid\"\n    | extend ModifiedManager = tostring(Fields.Value)\n    | where SystemUserId == ModifiedManager\n    | extend Message = \"User added self as manager of another user\";\nlet assign_self_to_position_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Update\" and EntityName == \"systemuser\"\n    | mv-expand Position = Fields\n    | where Position.Name == \"positionid\" and tostring(Position.Value) in (monitored_position_ids)\n    | mv-expand Target = Fields\n    | where Target.Name == \"systemuserid\"\n    | extend UserAssigned = tostring(Target.Value)\n    | where SystemUserId == UserAssigned\n    | extend\n        Message = \"User assigned self to a monitored position\",\n        PositionId = tostring(Position.Value);\nunion\n    security_disabled_events,\n    assign_self_as_manager_events,\n    assign_self_to_position_events\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeGenerated,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    Message,\n    PositionId,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "status": "Available",
         "name": "Dataverse - Hierarchy security manipulation",
-        "queryPeriod": "1d",
+        "description": "Identifies suspicious behaviors in hierarchy security including:\n- Hierarchy security disabled.\n- User assigns themselves as a manager.\n- User assigns themselves to a monitored position.\n",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,19 +41,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -57,18 +63,12 @@
                 "identifier": "InstanceName",
                 "columnName": "InstanceUrl"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "query": "let monitored_position_ids = dynamic([\n    // Enter a list of monitored position ID (guids)\n    //\"79380ac5-da2a-ed11-9db1-000d3a58d546\"\n    ]);\nlet query_frequency = 1h;\nlet security_disabled_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Update\" and EntityName == \"organization\"\n    | mv-expand Fields\n    | where Fields.Name == \"ishierarchicalsecuritymodelenabled\"\n    | where Fields.Value == \"False\"\n    | extend Message = \"Hierarchy security has been disabled\"\n    | project TimeGenerated, UserId, ClientIp, InstanceUrl, Message;\nlet assign_self_as_manager_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Update\" and EntityName == \"systemuser\"\n    | mv-expand Fields\n    | where Fields.Name == \"parentsystemuserid\"\n    | extend ModifiedManager = tostring(Fields.Value)\n    | where SystemUserId == ModifiedManager\n    | extend Message = \"User added self as manager of another user\";\nlet assign_self_to_position_events = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Update\" and EntityName == \"systemuser\"\n    | mv-expand Position = Fields\n    | where Position.Name == \"positionid\" and tostring(Position.Value) in (monitored_position_ids)\n    | mv-expand Target = Fields\n    | where Target.Name == \"systemuserid\"\n    | extend UserAssigned = tostring(Target.Value)\n    | where SystemUserId == UserAssigned\n    | extend\n        Message = \"User assigned self to a monitored position\",\n        PositionId = tostring(Position.Value);\nunion\n    security_disabled_events,\n    assign_self_as_manager_events,\n    assign_self_to_position_events\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeGenerated,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    Message,\n    PositionId,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - Suspicious hierarchy security modifications in {{InstanceUrl}} ",
+          "alertDescriptionFormat": "{{Message}}. Events detected for user {{UserId}}."
         }
       }
     }

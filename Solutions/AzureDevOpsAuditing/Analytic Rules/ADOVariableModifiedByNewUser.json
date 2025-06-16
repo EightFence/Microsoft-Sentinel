@@ -14,14 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Variables can be configured and used at any stage of the build process in Azure DevOps to inject values. An attacker with the required permissions could modify or add to these variables to conduct malicious activity such as changing paths or remote endpoints called during the build.\nAs variables are often changed by users, just detecting these changes would have a high false positive rate. This detection looks for modifications to variable groups where that user has not been observed modifying them before.'\n",
         "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "query": "let lookback = 14d;\nlet timeframe = 1d;\nlet historical_data =\nADOAuditLogs\n| where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)\n| where OperationName =~ \"Library.VariableGroupModified\"\n| extend variables = Data.Variables\n| extend VariableGroupId = tostring(Data.VariableGroupId)\n| extend UserKey = strcat(VariableGroupId, \"-\", ActorUserId)\n| project UserKey;\nADOAuditLogs\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Library.VariableGroupModified\"\n| extend VariableGroupName = tostring(Data.VariableGroupName)\n| extend VariableGroupId = tostring(Data.VariableGroupId)\n| extend UserKey = strcat(VariableGroupId, \"-\", ActorUserId)\n| where UserKey !in (historical_data)\n| project-away UserKey\n| project-reorder TimeGenerated, VariableGroupName, ActorUPN, IpAddress, UserAgent\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "status": "Available",
         "name": "Azure DevOps Build Variable Modified by New User",
+        "description": "'Variables can be configured and used at any stage of the build process in Azure DevOps to inject values. An attacker with the required permissions could modify or add to these variables to conduct malicious activity such as changing paths or remote endpoints called during the build.\nAs variables are often changed by users, just detecting these changes would have a high false positive rate. This detection looks for modifications to variable groups where that user has not been observed modifying them before.'\n",
         "queryFrequency": "1d",
-        "queryPeriod": "14d",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -35,25 +42,18 @@
                 "identifier": "UPNSuffix",
                 "columnName": "AccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IpAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ],
-        "query": "let lookback = 14d;\nlet timeframe = 1d;\nlet historical_data =\nADOAuditLogs\n| where TimeGenerated > ago(lookback) and TimeGenerated < ago(timeframe)\n| where OperationName =~ \"Library.VariableGroupModified\"\n| extend variables = Data.Variables\n| extend VariableGroupId = tostring(Data.VariableGroupId)\n| extend UserKey = strcat(VariableGroupId, \"-\", ActorUserId)\n| project UserKey;\nADOAuditLogs\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Library.VariableGroupModified\"\n| extend VariableGroupName = tostring(Data.VariableGroupName)\n| extend VariableGroupId = tostring(Data.VariableGroupId)\n| extend UserKey = strcat(VariableGroupId, \"-\", ActorUserId)\n| where UserKey !in (historical_data)\n| project-away UserKey\n| project-reorder TimeGenerated, VariableGroupName, ActorUPN, IpAddress, UserAgent\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerThreshold": 0,
-        "severity": "Medium"
+        ]
       }
     }
   ]

@@ -14,18 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies a change in system audit configuration whereby audit logging is turned off.",
-        "queryFrequency": "1h",
         "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Dataverse - Audit logging was disabled in {{InstanceUrl}} ",
-          "alertDescriptionFormat": "Audit settings changes were detected in {{InstanceUrl}}. {{AuditValue}} enabled: was set to {{AuditEnabled}}."
+        "queryPeriod": "14d",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
         },
+        "severity": "Low",
+        "query": "let query_frequency = 1h;\nlet audit_properties = dynamic(['isauditenabled', 'isuseraccessauditenabled','isreadauditenabled']);\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message in~ (\"Update\", \"UpdateAuditSettings\")\n| where Fields has_any (audit_properties)\n| mv-expand Fields\n| extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)\n| where AuditValue in~ (audit_properties) and not (AuditEnabled)\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeGenerated,\n    UserId,\n    ClientIp,\n    OriginalObjectId,\n    AuditValue,\n    AuditEnabled,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "status": "Available",
         "name": "Dataverse - Audit logging disabled",
-        "queryPeriod": "14d",
+        "description": "Identifies a change in system audit configuration whereby audit logging is turned off.",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,19 +41,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -57,18 +63,12 @@
                 "identifier": "InstanceName",
                 "columnName": "InstanceUrl"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "query": "let query_frequency = 1h;\nlet audit_properties = dynamic(['isauditenabled', 'isuseraccessauditenabled','isreadauditenabled']);\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message in~ (\"Update\", \"UpdateAuditSettings\")\n| where Fields has_any (audit_properties)\n| mv-expand Fields\n| extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)\n| where AuditValue in~ (audit_properties) and not (AuditEnabled)\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    TimeGenerated,\n    UserId,\n    ClientIp,\n    OriginalObjectId,\n    AuditValue,\n    AuditEnabled,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerThreshold": 0,
-        "severity": "Low",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - Audit logging was disabled in {{InstanceUrl}} ",
+          "alertDescriptionFormat": "Audit settings changes were detected in {{InstanceUrl}}. {{AuditValue}} enabled: was set to {{AuditEnabled}}."
         }
       }
     }
