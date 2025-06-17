@@ -14,45 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "description": "Identifies user account deletion activity where the amount of deleted users exceeds a predefined threshold.",
         "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "CloudApp",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "query": "let bulk_delete_threshold = 10;\nSAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| where Message.object has \"scim user\" and Message.object has \"DELETE\"\n| mv-expand Attributes = Message.attributes\n| where isnotempty(Attributes.old)\n| extend DeletedUserName = tostring(parse_json(tostring(Attributes.old)).userName)\n| where isnotempty(DeletedUserName)\n| summarize\n    Start = min(UpdatedOn),\n    End = max(UpdatedOn),\n    DeletedUsers = make_set(DeletedUserName, 100)\n    by UserName, Tenant, SpaceId\n| where array_length(DeletedUsers) > bulk_delete_threshold\n| project Start, End, UserName, DeletedUsers, Tenant, SpaceId, CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
         "severity": "Medium",
-        "query": "let bulk_delete_threshold = 10;\nSAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| where Message.object has \"scim user\" and Message.object has \"DELETE\"\n| mv-expand Attributes = Message.attributes\n| where isnotempty(Attributes.old)\n| extend DeletedUserName = tostring(parse_json(tostring(Attributes.old)).userName)\n| where isnotempty(DeletedUserName)\n| summarize\n    Start = min(UpdatedOn),\n    End = max(UpdatedOn),\n    DeletedUsers = make_set(DeletedUserName, 100)\n    by UserName, Tenant, SpaceId\n| where array_length(DeletedUsers) > bulk_delete_threshold\n| project Start, End, UserName, DeletedUsers, Tenant, SpaceId, CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "tactics": [
-          "Impact"
-        ],
-        "status": "Available",
-        "name": "BTP - Mass user deletion in a sub account",
-        "description": "Identifies user account deletion activity where the amount of deleted users exceeds a predefined threshold.",
-        "queryFrequency": "1h",
         "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "CloudApplication",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "CloudApp"
-              }
-            ]
-          }
-        ]
+        "triggerOperator": "gt",
+        "name": "BTP - Mass user deletion in a sub account",
+        "status": "Available"
       }
     }
   ]
