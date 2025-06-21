@@ -14,9 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet Signins = materialize(union isfuzzy=true\n( SigninLogs | where TimeGenerated >= ago(dt_lookBack)),\n( AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails))\n| where isnotempty(UserPrincipalName) and UserPrincipalName matches regex emailregex\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend SigninLogs_TimeGenerated = TimeGenerated);\nlet SigninUPNs = Signins | distinct UserPrincipalName | summarize make_list(UserPrincipalName);\nThreatIntelIndicators\n//Filtering the table for Email related IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend Id = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where EmailSenderAddress in (SigninUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n  | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n| join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ValidUntil\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, UserPrincipalName\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkLocationDetails, Type, Url\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated\n",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "description": "'Identifies a match in SigninLogs table from any Email IOC from TI'\n",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "name": "TI map Email entity to SigninLogs",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -30,38 +37,31 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
         "tactics": [
           "InitialAccess"
-        ],
-        "name": "TI map Email entity to SigninLogs",
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "description": "'Identifies a match in SigninLogs table from any Email IOC from TI'\n",
-        "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet Signins = materialize(union isfuzzy=true\n( SigninLogs | where TimeGenerated >= ago(dt_lookBack)),\n( AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails))\n| where isnotempty(UserPrincipalName) and UserPrincipalName matches regex emailregex\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend SigninLogs_TimeGenerated = TimeGenerated);\nlet SigninUPNs = Signins | distinct UserPrincipalName | summarize make_list(UserPrincipalName);\nThreatIntelIndicators\n//Filtering the table for Email related IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend Id = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where EmailSenderAddress in (SigninUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n  | project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n| join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ValidUntil\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, UserPrincipalName\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkLocationDetails, Type, Url\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated\n"
+        ]
       }
     }
   ]
