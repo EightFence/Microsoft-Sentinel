@@ -14,30 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "triggerOperator": "gt",
-        "queryPeriod": "14d",
-        "severity": "Low",
-        "queryFrequency": "1h",
         "query": "// Set the time span for the query.\nlet Timeframe = 1h;\n// Set the HashTimeframe for the hash lookup; longer makes it more accurate, but obviously also more resource-intensive.\nlet HashTimeframe = 14d;\n// Get all known SHA1 hashes for certutil executions or renamed files formerly named certutil.\nlet CertUtilPESha1=materialize(DeviceProcessEvents | where Timestamp > ago(HashTimeframe)| where FileName has \"certutil\"  | where isnotempty(SHA1) | summarize sha1=make_set(SHA1));\nlet CertUtilFESha1=materialize(DeviceFileEvents | where Timestamp > ago(HashTimeframe)| where PreviousFileName contains \"certutil\" or FileName contains \"certutil\"  | where isnotempty(SHA1) | summarize sha1=make_set(SHA1));\nDeviceProcessEvents\n| where Timestamp >= ago(Timeframe)\n// Get all executions by processes with a SHA1 hash that is or was named certutil.\n| where SHA1 in (CertUtilPESha1) or SHA1 in (CertUtilFESha1) or FileName =~ \"certutil.exe\" or ProcessCommandLine has \"certutil\"\n// Create a new field called CleanProcessCommandLine which gets populated with the value of ProcessCommandLine as Windows parses it for execution, \n// removing any potential command line obfuscation. \n| extend CleanProcessCommandLine=parse_command_line(ProcessCommandLine, \"windows\")\n// Search for de-obfuscated commands used. \n// Urlcache is the documented attribute. However, url is also accepted.\n// Verifyctl is the documented attribute. However, verify is also accepted.\n| where CleanProcessCommandLine has_any (\"decode\", \"encode\", \"verify\",\"url\") \n| order by Timestamp\n",
         "tactics": [
           "CommandAndControl",
           "DefenseEvasion"
         ],
-        "triggerThreshold": 0,
-        "name": "Ingress Tool Transfer - Certutil",
+        "status": "Available",
+        "description": "This detection addresses most of the known ways to utilize this binary for malicious/unintended purposes. \nIt attempts to accommodate for most detection evasion techniques, like commandline obfuscation and binary renaming.\n",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
                 "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountSid",
@@ -51,19 +47,23 @@
                 "columnName": "AccountDomain",
                 "identifier": "NTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Process",
             "fieldMappings": [
               {
                 "columnName": "ProcessCommandLine",
                 "identifier": "CommandLine"
               }
-            ]
+            ],
+            "entityType": "Process"
           }
         ],
-        "description": "This detection addresses most of the known ways to utilize this binary for malicious/unintended purposes. \nIt attempts to accommodate for most detection evasion techniques, like commandline obfuscation and binary renaming.\n"
+        "queryPeriod": "14d",
+        "name": "Ingress Tool Transfer - Certutil",
+        "triggerThreshold": 0,
+        "severity": "Low"
       }
     }
   ]
