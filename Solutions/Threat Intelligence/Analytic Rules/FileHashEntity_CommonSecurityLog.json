@@ -18,16 +18,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "SourceUserName"
+                "columnName": "SourceUserName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -35,16 +35,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "DeviceName"
+                "columnName": "DeviceName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "DnsDomain"
+                "columnName": "DnsDomain",
+                "identifier": "DnsDomain"
               }
             ],
             "entityType": "Host"
@@ -52,8 +52,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIP"
+                "columnName": "SourceIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -61,8 +61,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ],
             "entityType": "URL"
@@ -70,28 +70,28 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Value",
-                "columnName": "FileHashValue"
+                "columnName": "FileHashValue",
+                "identifier": "Value"
               },
               {
-                "identifier": "Algorithm",
-                "columnName": "FileHashType"
+                "columnName": "FileHashType",
+                "identifier": "Algorithm"
               }
             ],
             "entityType": "FileHash"
           }
         ],
+        "name": "TI map File Hash to CommonSecurityLog Event",
+        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n",
         "tactics": [
           "CommandAndControl"
         ],
         "queryPeriod": "14d",
         "queryFrequency": "1h",
-        "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash IOC from TI'\n",
         "severity": "Medium",
+        "triggerOperator": "gt",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet fileHashIndicators = ThreatIntelligenceIndicator\n| where isnotempty(FileHashValue)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now();\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend  FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n  CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n  | where isnotempty(FileHash)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n  )\non $left.FileHashValue == $right.FileHash\n| where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, FileHashValue\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity, FileHashValue, FileHashType\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n| extend Name = tostring(split(SourceUserName, '@', 0)[0]), UPNSuffix = tostring(split(SourceUserName, '@', 1)[0])\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
-        "name": "TI map File Hash to CommonSecurityLog Event",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt"
+        "triggerThreshold": 0
       }
     }
   ]
