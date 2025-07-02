@@ -14,12 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n//Filtering the table for Email related IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)\n    // Filtering PAN Logs for specific event type to match relevant email entities\n    | where DeviceVendor == \"Palo Alto Networks\" and  DeviceEventClassID == \"wildfire\" and ApplicationProtocol in (\"smtp\",\"pop3\")\n    | extend DestinationUserID = tolower(DestinationUserID)\n    | where DestinationUserID matches regex emailregex\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.DestinationUserID\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, DestinationUserID\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,\nDestinationIP, DestinationPort, Protocol, ApplicationProtocol, Url//,  EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType,\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "DestinationUserID",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "DestinationUserID"
               }
             ],
             "entityType": "Account"
@@ -27,8 +30,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SourceIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIP"
               }
             ],
             "entityType": "IP"
@@ -36,24 +39,21 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ],
             "entityType": "URL"
           }
         ],
-        "name": "TI map Email entity to PaloAlto CommonSecurityLog",
-        "description": "'Identifies a match in CommonSecurityLog table from any Email IOC from TI'\n",
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
         "tactics": [
           "InitialAccess"
         ],
-        "queryPeriod": "14d",
-        "queryFrequency": "1h",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n//Filtering the table for Email related IOCs\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"email-addr\"\n| extend EmailSenderAddress = ObservableValue\n| extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| project-reorder *, TrafficLightProtocolLevel, EmailSenderAddress, EmailSourceDomain, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack) and isnotempty(DestinationUserID)\n    // Filtering PAN Logs for specific event type to match relevant email entities\n    | where DeviceVendor == \"Palo Alto Networks\" and  DeviceEventClassID == \"wildfire\" and ApplicationProtocol in (\"smtp\",\"pop3\")\n    | extend DestinationUserID = tolower(DestinationUserID)\n    | where DestinationUserID matches regex emailregex\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.DestinationUserID\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, DestinationUserID\n| project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, EmailSenderAddress, DestinationUserID, DeviceEventClassID, LogSeverity, DeviceAction, SourceIP, SourcePort,\nDestinationIP, DestinationPort, Protocol, ApplicationProtocol, Url//,  EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType,\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
-        "triggerThreshold": 0
+        "name": "TI map Email entity to PaloAlto CommonSecurityLog",
+        "triggerThreshold": 0,
+        "description": "'Identifies a match in CommonSecurityLog table from any Email IOC from TI'\n"
       }
     }
   ]
