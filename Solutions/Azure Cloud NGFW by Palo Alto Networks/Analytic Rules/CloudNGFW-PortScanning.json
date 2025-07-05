@@ -14,12 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "triggerOperator": "gt",
-        "name": "CloudNGFW By Palo Alto Networks - possible internal to external port scanning",
-        "severity": "Low",
         "description": "'Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which results in an \"app = incomplete\" designation. The server resets coupled with an \"Incomplete\" app designation can be an indication of internal to external port scanning or probing attack.\nReferences: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK\nhttps://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK'\n",
+        "queryFrequency": "1h",
+        "query": "fluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| where isnotempty(FirewallName_s)\n| extend message = parse_json(Message)\n| extend DestinationPort = tostring(message.dport)\n| extend SourceIP = tostring(message.src_ip)\n| extend DestinationIP = tostring(message.dst_ip)\n| extend Application = tostring(message.app)\n| extend Protocol = tostring(message.proto)\n| extend Action = tostring(message.action)\n| where isnotempty(DestinationPort) and message.action !in (\"reset-both\", \"deny\")\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where message.app == \"incomplete\"\n| where toint(DestinationPort) !between (49512 .. 65535)\n| where message.dst_ip !startswith \"10.\"\n| extend Reason = coalesce(column_ifexists(\"Reason\", \"\"), tostring(message.session_end_reason), \"\")\n| where Reason !has \"aged-out\"\n| where Reason !has \"tcp-fin\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action, DestinationIP\n| where count_ >= 10\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), makeset(DestinationIP), totalcount = sum(count_) by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action\n| extend IPAddress = SourceIP\n| extend HostName = tostring(split(FirewallName_s, \".\")[0]), DomainIndex = toint(indexof(FirewallName_s, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(FirewallName_s, DomainIndex + 1), FirewallName_s)\n",
         "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "status": "Available",
+        "name": "CloudNGFW By Palo Alto Networks - possible internal to external port scanning",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Discovery"
+        ],
         "entityMappings": [
           {
             "entityType": "Host",
@@ -48,12 +53,7 @@
             ]
           }
         ],
-        "queryFrequency": "1h",
-        "query": "fluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| where isnotempty(FirewallName_s)\n| extend message = parse_json(Message)\n| extend DestinationPort = tostring(message.dport)\n| extend SourceIP = tostring(message.src_ip)\n| extend DestinationIP = tostring(message.dst_ip)\n| extend Application = tostring(message.app)\n| extend Protocol = tostring(message.proto)\n| extend Action = tostring(message.action)\n| where isnotempty(DestinationPort) and message.action !in (\"reset-both\", \"deny\")\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where message.app == \"incomplete\"\n| where toint(DestinationPort) !between (49512 .. 65535)\n| where message.dst_ip !startswith \"10.\"\n| extend Reason = coalesce(column_ifexists(\"Reason\", \"\"), tostring(message.session_end_reason), \"\")\n| where Reason !has \"aged-out\"\n| where Reason !has \"tcp-fin\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action, DestinationIP\n| where count_ >= 10\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), makeset(DestinationIP), totalcount = sum(count_) by FirewallName_s, SourceIP, Application, Reason, DestinationPort, Protocol, ident_s, Action\n| extend IPAddress = SourceIP\n| extend HostName = tostring(split(FirewallName_s, \".\")[0]), DomainIndex = toint(indexof(FirewallName_s, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(FirewallName_s, DomainIndex + 1), FirewallName_s)\n",
-        "tactics": [
-          "Discovery"
-        ],
-        "triggerThreshold": 0
+        "severity": "Low"
       }
     }
   ]
