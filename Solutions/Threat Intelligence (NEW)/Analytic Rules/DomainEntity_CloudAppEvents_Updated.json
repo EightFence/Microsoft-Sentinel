@@ -14,35 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d; \nlet list_tlds =\n  ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n    | where IsActive == true and ValidUntil > now()\n    //extract key part of kv pair\n    | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n    | where isnotempty(IndicatorType) and IndicatorType == \"domain-name\"\n    | extend DomainName = tolower(IndicatorType)\n    | extend parts = split(DomainName, '.')\n    | extend tld = parts[(array_length(parts) - 1)]\n    | extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | summarize count() by tostring(tld)\n    | summarize make_set(tld);\nlet Domain_Indicators =\n  ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n    | where IsActive == true and ValidUntil > now()\n    | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n    | where isnotempty(IndicatorType) and IndicatorType == \"domain-name\"\n    | extend TI_DomainEntity = tolower(ObservableValue)\n    | extend DomainName = TI_DomainEntity\n    | extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | where isnotempty(TI_DomainEntity)\n    | project-reorder *, IndicatorType, DomainName, Type, TI_DomainEntity;\n  Domain_Indicators\n    | join kind=innerunique (\n  CloudAppEvents\n    | extend IngestionTime = ingestion_time()\n    | where IngestionTime > ago(dt_lookBack)\n    | extend PAUrl = columnifexists(\"RequestURL\", \"None\")\n    | extend Domain = trim('\"', tostring(parseurl(PAUrl).Host))\n    | extend Domain = tolower(Domain)\n    | extend parts = split(Domain, '.')\n    | extend tld = parts[(array_length(parts) - 1)]\n    | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_DomainEntity == $right.Domain\n    | where CloudAppEvents_TimeGenerated < ValidUntil\n    | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId\n    | extend \n          Description = tostring(parse_json(max_CloudAppEvents_TimeGenerated_Data).description),\n          ActivityGroupNames = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ActivityGroupNames\", \"\"),\n          ThreatType = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatType\", \"\"),\n          ExpirationDateTime = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ExpirationDateTime\", \"\"),\n          ConfidenceScore = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ConfidenceScore\", \"\"),\n          DomainName = column_ifexists(\"max_CloudAppEvents_TimeGenerated_DomainName\", \"\"),\n          ProviderName = column_ifexists(\"max_CloudAppEvents_TimeGenerated_IndicatorProvider\", \"\"),\n          AlertSeverity = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatSeverity\", \"\"),\n          IPAddress = column_ifexists(\"max_CloudAppEvents_TimeGenerated_IPAddress\", \"\")\n    | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, ProviderName, AlertSeverity, IPAddress\n",
-        "description": "'Identifies compromises and attacks and detect malicious activities in one's domain entity from TI.'\n",
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerThreshold": 0,
-        "name": "TI map Domain entity to Cloud App Events",
+        "queryFrequency": "1h",
         "severity": "Medium",
+        "queryPeriod": "14d",
+        "description": "'Identifies compromises and attacks and detect malicious activities in one's domain entity from TI.'\n",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d; \nlet list_tlds =\n  ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n    //extract key part of kv pair\n    | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n    | where IndicatorType == \"domain-name\"\n    | extend DomainName = tolower(IndicatorType)\n    | extend parts = split(DomainName, '.')\n    | extend tld = parts[(array_length(parts) - 1)]\n    | extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | summarize count() by tostring(tld)\n    | summarize make_set(tld);\nlet Domain_Indicators =\n  ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n    | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n    | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n    | where IndicatorType == \"domain-name\"\n    | extend DomainName = tolower(ObservableValue)\n    | extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | project-reorder *, IndicatorType, DomainName, Type;\n  Domain_Indicators\n    | join kind=innerunique (\n  CloudAppEvents\n    | extend IngestionTime = ingestion_time()\n    | where IngestionTime > ago(dt_lookBack)\n    | extend PAUrl = columnifexists(\"RequestURL\", \"None\")\n    | extend Domain = tolower(trim('\"', tostring(parseurl(PAUrl).Host)))\n    | extend parts = split(Domain, '.')\n    | extend tld = parts[(array_length(parts) - 1)]\n    | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.DomainName == $right.Domain\n    | where CloudAppEvents_TimeGenerated < ValidUntil\n    | summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId\n    | extend \n          Description = tostring(parse_json(max_CloudAppEvents_TimeGenerated_Data).description),\n          ActivityGroupNames = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ActivityGroupNames\", \"\"),\n          ThreatType = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatType\", \"\"),\n          ExpirationDateTime = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ExpirationDateTime\", \"\"),\n          ConfidenceScore = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ConfidenceScore\", \"\"),\n          DomainName = column_ifexists(\"max_CloudAppEvents_TimeGenerated_DomainName\", \"\"),\n          ProviderName = column_ifexists(\"max_CloudAppEvents_TimeGenerated_IndicatorProvider\", \"\"),\n          AlertSeverity = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatSeverity\", \"\"),\n          IPAddress = column_ifexists(\"max_CloudAppEvents_TimeGenerated_IPAddress\", \"\")\n    | project CloudAppEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, ProviderName, AlertSeverity, IPAddress\n",
+        "name": "TI map Domain entity to Cloud App Events",
         "entityMappings": [
           {
-            "entityType": "DNS",
             "fieldMappings": [
               {
-                "columnName": "DomainName",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "DomainName"
               }
-            ]
+            ],
+            "entityType": "DNS"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ]
       }

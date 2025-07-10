@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelIndicators\n//extract key part of kv pair\n      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n      | where isnotempty(IndicatorType) and IndicatorType == \"file\"\n      | extend FileHashType = replace(\"'\", \"\", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7, strlen(ObservableKey) - indexof(ObservableKey, \"hashes.\") - 7))\n      | extend FileHashValue = toupper(ObservableValue)\n      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n//  | where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n  | project-reorder *, FileHashType, FileHashValue, Type\n| join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, FileHashValue, FileHashType, ValidUntil, Confidence, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated\n",
-        "description": "'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'\n",
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerThreshold": 0,
-        "name": "TI map File Hash to DeviceFileEvents Event",
+        "queryFrequency": "1h",
         "severity": "Medium",
+        "queryPeriod": "14d",
+        "description": "'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'\n",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelIndicators\n//extract key part of kv pair\n      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n      | where IndicatorType == \"file\"\n      | extend FileHashType = replace(\"'\", \"\", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7, strlen(ObservableKey) - indexof(ObservableKey, \"hashes.\") - 7))\n      | extend FileHashValue = ObservableValue\n      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n//  | where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n  | project-reorder *, FileHashType, FileHashValue, Type\n| join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, FileHashValue, FileHashType, ValidUntil, Confidence, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated\n",
+        "name": "TI map File Hash to DeviceFileEvents Event",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "RequestAccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "RequestAccountName"
               },
               {
-                "columnName": "RequestAccountSid",
-                "identifier": "Sid"
+                "identifier": "Sid",
+                "columnName": "RequestAccountSid"
               },
               {
-                "columnName": "RequestAccountDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "RequestAccountDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
-                "columnName": "FileHashValue",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "FileHashValue"
               },
               {
-                "columnName": "FileHashType",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "FileHashType"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "DeviceName"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ]
       }
