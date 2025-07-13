@@ -14,6 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DomainTIs= ThreatIntelligenceIndicator\n  // Picking up only IOC's that contain the entities we want\n  | where isnotempty(DomainName)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now();\nlet Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) \n  | project DomainList = iff(NDomains > HAS_ANY_MAX, dynamic([]), DomainsList) ;\nDomainTIs\n  | join (\n      _Im_Dns(starttime=ago(dt_lookBack), domain_has_any=toscalar(Domains))\n      | extend DNS_TimeGenerated = TimeGenerated\n) on $left.DomainName==$right.DnsQuery\n| where DNS_TimeGenerated < ExpirationDateTime\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, Domain, DnsQuery, DnsQueryType\n| extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n",
+        "description": "Identifies a match in DNS events from any Domain IOC from TI\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema'\n",
+        "severity": "Medium",
+        "name": "TI map Domain entity to Dns Events (ASIM DNS Schema)",
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CommandAndControl"
+        ],
         "entityMappings": [
           {
             "entityType": "Host",
@@ -60,30 +71,19 @@
             ]
           }
         ],
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "name": "TI map Domain entity to Dns Events (ASIM DNS Schema)",
-        "queryPeriod": "14d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DomainTIs= ThreatIntelligenceIndicator\n  // Picking up only IOC's that contain the entities we want\n  | where isnotempty(DomainName)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now();\nlet Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) \n  | project DomainList = iff(NDomains > HAS_ANY_MAX, dynamic([]), DomainsList) ;\nDomainTIs\n  | join (\n      _Im_Dns(starttime=ago(dt_lookBack), domain_has_any=toscalar(Domains))\n      | extend DNS_TimeGenerated = TimeGenerated\n) on $left.DomainName==$right.DnsQuery\n| where DNS_TimeGenerated < ExpirationDateTime\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, Domain, DnsQuery, DnsQueryType\n| extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n",
-        "severity": "Medium",
-        "queryFrequency": "1h",
         "customDetails": {
-          "LatestIndicatorTime": "LatestIndicatorTime",
-          "QueryType": "DnsQueryType",
-          "IndicatorId": "IndicatorId",
-          "ThreatType": "ThreatType",
-          "ConfidenceScore": "ConfidenceScore",
-          "Description": "Description",
           "ExpirationDateTime": "ExpirationDateTime",
-          "DnsQuery": "DnsQuery",
+          "LatestIndicatorTime": "LatestIndicatorTime",
+          "DNSRequestTime": "DNS_TimeGenerated",
+          "IndicatorId": "IndicatorId",
+          "ConfidenceScore": "ConfidenceScore",
           "ActivityGroupNames": "ActivityGroupNames",
           "SourceIPAddress": "SrcIpAddr",
-          "DNSRequestTime": "DNS_TimeGenerated"
-        },
-        "description": "Identifies a match in DNS events from any Domain IOC from TI\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM DNS schema'\n"
+          "DnsQuery": "DnsQuery",
+          "ThreatType": "ThreatType",
+          "QueryType": "DnsQueryType",
+          "Description": "Description"
+        }
       }
     }
   ]

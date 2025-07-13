@@ -14,6 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "description": "'Flags builds/releases that use a large number of service connections if they aren't manually in the allow list.\nThis is to determine if someone is hijacking a build/release and adding many service connections in order to abuse or dump credentials from service connections.'\n",
+        "severity": "Medium",
+        "name": "Azure DevOps Service Connection Abuse",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Persistence",
+          "Impact"
+        ],
+        "query": "// How many greater than Service Connections you want to view per build/release\nlet ServiceConnectionThreshold = 4;\nlet BypassDefIds = datatable(DefId:string, Type:string, ProjectName:string)\n[\n//\"103\", \"Release\", \"ProjectA\",\n//\"42\", \"Release\", \"ProjectB\",\n//\"122\", \"Build\", \"ProjectB\"\n];\nADOAuditLogs\n| where OperationName == \"Library.ServiceConnectionExecuted\"\n| extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)\n| parse ScopeDisplayName with OrganizationName ' (Organization)'\n| summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n  by OrganizationName, tostring(DefId), tostring(Type), ProjectId, ProjectName, ActorUPN, IpAddress\n| where CurrentCount > ServiceConnectionThreshold\n| join kind=anti BypassDefIds on $left.DefId==$right.DefId and $left.Type == $right.Type and $left.ProjectName == $right.ProjectName\n| extend link = iif(\n  Type == \"Build\", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId),\n  strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))\n| extend timestamp = StartTime\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -41,20 +54,7 @@
               }
             ]
           }
-        ],
-        "tactics": [
-          "Persistence",
-          "Impact"
-        ],
-        "name": "Azure DevOps Service Connection Abuse",
-        "queryPeriod": "14d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "query": "// How many greater than Service Connections you want to view per build/release\nlet ServiceConnectionThreshold = 4;\nlet BypassDefIds = datatable(DefId:string, Type:string, ProjectName:string)\n[\n//\"103\", \"Release\", \"ProjectA\",\n//\"42\", \"Release\", \"ProjectB\",\n//\"122\", \"Build\", \"ProjectB\"\n];\nADOAuditLogs\n| where OperationName == \"Library.ServiceConnectionExecuted\"\n| extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)\n| parse ScopeDisplayName with OrganizationName ' (Organization)'\n| summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n  by OrganizationName, tostring(DefId), tostring(Type), ProjectId, ProjectName, ActorUPN, IpAddress\n| where CurrentCount > ServiceConnectionThreshold\n| join kind=anti BypassDefIds on $left.DefId==$right.DefId and $left.Type == $right.Type and $left.ProjectName == $right.ProjectName\n| extend link = iif(\n  Type == \"Build\", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId),\n  strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))\n| extend timestamp = StartTime\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "status": "Available",
-        "description": "'Flags builds/releases that use a large number of service connections if they aren't manually in the allow list.\nThis is to determine if someone is hijacking a build/release and adding many service connections in order to abuse or dump credentials from service connections.'\n"
+        ]
       }
     }
   ]
