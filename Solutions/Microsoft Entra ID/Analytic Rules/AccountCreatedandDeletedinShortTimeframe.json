@@ -14,21 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess"
+        ],
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "query": "let queryfrequency = 1h;\nlet queryperiod = 1d;\nAuditLogs\n| where TimeGenerated > ago(queryfrequency)\n| where OperationName =~ \"Delete user\"\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type == \"User\"\n      | extend TargetUserPrincipalName = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResource.userPrincipalName))\n  )\n| extend DeletedByApp = tostring(InitiatedBy.app.displayName),\nDeletedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),\nDeletedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),\nDeletedByAadUserId = tostring(InitiatedBy.user.id),\nDeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)\n| project Deletion_TimeGenerated = TimeGenerated, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, \nDeletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources\n| join kind=inner (\n    AuditLogs\n    | where TimeGenerated > ago(queryperiod)\n    | where OperationName =~ \"Add user\"      \n    | mv-apply TargetResource = TargetResources on \n      (\n          where TargetResource.type == \"User\"\n          | extend TargetUserPrincipalName = trim(@'\"',tostring(TargetResource.userPrincipalName))\n      )\n    | project-rename Creation_TimeGenerated = TimeGenerated\n) on TargetUserPrincipalName\n| extend TimeDelta = Deletion_TimeGenerated - Creation_TimeGenerated\n| where  TimeDelta between (time(0s) .. queryperiod)\n| extend CreatedByApp = tostring(InitiatedBy.app.displayName),\nCreatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),\nCreatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),\nCreatedByAadUserId = tostring(InitiatedBy.user.id),\nCreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)\n| project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, \nCreatedByApp, CreatedByAppServicePrincipalId, CreatedByUserPrincipalName, CreatedByAadUserId, CreatedByIPAddress, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend CreatedByName = tostring(split(CreatedByUserPrincipalName,'@',0)[0]), CreatedByUPNSuffix = tostring(split(CreatedByUserPrincipalName,'@',1)[0])\n| extend DeletedByName = tostring(split(DeletedByUserPrincipalName,'@',0)[0]), DeletedByUPNSuffix = tostring(split(DeletedByUserPrincipalName,'@',1)[0])\n",
+        "description": "'Search for user principal name (UPN) events. Look for accounts created and then deleted in under 24 hours. Attackers may create an account for their use, and then remove the account when no longer needed.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-account'\n",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "TargetUserPrincipalName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "TargetUserPrincipalName"
               },
               {
-                "columnName": "TargetName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "TargetName"
               },
               {
-                "columnName": "TargetUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "TargetUPNSuffix"
               }
             ]
           },
@@ -36,16 +44,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "CreatedByUserPrincipalName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "CreatedByUserPrincipalName"
               },
               {
-                "columnName": "CreatedByName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "CreatedByName"
               },
               {
-                "columnName": "CreatedByUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "CreatedByUPNSuffix"
               }
             ]
           },
@@ -53,8 +61,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "CreatedByAadUserId",
-                "identifier": "AadUserId"
+                "identifier": "AadUserId",
+                "columnName": "CreatedByAadUserId"
               }
             ]
           },
@@ -62,16 +70,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "DeletedByUserPrincipalName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "DeletedByUserPrincipalName"
               },
               {
-                "columnName": "DeletedByName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "DeletedByName"
               },
               {
-                "columnName": "DeletedByUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "DeletedByUPNSuffix"
               }
             ]
           },
@@ -79,8 +87,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "DeletedByAadUserId",
-                "identifier": "AadUserId"
+                "identifier": "AadUserId",
+                "columnName": "DeletedByAadUserId"
               }
             ]
           },
@@ -88,8 +96,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "CreatedByIPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "CreatedByIPAddress"
               }
             ]
           },
@@ -97,24 +105,16 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "DeletedByIPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "DeletedByIPAddress"
               }
             ]
           }
         ],
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "tactics": [
-          "InitialAccess"
-        ],
         "queryFrequency": "1h",
-        "name": "Account Created and Deleted in Short Timeframe",
-        "triggerOperator": "gt",
         "severity": "High",
-        "description": "'Search for user principal name (UPN) events. Look for accounts created and then deleted in under 24 hours. Attackers may create an account for their use, and then remove the account when no longer needed.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-account'\n",
-        "status": "Available",
-        "query": "let queryfrequency = 1h;\nlet queryperiod = 1d;\nAuditLogs\n| where TimeGenerated > ago(queryfrequency)\n| where OperationName =~ \"Delete user\"\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type == \"User\"\n      | extend TargetUserPrincipalName = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResource.userPrincipalName))\n  )\n| extend DeletedByApp = tostring(InitiatedBy.app.displayName),\nDeletedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),\nDeletedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),\nDeletedByAadUserId = tostring(InitiatedBy.user.id),\nDeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)\n| project Deletion_TimeGenerated = TimeGenerated, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, \nDeletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources\n| join kind=inner (\n    AuditLogs\n    | where TimeGenerated > ago(queryperiod)\n    | where OperationName =~ \"Add user\"      \n    | mv-apply TargetResource = TargetResources on \n      (\n          where TargetResource.type == \"User\"\n          | extend TargetUserPrincipalName = trim(@'\"',tostring(TargetResource.userPrincipalName))\n      )\n    | project-rename Creation_TimeGenerated = TimeGenerated\n) on TargetUserPrincipalName\n| extend TimeDelta = Deletion_TimeGenerated - Creation_TimeGenerated\n| where  TimeDelta between (time(0s) .. queryperiod)\n| extend CreatedByApp = tostring(InitiatedBy.app.displayName),\nCreatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),\nCreatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),\nCreatedByAadUserId = tostring(InitiatedBy.user.id),\nCreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)\n| project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, \nCreatedByApp, CreatedByAppServicePrincipalId, CreatedByUserPrincipalName, CreatedByAadUserId, CreatedByIPAddress, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend CreatedByName = tostring(split(CreatedByUserPrincipalName,'@',0)[0]), CreatedByUPNSuffix = tostring(split(CreatedByUserPrincipalName,'@',1)[0])\n| extend DeletedByName = tostring(split(DeletedByUserPrincipalName,'@',0)[0]), DeletedByUPNSuffix = tostring(split(DeletedByUserPrincipalName,'@',1)[0])\n"
+        "name": "Account Created and Deleted in Short Timeframe",
+        "triggerOperator": "gt"
       }
     }
   ]

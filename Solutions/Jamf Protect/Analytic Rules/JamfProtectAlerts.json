@@ -15,21 +15,48 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "tactics": null,
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertSeverityColumnName": "EventSeverity",
+          "alertDisplayNameFormat": "{{EventMessage}} detected on {{DvcHostname}}",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "ProviderName",
+              "value": "EventVendor"
+            },
+            {
+              "alertProperty": "ProductName",
+              "value": "EventProduct"
+            },
+            {
+              "alertProperty": "Techniques",
+              "value": "Techniques"
+            }
+          ],
+          "alertTacticsColumnName": "Tactics",
+          "alertDescriptionFormat": "{{EventResultMessage}} - Please investigate"
+        },
+        "query": "jamfprotectalerts_CL\n| extend\n    algorithm = \"SHA256\",\n    Host_IPs = tostring(parse_json(DvcIpAddr)[0]),\n    Tags = parse_json(tostring(parse_json(tostring(input.match)).tags)),\n    Tactics = case(input.match.tags has \"Execution\", \"Execution\", input.match.tags has \"Visibility\", \"Visibility\", input.match.tags has \"Persistence\", \"Persistence\", input.match.tags has \"LateralMovement\", \"LateralMovement\", input.match.tags has \"CredentialAccess\", \"CredentialAcccess\", input.match.tags has \"DefenseEvasion\", \"DefenseEvasion\", input.match.tags has \"PrivilegeEscalation\", \"PrivilegeEscalation\", input.match.tags has \"Impact\", \"Impact\", input.match.tags has \"CommandAndControl\", \"CommandandControl\", input.match.tags has \"Discovery\", \"Discovery\", input.match.tags has \"InitialAccess\", \"InitialAccess\", \"\"),\n    Techniques = pack_array(extract(@\"[A-Za-z]\\d{4}\", 0, tostring(input.match.tags))),\n    JamfPro = case(input.match.actions has \"SmartGroup\", \"Workflow with Jamf Pro\", input.match.actions has \"Prevented\", \"No workflow, Prevented by Protect\", \"No workflow\")\n",
+        "description": "'Creates an incident based on Jamf Protect Alert data in Microsoft Sentinel'\n",
+        "suppressionEnabled": false,
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DvcHostname",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "DvcHostname"
               },
               {
-                "columnName": "DvcOs",
-                "identifier": "OSFamily"
+                "identifier": "OSFamily",
+                "columnName": "DvcOs"
               },
               {
-                "columnName": "DvcOsVersion",
-                "identifier": "OSVersion"
+                "identifier": "OSVersion",
+                "columnName": "DvcOsVersion"
               }
             ]
           },
@@ -37,8 +64,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "Host_IPs",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "Host_IPs"
               }
             ]
           },
@@ -46,12 +73,12 @@
             "entityType": "Process",
             "fieldMappings": [
               {
-                "columnName": "TargetProcessCurrentDirectory",
-                "identifier": "CommandLine"
+                "identifier": "CommandLine",
+                "columnName": "TargetProcessCurrentDirectory"
               },
               {
-                "columnName": "TargetProcessId",
-                "identifier": "ProcessId"
+                "identifier": "ProcessId",
+                "columnName": "TargetProcessId"
               }
             ]
           },
@@ -59,66 +86,39 @@
             "entityType": "FileHash",
             "fieldMappings": [
               {
-                "columnName": "algorithm",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "algorithm"
               },
               {
-                "columnName": "TargetBinarySHA256",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "TargetBinarySHA256"
               }
             ]
           }
         ],
-        "suppressionDuration": "PT5H",
-        "name": "Jamf Protect - Alerts",
-        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "enabled": false
+          }
+        },
         "severity": "High",
         "customDetails": {
           "JamfPro_Status": "JamfPro",
-          "TargetbinarySign": "TargetbinarySignerType",
-          "Related_File_hash": "TargetBinarySHA256",
-          "Related_Binaries": "TargetBinaryFilePath",
           "Protect_Event_Type": "EventType",
-          "Protect_Tags": "Tags",
+          "Related_File_hash": "TargetBinarySHA256",
+          "TargetbinarySign": "TargetbinarySignerType",
+          "TargetBinarySigner": "TargetBinarySigningTeamID",
           "TargetBinarySignMsg": "TargetBinarySigningInfoMessage",
+          "Protect_Tags": "Tags",
           "Protect_Analytic": "EventMessage",
-          "TargetBinarySigner": "TargetBinarySigningTeamID"
+          "Related_Binaries": "TargetBinaryFilePath"
         },
-        "description": "'Creates an incident based on Jamf Protect Alert data in Microsoft Sentinel'\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "enabled": false,
-            "lookbackDuration": "PT5H"
-          },
-          "createIncident": true
-        },
-        "status": "Available",
-        "query": "jamfprotectalerts_CL\n| extend\n    algorithm = \"SHA256\",\n    Host_IPs = tostring(parse_json(DvcIpAddr)[0]),\n    Tags = parse_json(tostring(parse_json(tostring(input.match)).tags)),\n    Tactics = case(input.match.tags has \"Execution\", \"Execution\", input.match.tags has \"Visibility\", \"Visibility\", input.match.tags has \"Persistence\", \"Persistence\", input.match.tags has \"LateralMovement\", \"LateralMovement\", input.match.tags has \"CredentialAccess\", \"CredentialAcccess\", input.match.tags has \"DefenseEvasion\", \"DefenseEvasion\", input.match.tags has \"PrivilegeEscalation\", \"PrivilegeEscalation\", input.match.tags has \"Impact\", \"Impact\", input.match.tags has \"CommandAndControl\", \"CommandandControl\", input.match.tags has \"Discovery\", \"Discovery\", input.match.tags has \"InitialAccess\", \"InitialAccess\", \"\"),\n    Techniques = pack_array(extract(@\"[A-Za-z]\\d{4}\", 0, tostring(input.match.tags))),\n    JamfPro = case(input.match.actions has \"SmartGroup\", \"Workflow with Jamf Pro\", input.match.actions has \"Prevented\", \"No workflow, Prevented by Protect\", \"No workflow\")\n",
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "value": "EventVendor",
-              "alertProperty": "ProviderName"
-            },
-            {
-              "value": "EventProduct",
-              "alertProperty": "ProductName"
-            },
-            {
-              "value": "Techniques",
-              "alertProperty": "Techniques"
-            }
-          ],
-          "alertDescriptionFormat": "{{EventResultMessage}} - Please investigate",
-          "alertTacticsColumnName": "Tactics",
-          "alertSeverityColumnName": "EventSeverity",
-          "alertDisplayNameFormat": "{{EventMessage}} detected on {{DvcHostname}}"
-        }
+        "name": "Jamf Protect - Alerts",
+        "suppressionDuration": "PT5H"
       }
     }
   ]
