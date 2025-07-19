@@ -14,16 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl",
-          "Execution"
-        ],
-        "triggerThreshold": 0,
         "query": "let starttime = 14d;\nlet endtime = 1d;\nlet UserAgentAll =\n(union isfuzzy=true\n(OfficeActivity\n| where TimeGenerated >= ago(starttime)\n| where isnotempty(UserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, RecordType, Operation\n),\n(\nW3CIISLog\n| where TimeGenerated >= ago(starttime)\n| where isnotempty(csUserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, csUriStem\n),\n(\nAWSCloudTrail\n| where TimeGenerated >= ago(starttime)\n| where isnotempty(UserAgent)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventSource, EventName\n))\n// remove wordSize blocks of non-numeric hex characters prior to word extraction\n| extend UserAgentNoHexAlphas = replace(\"([A-Fa-f]{4,})\", \"x\", UserAgent)\n// once blocks of hex chars are removed, extract wordSize blocks of a-z\n| extend Tokens = extract_all(\"([A-Za-z]{4,})\", UserAgentNoHexAlphas)\n// concatenate extracted words to create a summarized user agent for baseline and comparison\n| extend NormalizedUserAgent = strcat_array(Tokens, \"|\")\n| project-away UserAgentNoHexAlphas, Tokens;\nUserAgentAll\n| where StartTime >= ago(endtime)\n| summarize StartTime = min(StartTime), EndTime = max(EndTime), count() by UserAgent, NormalizedUserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem\n| join kind=leftanti\n(\nUserAgentAll\n| where StartTime < ago(endtime)\n| summarize by NormalizedUserAgent, SourceIP, Account, Type, RecordType, Operation, EventSource, EventName, sSiteName, csMethod, csUriStem\n)\non NormalizedUserAgent\n| extend timestamp = StartTime\n| extend Name = tostring(split(Account, '@', 0)[0]), UPNSuffix = tostring(split(Account, '@', 1)[0])\n",
-        "description": "'Identifies new UserAgents observed in the last 24 hours versus the previous 14 days. This detection extracts words from user agents to build the baseline and determine rareity rather than perform a direct comparison. This avoids FPs caused by version numbers and other high entropy user agent components.\nThese new UserAgents could be benign. However, in normally stable environments, these new UserAgents could provide a starting point for investigating malicious activity.\nNote: W3CIISLog can be noisy depending on the environment, however OfficeActivity and AWSCloudTrail are usually stable with low numbers of detections.'\n",
-        "status": "Available",
-        "queryPeriod": "14d",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -48,10 +39,19 @@
             ]
           }
         ],
-        "queryFrequency": "1d",
         "severity": "Low",
+        "description": "'Identifies new UserAgents observed in the last 24 hours versus the previous 14 days. This detection extracts words from user agents to build the baseline and determine rareity rather than perform a direct comparison. This avoids FPs caused by version numbers and other high entropy user agent components.\nThese new UserAgents could be benign. However, in normally stable environments, these new UserAgents could provide a starting point for investigating malicious activity.\nNote: W3CIISLog can be noisy depending on the environment, however OfficeActivity and AWSCloudTrail are usually stable with low numbers of detections.'\n",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl",
+          "Execution"
+        ],
+        "queryFrequency": "1d",
         "name": "New UserAgent observed in last 24 hours",
-        "triggerOperator": "gt"
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "status": "Available"
       }
     }
   ]
