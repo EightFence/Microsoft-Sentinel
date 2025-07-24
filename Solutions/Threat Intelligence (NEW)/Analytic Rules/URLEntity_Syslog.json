@@ -14,17 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "14d",
         "tactics": [
           "CommandAndControl"
         ],
         "name": "TI Map URL Entity to Syslog Data",
         "triggerOperator": "gt",
+        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in Syslog data.'\n",
+        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "Computer"
               }
             ],
             "entityType": "Host"
@@ -32,8 +35,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "HostIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "HostIP"
               }
             ],
             "entityType": "IP"
@@ -41,19 +44,16 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ],
             "entityType": "URL"
           }
         ],
-        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in Syslog data.'\n",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n// Picking up only IOC's that contain the entities we want\n//extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n   | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  Syslog\n  | where TimeGenerated >= ago(dt_lookBack)\n  // Extract URL from the Syslog message but only take messages that include URLs\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,SyslogMessage)\n  | extend Syslog_TimeGenerated = TimeGenerated\n) on Url\n| where Syslog_TimeGenerated < ValidUntil\n| summarize Syslog_TimeGenerated  = arg_max(Syslog_TimeGenerated , *) by Id, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project timestamp = Syslog_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, SyslogMessage, Computer, ProcessName, Url, HostIP\n",
         "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "severity": "Medium",
-        "queryPeriod": "14d"
+        "queryFrequency": "1h"
       }
     }
   ]
