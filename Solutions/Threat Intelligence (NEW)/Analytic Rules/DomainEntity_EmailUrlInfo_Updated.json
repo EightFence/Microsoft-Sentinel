@@ -14,28 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let dt_lookBack = 1h; // Define the lookback period for email data as 1 hour\nlet ioc_lookBack = 14d; // Define the lookback period for threat intelligence data as 14 days\nlet EmailUrlInfo_ = EmailUrlInfo| where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains\n| where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback period\n| extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs and domains to lowercase\n| extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column for the time generated\nlet EmailEvents_ = EmailEvents\n| where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period\nlet TI_Urls = ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"url\"\n| extend Url = ObservableValue\n| where isnotempty(Url) // Filter for non-empty URLs\n| extend Url = tolower(Url) // Convert URLs to lowercase\n| join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL\n| where IsActive == true and ValidUntil > now() // Filter for active indicators that haven't expired\n| where EmailUrlInfo_TimeGenerated < ValidUntil // Ensure email info was generated before the indicator expired\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by Id, Url // Get the latest email info for each indicator\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(\"ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, UrlLocation, NetworkMessageId; // Select relevant columns\nlet TI_Domains = ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| where isnotempty(ObservableValue) // Filter for non-empty domain names\n| where ObservableKey == \"domain-name:value\"\n| extend Active = IsActive\n| extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel\n| extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase\n| extend IndicatorId = tostring(split(Id, \"--\")[2]);\nlet TI_Domains_UrlInfo = TI_Domains\n| project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Type\n| join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name\n| extend ExpirationDateTime = ValidUntil\n| extend Description = Data.description\n| extend ThreatType =  Data.type\n| extend ConfidenceScore = Confidence\n| extend ActivityGroupNames = replace_string(tostring(parse_json(tostring(Data.labels))[0]),\"ActivityGroup:\",\"\")\n| where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired\n| where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns\nunion TI_Urls, TI_Domains_UrlInfo // Combine URL and domain threat intelligence data\n| extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column\n| join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events on network message ID\n| where DeliveryAction !has \"Blocked\" // Filter out blocked delivery actions\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address\"\n",
+        "queryFrequency": "1h",
+        "name": "TI map Domain entity to EmailUrlInfo",
+        "description": "'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "queryPeriod": "14d",
         "tactics": [
           "InitialAccess"
         ],
-        "name": "TI map Domain entity to EmailUrlInfo",
-        "triggerOperator": "gt",
-        "description": "'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'\n",
-        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "RecipientEmailAddress"
+                "columnName": "RecipientEmailAddress",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "Name"
+                "columnName": "Name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -43,16 +45,14 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ],
             "entityType": "URL"
           }
         ],
-        "query": "let dt_lookBack = 1h; // Define the lookback period for email data as 1 hour\nlet ioc_lookBack = 14d; // Define the lookback period for threat intelligence data as 14 days\nlet EmailUrlInfo_ = EmailUrlInfo| where isnotempty(Url) or isnotempty(UrlDomain) // Filter for non-empty URLs or URL domains\n| where TimeGenerated >= ago(dt_lookBack) // Filter for records within the lookback period\n| extend Url = tolower(Url), UrlDomain = tolower(UrlDomain) // Convert URLs and domains to lowercase\n| extend EmailUrlInfo_TimeGenerated = TimeGenerated; // Create a new column for the time generated\nlet EmailEvents_ = EmailEvents\n| where TimeGenerated >= ago(dt_lookBack); // Filter email events within the lookback period\nlet TI_Urls = ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where isnotempty(IndicatorType) and IndicatorType == \"url\"\n| extend Url = ObservableValue\n| where isnotempty(Url) // Filter for non-empty URLs\n| extend Url = tolower(Url) // Convert URLs to lowercase\n| join kind=innerunique (EmailUrlInfo_) on Url // Join with email URL info on URL\n| where IsActive == true and ValidUntil > now() // Filter for active indicators that haven't expired\n| where EmailUrlInfo_TimeGenerated < ValidUntil // Ensure email info was generated before the indicator expired\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by Id, Url // Get the latest email info for each indicator\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(\"ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, Url, UrlLocation, NetworkMessageId; // Select relevant columns\nlet TI_Domains = ThreatIntelIndicators\n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n| where isnotempty(ObservableValue) // Filter for non-empty domain names\n| where ObservableKey == \"domain-name:value\"\n| extend Active = IsActive\n| extend TrafficLightProtocolLevel = AdditionalFields.TLPLevel\n| extend DomainName = tolower(ObservableValue) // Convert domain names to lowercase\n| extend IndicatorId = tostring(split(Id, \"--\")[2]);\nlet TI_Domains_UrlInfo = TI_Domains\n| project-reorder *, Active, Tags, TrafficLightProtocolLevel, DomainName, Type\n| join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain // Join with email URL info on domain name\n| extend ExpirationDateTime = ValidUntil\n| extend Description = Data.description\n| extend ThreatType =  Data.type\n| extend ConfidenceScore = Confidence\n| extend ActivityGroupNames = replace_string(tostring(parse_json(tostring(Data.labels))[0]),\"ActivityGroup:\",\"\")\n| where Active == true and ExpirationDateTime > now() // Filter for active indicators that haven't expired\n| where EmailUrlInfo_TimeGenerated < ExpirationDateTime // Ensure email info was generated before the indicator expired\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, UrlDomain // Get the latest email info for each indicator\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, UrlDomain, UrlLocation, NetworkMessageId; // Select relevant columns\nunion TI_Urls, TI_Domains_UrlInfo // Combine URL and domain threat intelligence data\n| extend timestamp = EmailUrlInfo_TimeGenerated // Add a timestamp column\n| join kind=inner (EmailEvents_) on NetworkMessageId // Join with email events on network message ID\n| where DeliveryAction !has \"Blocked\" // Filter out blocked delivery actions\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0]); // Extract name and UPN suffix from recipient email address\"\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h"
+        "severity": "Medium"
       }
     }
   ]
