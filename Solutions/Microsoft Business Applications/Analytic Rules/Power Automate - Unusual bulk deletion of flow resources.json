@@ -14,32 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "User {{ActorName}}  deleted {{DeletedFlowCount}} flows in the last hour, surpassing the bulk delete threshold. This is anomalous compared to the past 14 days.",
+          "alertDisplayNameFormat": "Power Automate - unusual bulk deletion of {{DeletedFlowCount}} flows"
+        },
         "customDetails": {
           "DeletedFlowCount": "DeletedFlowCount"
         },
-        "severity": "Medium",
-        "query": "// minThreshold: Minimum number of apps to be deleted to be considered an anomaly;\n// This is to prevent one-off isolated delete flow to be considered outlier.\n// The Min Threshold can be reduced or increased according to the traffic in the organization.\nlet minThreshold=10;\nlet interval = 1h;\nlet startTime = ago(14d);\nlet endTime = now();\nlet query_frequency = 1h;\nlet flow_deletion_events = PowerAutomateActivity\n    | where TimeGenerated >= startTime\n    | where EventOriginalType =~ \"DeleteFlow\"\n    | extend IngestionTimeGenerated = TimeGenerated;\nflow_deletion_events\n| make-series DeletedFlowCount=count() on IngestionTimeGenerated from startTime to endTime step interval by ActorName, UserUpn, ActorUserId\n| extend(Anomalies, AnomalyScore, ExpectedUsage) = series_decompose_anomalies(DeletedFlowCount)\n| mv-expand\n    DeletedFlowCount to typeof(double),\n    IngestionTimeGenerated to typeof(datetime),\n    Anomalies to typeof(double),\n    AnomalyScore to typeof(double),\n    ExpectedUsage to typeof(long)\n| where IngestionTimeGenerated >= ago(query_frequency)\n| where Anomalies != 0 and DeletedFlowCount >= minThreshold\n| lookup (flow_deletion_events\n    | where IngestionTimeGenerated >= ago(query_frequency))\n    on ActorName, UserUpn, ActorUserId\n| extend\n    AccountName = tostring(split(ActorName, \"@\")[0]),\n    UPNSuffix = tostring(split(ActorName, \"@\")[1]),\n    PowerAutomateAppId = 27592\n| project\n    TimeGenerated,\n    ActorName,\n    DeletedFlowCount,\n    ExpectedUsage,\n    Anomalies,\n    AnomalyScore,\n    AccountName,\n    UPNSuffix,\n    PowerAutomateAppId,\n    UserUpn,\n    ActorUserId\n",
-        "tactics": [
-          "Impact",
-          "DefenseEvasion"
-        ],
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
-        "name": "Power Automate - Unusual bulk deletion of flow resources",
-        "triggerOperator": "gt",
+        "queryFrequency": "1h",
         "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -47,20 +44,23 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "PowerAutomateAppId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "PowerAutomateAppId"
               }
             ]
           }
         ],
-        "queryPeriod": "14d",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Power Automate - unusual bulk deletion of {{DeletedFlowCount}} flows",
-          "alertDescriptionFormat": "User {{ActorName}}  deleted {{DeletedFlowCount}} flows in the last hour, surpassing the bulk delete threshold. This is anomalous compared to the past 14 days."
-        },
+        "triggerOperator": "gt",
         "description": "Identifies bulk deletion of Power Automate flows that exceed a predefined threshold defined in the query and deviate from activity patterns observed in the last 14 days.",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "query": "// minThreshold: Minimum number of apps to be deleted to be considered an anomaly;\n// This is to prevent one-off isolated delete flow to be considered outlier.\n// The Min Threshold can be reduced or increased according to the traffic in the organization.\nlet minThreshold=10;\nlet interval = 1h;\nlet startTime = ago(14d);\nlet endTime = now();\nlet query_frequency = 1h;\nlet flow_deletion_events = PowerAutomateActivity\n    | where TimeGenerated >= startTime\n    | where EventOriginalType =~ \"DeleteFlow\"\n    | extend IngestionTimeGenerated = TimeGenerated;\nflow_deletion_events\n| make-series DeletedFlowCount=count() on IngestionTimeGenerated from startTime to endTime step interval by ActorName, UserUpn, ActorUserId\n| extend(Anomalies, AnomalyScore, ExpectedUsage) = series_decompose_anomalies(DeletedFlowCount)\n| mv-expand\n    DeletedFlowCount to typeof(double),\n    IngestionTimeGenerated to typeof(datetime),\n    Anomalies to typeof(double),\n    AnomalyScore to typeof(double),\n    ExpectedUsage to typeof(long)\n| where IngestionTimeGenerated >= ago(query_frequency)\n| where Anomalies != 0 and DeletedFlowCount >= minThreshold\n| lookup (flow_deletion_events\n    | where IngestionTimeGenerated >= ago(query_frequency))\n    on ActorName, UserUpn, ActorUserId\n| extend\n    AccountName = tostring(split(ActorName, \"@\")[0]),\n    UPNSuffix = tostring(split(ActorName, \"@\")[1]),\n    PowerAutomateAppId = 27592\n| project\n    TimeGenerated,\n    ActorName,\n    DeletedFlowCount,\n    ExpectedUsage,\n    Anomalies,\n    AnomalyScore,\n    AccountName,\n    UPNSuffix,\n    PowerAutomateAppId,\n    UserUpn,\n    ActorUserId\n",
+        "name": "Power Automate - Unusual bulk deletion of flow resources",
         "triggerThreshold": 0,
-        "queryFrequency": "1h"
+        "tactics": [
+          "Impact",
+          "DefenseEvasion"
+        ]
       }
     }
   ]
