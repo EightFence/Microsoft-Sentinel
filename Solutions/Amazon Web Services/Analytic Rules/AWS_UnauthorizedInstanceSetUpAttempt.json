@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f7210a45-12a4-4d02-b59e-f23476827a4b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f7210a45-12a4-4d02-b59e-f23476827a4b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UpnSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
+        "queryFrequency": "10m",
+        "description": "'A User without access tried to Run an Instance. It might be to launch a malicious Instance in AWS subscription. Ref: https://stratus-red-team.cloud/attack-techniques/AWS/aws.execution.ec2-launch-unusual-instances/'\n",
+        "queryPeriod": "10m",
+        "name": "Unauthorized EC2 Instance Setup Attempt",
+        "triggerThreshold": 0,
+        "tactics": [
+          "ResourceDevelopment"
+        ],
+        "status": "Available",
+        "query": "AWSCloudTrail\n| where EventName == \"RunInstances\"\n| where ErrorCode == \"Client.UnauthorizedOperation\"\n| project TimeGenerated, AwsEventId, EventTypeName, UserIdentityPrincipalid, UserIdentityType,  UserIdentityAccountId, SessionMfaAuthenticated, SessionCreationDate, SessionIssuerUserName, SourceIpAddress, AWSRegion, UserAgent, RequestParameters, ErrorMessage\n| extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, \":\") + 1)\n| extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]\n"
+      }
+    }
+  ]
+}

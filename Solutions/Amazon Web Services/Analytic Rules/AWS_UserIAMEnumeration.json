@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cfaaf0bc-16d1-48df-ac8b-9d901bbd516a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cfaaf0bc-16d1-48df-ac8b-9d901bbd516a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UpnSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "set_SourceIpAddress"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
+        "queryFrequency": "10m",
+        "description": "'Detects enumeration of accounts configuration via api call to list different instances and services within a short period of time. WL Scanner of Cloud Account such as Wiz and threshold can be adjusted'\n",
+        "queryPeriod": "10m",
+        "name": "User IAM Enumeration",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Discovery"
+        ],
+        "status": "Available",
+        "query": "let threshold = 50; \nAWSCloudTrail\n| where EventName in (\"ListAttachedRolePolicies\",\"ListRoles\",\"ListGroupsForUser\",\"ListAttachedUserPolicies\",\"ListAccessKeys\",\"ListUsers\")\n| summarize\n    count(),\n    make_set(AWSRegion),\n    make_set(UserAgent),\n    make_set(SourceIpAddress),\n    make_set(ErrorCode),\n    make_set(ErrorMessage),\n    make_set(EventName)\n    by bin(TimeGenerated, 10m), UserIdentityPrincipalid, UserIdentityArn, UserIdentityAccountId\n| where count_ > threshold\n| mv-expand set_SourceIpAddress\n| extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, \":\") + 1)\n| extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]\n"
+      }
+    }
+  ]
+}

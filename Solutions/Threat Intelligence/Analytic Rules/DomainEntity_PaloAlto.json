@@ -14,15 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "description": "'Identifies a match in Palo Alto data in CommonSecurityLog table from any Domain IOC from TI'\n",
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "name": "TI map Domain entity to PaloAlto",
-        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Host",
@@ -52,7 +44,15 @@
             ]
           }
         ],
-        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "description": "'Identifies a match in Palo Alto data in CommonSecurityLog table from any Domain IOC from TI'\n",
+        "queryPeriod": "14d",
+        "name": "TI map Domain entity to PaloAlto",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CommandAndControl"
+        ],
         "query": "let dt_lookBack = 1h;  // Duration to look back for recent logs (1 hour)\nlet ioc_lookBack = 14d;  // Duration to look back for recent threat intelligence indicators (14 days)\n// Create a list of top-level domains (TLDs) in our threat feed for later validation of extracted domains\nlet list_tlds = \n    ThreatIntelligenceIndicator\n    | where isnotempty(DomainName)\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n    | where Active == true and ExpirationDateTime > now()\n    | extend DomainName = tolower(DomainName)\n    | extend parts = split(DomainName, '.')\n    | extend tld = parts[(array_length(parts)-1)]\n    | summarize count() by tostring(tld)\n    | summarize make_list(tld);\nlet Domain_Indicators = \n    ThreatIntelligenceIndicator\n    // Filter to pick up only IOC's that contain the entities we want (in this case, DomainName)\n    | where isnotempty(DomainName)\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n    | where Active == true and ExpirationDateTime > now()\n    | extend TI_DomainEntity = DomainName;\nDomain_Indicators\n    // Join with CommonSecurityLog to find potential malicious activity\n    | join kind=innerunique (\n        CommonSecurityLog\n        | extend IngestionTime = ingestion_time()\n        | where IngestionTime > ago(dt_lookBack)\n        | where DeviceVendor =~ 'Palo Alto Networks'\n        | where DeviceEventClassID =~ 'url'\n        // Uncomment the line below to only alert on allowed connections\n        // | where DeviceAction !~ \"block-url\"\n        // Extract domain from RequestURL, if not present, extract it from AdditionalExtensions\n        | extend PA_Url = coalesce(RequestURL, \"None\")\n        | extend PA_Url = iif(isempty(PA_Url) and AdditionalExtensions !startswith \"PanOS\", extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)), trim('\"', PA_Url))\n        | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith \"http://\" and PA_Url !startswith \"https://\" and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), PA_Url)\n        | extend PA_Url = iif(PA_Url !in~ ('None', 'http://None', 'https://None') and PA_Url !startswith \"https://\" and ApplicationProtocol =~ \"ssl\", strcat('https://', PA_Url), PA_Url)\n        | extend Domain = trim(@\"\"\"\", tostring(parse_url(PA_Url).Host))\n        | where isnotempty(Domain)\n        | extend Domain = tolower(Domain)\n        | extend parts = split(Domain, '.')\n        // Split out the top-level domain (TLD) for the purpose of checking if we have any TI indicators with this TLD to match on\n        | extend tld = parts[(array_length(parts)-1)]\n        // Validate parsed domain by checking TLD against TLDs from the threat feed and drop domains where there is no chance of a match\n        | where tld in~ (list_tlds)\n        | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n    ) on $left.TI_DomainEntity == $right.Domain\n    | where CommonSecurityLog_TimeGenerated < ExpirationDateTime\n    // Group the results by IndicatorId and Domain and keep only the latest CommonSecurityLog_TimeGenerated\n    | summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by IndicatorId, Domain\n    // Select the desired fields for the final result set\n    | project CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, PA_Url, Domain, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DeviceAction, DestinationIP, DestinationPort, DeviceName, SourceIP, SourcePort, ApplicationProtocol, RequestMethod, Type, TI_DomainEntity\n    // Add a new field 'timestamp' for convenience, using the CommonSecurityLog_TimeGenerated as its value\n    | extend timestamp = CommonSecurityLog_TimeGenerated\n"
       }
     }

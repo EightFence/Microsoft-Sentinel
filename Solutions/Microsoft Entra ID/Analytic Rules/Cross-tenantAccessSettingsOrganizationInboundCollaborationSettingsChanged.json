@@ -14,18 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "status": "Available",
-        "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Inbound Collaboration Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
-        "queryFrequency": "2d",
-        "queryPeriod": "2d",
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "Discovery"
-        ],
-        "name": "Cross-tenant Access Settings Organization Inbound Collaboration Settings Changed",
-        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -76,7 +65,18 @@
             ]
           }
         ],
-        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryFrequency": "2d",
+        "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Inbound Collaboration Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
+        "queryPeriod": "2d",
+        "name": "Cross-tenant Access Settings Organization Inbound Collaboration Settings Changed",
+        "triggerThreshold": 0,
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "Discovery"
+        ],
+        "status": "Available",
         "query": "// In User & Groups and in Applications, the following \"AccessType\" values in columns PremodifiedInboundSettings and ModifiedInboundSettings are interpreted accordingly\n// When Access Type in premodified inbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified inbound settings value was 2 that means that the initial access was blocked.\n// When Access Type in modified inbound settings value is 1 that means that now access is allowed. When Access Type in modified inbound settings value is 2 that means that now access is blocked.\nAuditLogs\n| where OperationName has \"Update a partner cross-tenant access setting\"\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"Policy\"\n      | extend Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on\n  (\n      where Property.displayName =~ \"b2bCollaborationInbound\"\n      | extend PremodifiedInboundSettings = trim('\"',tostring(Property.oldValue)),\n               ModifiedInboundSettings = trim(@'\"',tostring(Property.newValue))\n  )\n| where PremodifiedInboundSettings != ModifiedInboundSettings\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n"
       }
     }
