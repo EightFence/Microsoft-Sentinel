@@ -14,18 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -33,8 +32,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ClientIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIp"
               }
             ]
           },
@@ -42,31 +41,32 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
               },
               {
-                "columnName": "InstanceUrl",
-                "identifier": "InstanceName"
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
               }
             ]
           }
         ],
-        "status": "Available",
-        "triggerThreshold": 0,
-        "name": "Dataverse - Suspicious use of Web API",
-        "description": "Identifies sign-in across multiple Dataverse environments, breaching a predefined threshold, originating from a user with IP address that was used to sign-into the well known Microsoft Entra app registration.",
-        "queryPeriod": "14d",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "1h",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Dataverse - Suspicious Web API sign-in activity",
           "alertDescriptionFormat": "{{UserId}} sign-in activity generated in {{InstanceUrl}}. The app used was a well known multi-tenant app not owned or registered by the organization."
         },
-        "query": "let query_frequency = 1h;\nlet query_lookback = 24h;\n// AppID of the multi-tenant Dynamics 365 Example Client Application\nlet well_known_app_id = \"51f81489-12ee-4a9e-aaae-a2591f45987d\";\nlet environment_count_threshold = 10;\nSigninLogs\n| where TimeGenerated >= ago(query_lookback)\n// Comment out the line below to monitor activity from all Azure AD apps\n| where AppId == well_known_app_id\n| where ResourceIdentity == '00000007-0000-0000-c000-000000000000'\n| summarize FirstSeen = min(TimeGenerated) by AppId, UserPrincipalName, IPAddress, AppDisplayName\n| join kind=inner (\n    DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"UserSignIn\")\n    on $left.UserPrincipalName == $right.UserId, $left.IPAddress == $right.ClientIp\n| where TimeGenerated between (FirstSeen .. (FirstSeen + 2h))\n| summarize InstanceCount = dcount(InstanceUrl, 4), FirstSeen = min(FirstSeen) by UserId, ClientIp, InstanceUrl, AppDisplayName, AppId\n| where InstanceCount > environment_count_threshold\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstSeen,\n    UserId,\n    ClientIp,\n    AppDisplayName,\n    AppId,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "queryPeriod": "14d",
         "severity": "Medium",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "status": "Available",
+        "name": "Dataverse - Suspicious use of Web API",
+        "triggerOperator": "gt",
+        "description": "Identifies sign-in across multiple Dataverse environments, breaching a predefined threshold, originating from a user with IP address that was used to sign-into the well known Microsoft Entra app registration.",
+        "query": "let query_frequency = 1h;\nlet query_lookback = 24h;\n// AppID of the multi-tenant Dynamics 365 Example Client Application\nlet well_known_app_id = \"51f81489-12ee-4a9e-aaae-a2591f45987d\";\nlet environment_count_threshold = 10;\nSigninLogs\n| where TimeGenerated >= ago(query_lookback)\n// Comment out the line below to monitor activity from all Azure AD apps\n| where AppId == well_known_app_id\n| where ResourceIdentity == '00000007-0000-0000-c000-000000000000'\n| summarize FirstSeen = min(TimeGenerated) by AppId, UserPrincipalName, IPAddress, AppDisplayName\n| join kind=inner (\n    DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"UserSignIn\")\n    on $left.UserPrincipalName == $right.UserId, $left.IPAddress == $right.ClientIp\n| where TimeGenerated between (FirstSeen .. (FirstSeen + 2h))\n| summarize InstanceCount = dcount(InstanceUrl, 4), FirstSeen = min(FirstSeen) by UserId, ClientIp, InstanceUrl, AppDisplayName, AppId\n| where InstanceCount > environment_count_threshold\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstSeen,\n    UserId,\n    ClientIp,\n    AppDisplayName,\n    AppId,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "tactics": [
           "Execution",
           "Exfiltration",
