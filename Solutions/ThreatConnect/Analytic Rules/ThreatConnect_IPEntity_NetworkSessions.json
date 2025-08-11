@@ -14,46 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "lookbackDuration": "4h",
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "queryFrequency": "1h",
         "description": "ThreatConnect Specific:\nThis rule identifies a match Network Sessions for which the source or destination IP address is a known IoC.\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema",
-        "triggerThreshold": 0,
-        "suppressionEnabled": false,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = materialize (\n  ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where ExpirationDateTime > now() and Active == true\n  | where SourceSystem startswith \"ThreatConnect-\"\n  | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n  | where TI_ipEntity != \"NO_IP\"\n);\nIP_TI\n  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique \n(\n  _Im_NetworkSession (starttime=ago(dt_lookBack))\n  | where isnotempty(SrcIpAddr)\n  | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor  \n  | lookup (IP_TI | project TI_ipEntity, Active) on $left.SrcIpAddr == $right.TI_ipEntity\n  | project-rename SrcMatch = Active\n  | lookup (IP_TI | project TI_ipEntity, Active) on $left.DstIpAddr == $right.TI_ipEntity\n  | project-rename DstMatch = Active\n  | where SrcMatch or DstMatch\n  | extend \n      IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),\n      IoCDirection = iff(SrcMatch, \"Source\", \"Destination\")\n)on $left.TI_ipEntity == $right.IoCIP\n| where imNWS_mintime < ExpirationDateTime\n| project imNWS_mintime, imNWS_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct\n",
-        "name": "ThreatConnect TI map IP entity to Network Session Events (ASIM Network Session schema)",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "suppressionDuration": "1h",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator.",
-          "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC."
-        },
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "customDetails": {
-          "ActivityGroupNames": "ActivityGroupNames",
-          "EventEndTime": "imNWS_maxtime",
-          "EventStartTime": "imNWS_mintime",
-          "IoCConfidenceScore": "ConfidenceScore",
-          "IndicatorId": "IndicatorId",
-          "IoCDescription": "Description",
-          "ThreatType": "ThreatType",
-          "IoCExpirationTime": "ExpirationDateTime",
-          "IoCIPDirection": "IoCDirection"
-        },
         "entityMappings": [
           {
             "entityType": "IP",
@@ -64,7 +25,46 @@
               }
             ]
           }
-        ]
+        ],
+        "suppressionEnabled": false,
+        "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "name": "ThreatConnect TI map IP entity to Network Session Events (ASIM Network Session schema)",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = materialize (\n  ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where ExpirationDateTime > now() and Active == true\n  | where SourceSystem startswith \"ThreatConnect-\"\n  | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"NO_IP\")\n  | where TI_ipEntity != \"NO_IP\"\n);\nIP_TI\n  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique \n(\n  _Im_NetworkSession (starttime=ago(dt_lookBack))\n  | where isnotempty(SrcIpAddr)\n  | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor  \n  | lookup (IP_TI | project TI_ipEntity, Active) on $left.SrcIpAddr == $right.TI_ipEntity\n  | project-rename SrcMatch = Active\n  | lookup (IP_TI | project TI_ipEntity, Active) on $left.DstIpAddr == $right.TI_ipEntity\n  | project-rename DstMatch = Active\n  | where SrcMatch or DstMatch\n  | extend \n      IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),\n      IoCDirection = iff(SrcMatch, \"Source\", \"Destination\")\n)on $left.TI_ipEntity == $right.IoCIP\n| where imNWS_mintime < ExpirationDateTime\n| project imNWS_mintime, imNWS_maxtime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC.",
+          "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blead for more information on the indicator."
+        },
+        "triggerThreshold": 0,
+        "customDetails": {
+          "ActivityGroupNames": "ActivityGroupNames",
+          "IoCIPDirection": "IoCDirection",
+          "ThreatType": "ThreatType",
+          "IoCExpirationTime": "ExpirationDateTime",
+          "EventEndTime": "imNWS_maxtime",
+          "IoCDescription": "Description",
+          "EventStartTime": "imNWS_mintime",
+          "IoCConfidenceScore": "ConfidenceScore",
+          "IndicatorId": "IndicatorId"
+        },
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "queryPeriod": "14d",
+        "suppressionDuration": "1h",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "4h",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        }
       }
     }
   ]
