@@ -1,0 +1,120 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/72d3fb86-d1eb-44d6-9352-170c6bb45bb7')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/72d3fb86-d1eb-44d6-9352-170c6bb45bb7')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerThreshold": 0,
+        "queryPeriod": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{description}}",
+          "alertDisplayNameFormat": "Employee Compromised - {{user_name}} - {{email}}",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "ProductName",
+              "value": "ProductName"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "ProviderName"
+            }
+          ]
+        },
+        "severity": "High",
+        "suppressionDuration": "6h",
+        "customDetails": {
+          "UID": "uid",
+          "Source": "source",
+          "Impact": "impact",
+          "LastSeen": "last_seen",
+          "Description": "description",
+          "BreachDate": "breach_date",
+          "Recommendations": "recommendations",
+          "FirstSeen": "first_seen",
+          "TimeGenerated": "TimeGenerated",
+          "PassHash": "pass_hash"
+        },
+        "queryFrequency": "5m",
+        "suppressionEnabled": true,
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": false,
+            "lookbackDuration": "5h"
+          }
+        },
+        "query": "// Compromised Employees - Latest per UID\nlet timeFrame = 5m;\nCyfirmaCompromisedAccounts_CL\n| where TimeGenerated between (ago(timeFrame) .. now())\n    and Category has \"Compromised Employees\"\n| extend \n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| summarize arg_max(TimeGenerated, \n    url,\n    ip,\n    email,\n    user_name,\n    computer_name,\n    operating_system,\n    breach_date,\n    first_seen,\n    last_seen,\n    impact,\n    recommendations,\n    description,\n    source,\n    pass_hash,\n    ProductName,\n    ProviderName\n) by uid\n| sort by TimeGenerated desc\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "user_name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "email"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "computer_name"
+              },
+              {
+                "identifier": "OSVersion",
+                "columnName": "operating_system"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ip"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "url"
+              }
+            ]
+          }
+        ],
+        "status": "Available",
+        "description": "\"Identifies and alerts on internal employee accounts that have been compromised, based on CYFIRMA's threat intelligence.\nThis rule captures the latest exposure of user credentials, IP addresses, hostnames, operating systems, and pass hashes observed in the threat feed.\nIt supports rapid detection and investigation of phishing, stealer malware, and insider compromise scenarios.\"\n",
+        "name": "CYFIRMA - Compromised Employees Detection Rule",
+        "tactics": [
+          "CredentialAccess",
+          "InitialAccess",
+          "Persistence"
+        ]
+      }
+    }
+  ]
+}

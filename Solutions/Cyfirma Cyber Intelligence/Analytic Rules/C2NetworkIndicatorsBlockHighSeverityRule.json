@@ -1,0 +1,118 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6b61b716-afd9-4f6c-ad00-965d5987cafd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6b61b716-afd9-4f6c-ad00-965d5987cafd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerThreshold": 0,
+        "queryPeriod": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{Description}} - {{name}} ",
+          "alertDisplayNameFormat": "High-Confidence Command & Control Network Indicators with Block Recommendation Rule - {{name}} ",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "ProductName",
+              "value": "ProductName"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "ProviderName"
+            }
+          ]
+        },
+        "severity": "High",
+        "query": "// Network Indicators query with Block Recommended Action and C2 Roles\nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where ConfidenceScore >= 80\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Block' and (Roles contains 'c2' or Roles contains 'Command & Control')\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
+        "customDetails": {
+          "Sources": "Sources",
+          "SecurityVendors": "SecurityVendors",
+          "Created": "created",
+          "IPAbuse": "IPAbuse",
+          "Tags": "Tags",
+          "Description": "Description",
+          "IndicatorID": "IndicatorID",
+          "TimeGenerated": "TimeGenerated",
+          "ValidFrom": "valid_from",
+          "ThreatActors": "ThreatActors",
+          "Country": "Country",
+          "ConfidenceScore": "ConfidenceScore",
+          "Modified": "modified",
+          "Roles": "Roles",
+          "ThreatType": "ThreatType",
+          "RecommendedActions": "RecommendedActions"
+        },
+        "queryFrequency": "5m",
+        "suppressionEnabled": true,
+        "enabled": false,
+        "triggerOperator": "gt",
+        "suppressionDuration": "5m",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": false,
+            "lookbackDuration": "5m"
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPv4"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPv6"
+              }
+            ]
+          },
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "Domain"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URL"
+              }
+            ]
+          }
+        ],
+        "description": "\"This analytics rule detects network-based indicators identified by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure.\nThese may represent attacker-controlled endpoints used to maintain persistence, exfiltrate data, or receive commands from malware-infected hosts.\"\n",
+        "name": "CYFIRMA - High severity Command & Control Network Indicators with Block Recommendation Rule",
+        "tactics": [
+          "CommandAndControl",
+          "InitialAccess",
+          "Exfiltration"
+        ]
+      }
+    }
+  ]
+}
