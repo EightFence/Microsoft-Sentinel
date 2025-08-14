@@ -15,88 +15,8 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "severity": "High",
-        "suppressionEnabled": true,
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "description": "\"This analytics rule detects network-based indicators flagged by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure. \nThese indicators may represent attacker-controlled endpoints used for persistence, data exfiltration, or command delivery to compromised systems.\"\n",
-        "queryFrequency": "5m",
-        "enabled": false,
-        "customDetails": {
-          "Sources": "Sources",
-          "IndicatorID": "IndicatorID",
-          "TimeGenerated": "TimeGenerated",
-          "Description": "Description",
-          "ConfidenceScore": "ConfidenceScore",
-          "Tags": "Tags",
-          "Country": "Country",
-          "ValidFrom": "valid_from",
-          "Roles": "Roles",
-          "Modified": "modified",
-          "ThreatActors": "ThreatActors",
-          "SecurityVendors": "SecurityVendors",
-          "Created": "created",
-          "RecommendedActions": "RecommendedActions",
-          "ThreatType": "ThreatType",
-          "IPAbuse": "IPAbuse"
-        },
-        "tactics": [
-          "Impact",
-          "Persistence",
-          "DefenseEvasion",
-          "CredentialAccess",
-          "CommandAndControl",
-          "Execution",
-          "InitialAccess"
-        ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "enabled": false,
-            "reopenClosedIncident": false,
-            "lookbackDuration": "5m"
-          },
-          "createIncident": true
-        },
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPv4"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPv6"
-              }
-            ]
-          },
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "Domain"
-              }
-            ]
-          },
-          {
-            "entityType": "URL",
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "URL"
-              }
-            ]
-          }
-        ],
         "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{Description}} - {{name}} ",
           "alertDynamicProperties": [
             {
               "value": "ProductName",
@@ -107,15 +27,95 @@
               "alertProperty": "ProviderName"
             }
           ],
-          "alertDisplayNameFormat": "High-Confidence Trojan Network Indicators - Block Recommended Rule - {{name}} ",
-          "alertDescriptionFormat": "{{Description}} - {{name}} "
+          "alertDisplayNameFormat": "High-Confidence Trojan Network Indicators - Block Recommended Rule - {{name}} "
         },
-        "triggerThreshold": 0,
         "queryPeriod": "5m",
+        "queryFrequency": "5m",
+        "description": "\"This analytics rule detects network-based indicators flagged by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure. \nThese indicators may represent attacker-controlled endpoints used for persistence, data exfiltration, or command delivery to compromised systems.\"\n",
+        "triggerOperator": "GreaterThan",
+        "customDetails": {
+          "Sources": "Sources",
+          "Roles": "Roles",
+          "Modified": "modified",
+          "IndicatorID": "IndicatorID",
+          "ThreatActors": "ThreatActors",
+          "SecurityVendors": "SecurityVendors",
+          "Country": "Country",
+          "Description": "Description",
+          "TimeGenerated": "TimeGenerated",
+          "Created": "created",
+          "IPAbuse": "IPAbuse",
+          "ThreatType": "ThreatType",
+          "Tags": "Tags",
+          "ValidFrom": "valid_from",
+          "RecommendedActions": "RecommendedActions",
+          "ConfidenceScore": "ConfidenceScore"
+        },
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPv4",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPv6",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "columnName": "Domain",
+                "identifier": "DomainName"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URL",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "Impact",
+          "Persistence",
+          "DefenseEvasion",
+          "CredentialAccess",
+          "CommandAndControl",
+          "Execution",
+          "InitialAccess"
+        ],
+        "triggerThreshold": 0,
+        "name": "CYFIRMA - High severity Trojan Network Indicators - Block Recommended Rule",
+        "enabled": false,
         "query": "//Trojan Network Indicators - Block Recommended\nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where ConfidenceScore >= 80\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Block' and Roles has 'Trojan'\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
         "suppressionDuration": "5m",
-        "name": "CYFIRMA - High severity Trojan Network Indicators - Block Recommended Rule",
-        "triggerOperator": "GreaterThan"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "suppressionEnabled": true,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "5m",
+            "matchingMethod": "AllEntities",
+            "enabled": false
+          }
+        }
       }
     }
   ]
