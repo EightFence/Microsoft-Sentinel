@@ -14,62 +14,62 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "SAP ETD - Execution of Sensitive Function Module",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "extracted_sid",
-                "identifier": "AppId"
-              },
-              {
-                "columnName": "extracted_instance_name",
-                "identifier": "InstanceName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "extracted_instance_host",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "extracted_user_ip",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerThreshold": 0,
-        "status": "Available",
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "customDetails": {
+          "SAP_User": "extracted_sap_user",
+          "ETD_AlertNumber": "AlertId"
+        },
         "tactics": [
           "Discovery"
         ],
         "queryPeriod": "60m",
+        "status": "Available",
+        "name": "SAP ETD - Execution of Sensitive Function Module",
+        "query": "let AuditTimeAgo = 60m;\nlet minThreshold= 1;\nlet minScore= 50;\nlet SenseModules = _GetWatchlist('SAP - Sensitive Function Modules')\n| project trimmedFunctionModule = trim(@\"\\s+\", FunctionModule);\nSAPETDAlerts_CL\n| where TimeGenerated > ago(AuditTimeAgo)\n| where Threshold >= minThreshold and Score >= minScore\n| where PatternName == \"Critical Function module call in Test framework calls\"\n| mv-expand NormalizedTriggeringEvents\n| extend sapOriginalEvent = tostring(NormalizedTriggeringEvents.OriginalEvent)\n| extend Id_ = NormalizedTriggeringEvents.Id\n| extend extracted_user_ip = tostring(NormalizedTriggeringEvents.NetworkIPAddressInitiator)\n| extend extracted_sap_user = tostring(NormalizedTriggeringEvents.UserAccountActing)\n| extend extracted_sid = tostring(NormalizedTriggeringEvents.SystemIdActor)\n| extend extracted_instance_name = tostring(NormalizedTriggeringEvents.NetworkHostnameActor)\n| extend extracted_instance_host = tostring(NormalizedTriggeringEvents.ServiceInstanceName)\n| extend extracted_function_module = trim(@\"\\s+\", tostring(NormalizedTriggeringEvents.ServiceFunctionName))\n| extend extracted_system_role = tostring(NormalizedTriggeringEvents.SystemRoleReporter)\n| where extracted_function_module in (SenseModules)\n| extend AlertName = strcat(\"SAP ETD - Sensitive Function Module \", extracted_function_module,\" was executed by user \", extracted_sap_user, \n\" in a \", tolower(extracted_system_role), \" system\"), Dummy = \" \"\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{PatternDescription}}\n\nSource: SAP ETD\n",
+          "alertDisplayNameFormat": "SAP ETD - {{PatternName}} "
+        },
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "extracted_sid"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "extracted_instance_name"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "extracted_instance_host"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "extracted_user_ip"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
         "description": "Identifies execution of a sensitive ABAP Function Module using the watchlists provided by the Microsoft Sentinel Solution for SAP\n\nSource Action: Execute a sensitive function module directly using SE37.\n\n*Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*\n",
-        "severity": "Medium",
-        "customDetails": {
-          "ETD_AlertNumber": "AlertId",
-          "SAP_User": "extracted_sap_user"
-        },
-        "triggerOperator": "gt",
-        "query": "let AuditTimeAgo = 60m;\nlet minThreshold= 1;\nlet minScore= 50;\nlet SenseModules = _GetWatchlist('SAP - Sensitive Function Modules')\n| project trimmedFunctionModule = trim(@\"\\s+\", FunctionModule);\nSAPETDAlerts_CL\n| where TimeGenerated > ago(AuditTimeAgo)\n| where Threshold >= minThreshold and Score >= minScore\n| where PatternName == \"Critical Function module call in Test framework calls\"\n| mv-expand NormalizedTriggeringEvents\n| extend sapOriginalEvent = tostring(NormalizedTriggeringEvents.OriginalEvent)\n| extend Id_ = NormalizedTriggeringEvents.Id\n| extend extracted_user_ip = tostring(NormalizedTriggeringEvents.NetworkIPAddressInitiator)\n| extend extracted_sap_user = tostring(NormalizedTriggeringEvents.UserAccountActing)\n| extend extracted_sid = tostring(NormalizedTriggeringEvents.SystemIdActor)\n| extend extracted_instance_name = tostring(NormalizedTriggeringEvents.NetworkHostnameActor)\n| extend extracted_instance_host = tostring(NormalizedTriggeringEvents.ServiceInstanceName)\n| extend extracted_function_module = trim(@\"\\s+\", tostring(NormalizedTriggeringEvents.ServiceFunctionName))\n| extend extracted_system_role = tostring(NormalizedTriggeringEvents.SystemRoleReporter)\n| where extracted_function_module in (SenseModules)\n| extend AlertName = strcat(\"SAP ETD - Sensitive Function Module \", extracted_function_module,\" was executed by user \", extracted_sap_user, \n\" in a \", tolower(extracted_system_role), \" system\"), Dummy = \" \"\n",
-        "queryFrequency": "5m",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SAP ETD - {{PatternName}} ",
-          "alertDescriptionFormat": "{{PatternDescription}}\n\nSource: SAP ETD\n"
-        }
+        "queryFrequency": "5m"
       }
     }
   ]

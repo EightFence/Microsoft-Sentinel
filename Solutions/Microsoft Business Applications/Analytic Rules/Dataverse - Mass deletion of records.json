@@ -14,62 +14,62 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Dataverse - Mass deletion of records",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
-              },
-              {
-                "columnName": "InstanceUrl",
-                "identifier": "InstanceName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ClientIp",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerThreshold": 0,
-        "status": "Available",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "tactics": [
           "Impact"
         ],
         "queryPeriod": "14d",
+        "status": "Available",
+        "name": "Dataverse - Mass deletion of records",
+        "query": "let mass_delete_threshold = 10000;\nlet query_frequency = 1d;\nlet delete_activities = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Delete\";\nunion\n    (\n    delete_activities\n    | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl\n    | where TotalEvents > mass_delete_threshold\n    | join kind=inner (\n        delete_activities\n        | summarize DeleteCount = count() by UserId, InstanceUrl, ClientIp, EntityName)\n        on UserId, InstanceUrl\n    | extend Entities = bag_pack(\"Entity\", EntityName, \"Count\", DeleteCount)\n    | summarize Details = make_set(Entities, 100), FirstEvent = min(FirstEvent) by UserId, InstanceUrl, ClientIp, TotalEvents\n    ),\n    (\n    DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"BulkDelete\"\n    | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl, ClientIp\n    | extend Details = todynamic(\"Bulk delete scheduled\")\n    )\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    TotalEvents,\n    Details,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{UserId}} triggered the mass deletion detection with the following information: {{Details}}",
+          "alertDisplayNameFormat": "Dataverse - mass deletion or bulk deletion job detected in {{InstanceUrl}} "
+        },
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
         "description": "Identifies large scale record delete operations based on a predefined threshold and also detects scheduled bulk deletion jobs.",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "query": "let mass_delete_threshold = 10000;\nlet query_frequency = 1d;\nlet delete_activities = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"Delete\";\nunion\n    (\n    delete_activities\n    | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl\n    | where TotalEvents > mass_delete_threshold\n    | join kind=inner (\n        delete_activities\n        | summarize DeleteCount = count() by UserId, InstanceUrl, ClientIp, EntityName)\n        on UserId, InstanceUrl\n    | extend Entities = bag_pack(\"Entity\", EntityName, \"Count\", DeleteCount)\n    | summarize Details = make_set(Entities, 100), FirstEvent = min(FirstEvent) by UserId, InstanceUrl, ClientIp, TotalEvents\n    ),\n    (\n    DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message == \"BulkDelete\"\n    | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl, ClientIp\n    | extend Details = todynamic(\"Bulk delete scheduled\")\n    )\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    TotalEvents,\n    Details,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
-        "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Dataverse - mass deletion or bulk deletion job detected in {{InstanceUrl}} ",
-          "alertDescriptionFormat": "{{UserId}} triggered the mass deletion detection with the following information: {{Details}}"
-        }
+        "queryFrequency": "1h"
       }
     }
   ]
