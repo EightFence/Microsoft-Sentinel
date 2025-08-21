@@ -14,45 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "CredentialAccess",
-          "Discovery",
-          "LateralMovement",
-          "Collection",
-          "CommandAndControl",
-          "Exfiltration",
-          "Impact"
-        ],
-        "description": "'This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. This rule is focused on account's detections.'\n",
-        "queryPeriod": "5m",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "upn_suffix"
-              }
-            ],
-            "entityType": "Account"
-          }
-        ],
-        "triggerThreshold": 0,
-        "severity": "Informational",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {
-          "AttackType": "Activity",
-          "AttackCategory": "Category"
-        },
-        "name": "Vectra Account's Behaviors",
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\"\n    and DeviceEventClassID != \"hsc\"\n    and DeviceEventClassID != \"audit\"\n    and DeviceEventClassID != \"health\"\n    and DeviceEventClassID != \"asc\"\n| extend Category = coalesce(\n    column_ifexists(\"DeviceEventCategory\", \"\"), \n    extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n    \"\"\n    )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\" and AdditionalExtensions contains \"account\"\n| extend account = extract(\"account=(.+?);\", 1, AdditionalExtensions)\n| extend upn = iff(account matches regex \":\", tostring(split(account, \":\")[1]), tostring(split(account, \":\")[0]))\n| extend name = tostring(split(upn, \"@\")[0])\n| extend upn_suffix = tostring(split(upn, \"@\")[1])\n| extend source_entity = case(isnotempty(upn), upn,\n    isnotempty(SourceHostName), SourceHostName,\n    \"UNKNWON\")\n| extend level = case(threat_score == 0 and certainty_score == 0, \"Info\",\n    threat_score < 50 and certainty_score < 50, \"Low\",\n    threat_score < 50 and certainty_score >= 50, \"Medium\", \n    threat_score >= 50 and certainty_score <= 50, \"High\", \n    threat_score >= 50 and certainty_score >= 50, \"Critical\",\n    \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| summarize arg_max(threat_score, *) by source_entity, Activity\n| sort by TimeGenerated\n",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Vectra AI - {{Activity}} Detected",
-          "alertDescriptionFormat": "Entity is an account. Category is {{Category}}. Threat score is {{threat_score}} and certainty score is {{certainty_score}}.\n",
+          "alertSeverityColumnName": "Severity",
           "alertDynamicProperties": [
             {
               "value": "vectra_URL",
@@ -71,11 +35,47 @@
               "alertProperty": "ConfidenceScore"
             }
           ],
-          "alertSeverityColumnName": "Severity"
+          "alertDisplayNameFormat": "Vectra AI - {{Activity}} Detected",
+          "alertDescriptionFormat": "Entity is an account. Category is {{Category}}. Threat score is {{threat_score}} and certainty score is {{certainty_score}}.\n"
         },
-        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\"\n    and DeviceEventClassID != \"hsc\"\n    and DeviceEventClassID != \"audit\"\n    and DeviceEventClassID != \"health\"\n    and DeviceEventClassID != \"asc\"\n| extend Category = coalesce(\n    column_ifexists(\"DeviceEventCategory\", \"\"), \n    extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n    \"\"\n    )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\" and AdditionalExtensions contains \"account\"\n| extend account = extract(\"account=(.+?);\", 1, AdditionalExtensions)\n| extend upn = iff(account matches regex \":\", tostring(split(account, \":\")[1]), tostring(split(account, \":\")[0]))\n| extend name = tostring(split(upn, \"@\")[0])\n| extend upn_suffix = tostring(split(upn, \"@\")[1])\n| extend source_entity = case(isnotempty(upn), upn,\n    isnotempty(SourceHostName), SourceHostName,\n    \"UNKNWON\")\n| extend level = case(threat_score == 0 and certainty_score == 0, \"Info\",\n    threat_score < 50 and certainty_score < 50, \"Low\",\n    threat_score < 50 and certainty_score >= 50, \"Medium\", \n    threat_score >= 50 and certainty_score <= 50, \"High\", \n    threat_score >= 50 and certainty_score >= 50, \"Critical\",\n    \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| summarize arg_max(threat_score, *) by source_entity, Activity\n| sort by TimeGenerated\n",
         "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "upn_suffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "queryPeriod": "5m",
+        "name": "Vectra Account's Behaviors",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "AttackCategory": "Category",
+          "AttackType": "Activity"
+        },
         "queryFrequency": "5m",
+        "tactics": [
+          "CredentialAccess",
+          "Discovery",
+          "LateralMovement",
+          "Collection",
+          "CommandAndControl",
+          "Exfiltration",
+          "Impact"
+        ],
+        "description": "'This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. This rule is focused on account's detections.'\n",
+        "severity": "Informational",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "status": "Available"
       }
     }

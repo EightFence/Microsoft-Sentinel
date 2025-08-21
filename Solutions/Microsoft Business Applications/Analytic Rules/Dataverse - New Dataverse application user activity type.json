@@ -14,19 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "CredentialAccess",
-          "Execution",
-          "PrivilegeEscalation"
-        ],
-        "description": "Identifies new or previously unseen activity types associated with Dataverse application (non-interactive) user.",
-        "queryPeriod": "14d",
+        "query": "let query_frequency = 1h;\nlet query_lookback = 14d;\nlet app_user_regex = \"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\\\.com$\";\nlet guid_regex = \"([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\";\nlet application_users = DataverseActivity\n    | where UserId !endswith \"@onmicrosoft.com\" and UserId != \"Unknown\"\n    | summarize by UserId\n    | where split(UserId, \"@\")[1] matches regex app_user_regex;\nlet historical_app_activity = application_users\n    | join kind = inner (\n        DataverseActivity\n        | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n        | summarize by UserId, EntityName, Message, InstanceUrl)\n        on\n        UserId;\nlet current_activity = application_users\n    | join kind= inner (\n        DataverseActivity\n        | where TimeGenerated >= ago(query_frequency)\n        | summarize by UserId, EntityName, Message, InstanceUrl)\n        on\n        UserId;\ncurrent_activity\n| join kind = leftanti (historical_app_activity) on UserId, Message, EntityName, InstanceUrl\n| summarize NewActivities = make_set(strcat(Message, \" \", EntityName), 1000) by UserId, InstanceUrl\n| extend\n    AadUserId = extract(guid_regex, 1, tostring(split(UserId, \"@\")[0])),\n    CloudAppId = int(32780)\n| project\n    UserId,\n    NewActivities,\n    InstanceUrl,\n    AadUserId,\n    CloudAppId\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - Unusual non-interactive account activity in {{InstanceUrl}} ",
+          "alertDescriptionFormat": "{{UserId}} generated new activities in {{InstanceUrl}} which had not been seen previously in the Dataverse."
+        },
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "AadUserId"
+                "columnName": "AadUserId",
+                "identifier": "AadUserId"
               }
             ],
             "entityType": "Account"
@@ -34,30 +33,31 @@
           {
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "CloudAppId"
+                "columnName": "CloudAppId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "InstanceUrl"
+                "columnName": "InstanceUrl",
+                "identifier": "InstanceName"
               }
             ],
             "entityType": "CloudApplication"
           }
         ],
-        "query": "let query_frequency = 1h;\nlet query_lookback = 14d;\nlet app_user_regex = \"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\\\.com$\";\nlet guid_regex = \"([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\";\nlet application_users = DataverseActivity\n    | where UserId !endswith \"@onmicrosoft.com\" and UserId != \"Unknown\"\n    | summarize by UserId\n    | where split(UserId, \"@\")[1] matches regex app_user_regex;\nlet historical_app_activity = application_users\n    | join kind = inner (\n        DataverseActivity\n        | where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n        | summarize by UserId, EntityName, Message, InstanceUrl)\n        on\n        UserId;\nlet current_activity = application_users\n    | join kind= inner (\n        DataverseActivity\n        | where TimeGenerated >= ago(query_frequency)\n        | summarize by UserId, EntityName, Message, InstanceUrl)\n        on\n        UserId;\ncurrent_activity\n| join kind = leftanti (historical_app_activity) on UserId, Message, EntityName, InstanceUrl\n| summarize NewActivities = make_set(strcat(Message, \" \", EntityName), 1000) by UserId, InstanceUrl\n| extend\n    AadUserId = extract(guid_regex, 1, tostring(split(UserId, \"@\")[0])),\n    CloudAppId = int(32780)\n| project\n    UserId,\n    NewActivities,\n    InstanceUrl,\n    AadUserId,\n    CloudAppId\n",
+        "queryPeriod": "14d",
+        "name": "Dataverse - New Dataverse application user activity type",
         "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "tactics": [
+          "CredentialAccess",
+          "Execution",
+          "PrivilegeEscalation"
+        ],
+        "description": "Identifies new or previously unseen activity types associated with Dataverse application (non-interactive) user.",
         "severity": "Medium",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
-        "name": "Dataverse - New Dataverse application user activity type",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{UserId}} generated new activities in {{InstanceUrl}} which had not been seen previously in the Dataverse.",
-          "alertDisplayNameFormat": "Dataverse - Unusual non-interactive account activity in {{InstanceUrl}} "
-        },
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
         "status": "Available"
       }
     }
