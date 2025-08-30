@@ -14,37 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "User '{{SrcUsername}}' has been detected requesting URL '{{Urls}}' that contains private IP address '{{ip_inURL}}'. Encoding private IP addresses in a URL can be a method used by attackers to exfiltrate data from a compromised system",
-          "alertDisplayNameFormat": "Detected a private ip address '{{ip_inURL}}' carved in URL"
-        },
-        "queryFrequency": "1h",
-        "status": "Available",
-        "queryPeriod": "1h",
-        "query": "let lookback = 1h;\n// Identified base64 encoded IPv4 addresses\nlet ipv4_encoded_identification_regex = @\"\\=([a-zA-Z0-9\\/\\+]*(?:(?:MC|Au|wL|MS|Eu|xL|Mi|Iu|yL|My|Mu|zL|NC|Qu|0L|NS|Uu|1L|Ni|Yu|2L|Ny|cu|3L|OC|gu|4L|OS|ku|5L){1}[a-zA-Z0-9\\/\\+]{2,4}){3}[a-zA-Z0-9\\/\\+\\=]*)\";\n// Extractes IPv4 addresses as hex values\nlet ipv4_decoded_hex_extract = @\"((?:(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d),){6,14}(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d))\";\nlet ipV4_Private_FromPlainString = _Im_WebSession(starttime=ago(lookback), eventresult='Success')\n    | where isnotempty(Url)\n    | extend ip_inURL = extract(@\"\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b\", 0, Url)\n    | where ipv4_is_private(ip_inURL)\n    | where not(ipv4_is_private(DstIpAddr)) // only take traffic going to internet\n    | summarize\n        EventCount=count(),\n        EventEndTime = max(TimeGenerated),\n        EventStartTime = min(TimeGenerated),\n        Urls=tostring(make_set(Url, 100))\n        by SrcIpAddr, SrcUsername, SrcHostname, ip_inURL;\nlet ipV4_Private_FromEncodedString = \n    _Im_WebSession(starttime=ago(lookback), eventresult='Success')\n    | where isnotempty(Url)\n    // Identify requests with encoded IPv4 addresses\n    | where Url matches regex ipv4_encoded_identification_regex\n    | where not(ipv4_is_private(DstIpAddr)) // only take traffic going to internet\n    | project TimeGenerated, Url, SrcIpAddr, SrcUsername, SrcHostname\n    // Extract IP candidates in their base64 encoded format, significantly reducing the dataset\n    | extend extracted_encoded_ip_inURL = extract_all(ipv4_encoded_identification_regex, Url)\n    // We could have more than one ip, expand them out\n    | mv-expand extracted_encoded_ip_inURL to typeof(string)\n    | summarize\n        EventStartTime=min(TimeGenerated),\n        EventEndTime=max(TimeGenerated),\n        make_set(Url, 100),\n        EventCount=count()\n        by extracted_encoded_ip_inURL, SrcIpAddr, SrcUsername, SrcHostname\n    // Pad if we need to\n    | extend extracted_encoded_ip_inURL = iff(strlen(extracted_encoded_ip_inURL) % 2 == 0, extracted_encoded_ip_inURL, strcat(extracted_encoded_ip_inURL, \"=\"))\n    // Now decode the candidate to a long array, we cannot go straight to string as it cannot handle non-UTF8, we need to strip that first\n    | extend extracted_encoded_ip_inURL = tostring(base64_decode_toarray(extracted_encoded_ip_inURL))\n    // Extract the IP candidates from the array\n    | extend hex_extracted = extract_all(ipv4_decoded_hex_extract, extracted_encoded_ip_inURL)\n    // Expand, it's still possible that we might have more than 1 IP\n    | mv-expand hex_extracted\n    // Now we should have a clean string. We need to put it back into a dynamic array to convert back to a string.\n    | extend hex_extracted = trim_end(\",\", tostring(hex_extracted))\n    | extend hex_extracted = strcat(\"[\", hex_extracted, \"]\")\n    | extend hex_extracted = todynamic(hex_extracted)\n    // Convert the array back into a string\n    | extend decoded_ip_inURL = unicode_codepoints_to_string(hex_extracted)\n    | where ipv4_is_private(decoded_ip_inURL)\n    | project\n        ip_inURL=decoded_ip_inURL,\n        Urls=tostring(set_Url),\n        EventStartTime,\n        EventEndTime,\n        EventCount,\n        SrcIpAddr,\n        SrcUsername,\n        SrcHostname;\nunion ipV4_Private_FromPlainString, ipV4_Private_FromEncodedString\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n",
-        "description": "'This rule identifies requests made to atypical URLs, as malware can exploit IP addresses for communication with command-and-control (C2) servers. The detection identifies network requests that contain either plain text or Base64 encoded IP addresses. Alerts are triggered when a private IP address is observed as plain text or base64 encoded in an outbound web request. This method of concealing the IP address was observed in the utilization of the RunningRAT tool by POLONIUM.'\n",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ip_inURL"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SrcIpAddr"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -54,34 +43,45 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "SrcHostname"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
+        "triggerThreshold": 0,
         "severity": "Medium",
         "tactics": [
           "Exfiltration",
           "CommandAndControl"
         ],
-        "customDetails": {
-          "EventCount": "EventCount",
-          "EventEndTime": "EventEndTime",
-          "EventStartTime": "EventStartTime",
-          "Urls": "Urls"
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "User '{{SrcUsername}}' has been detected requesting URL '{{Urls}}' that contains private IP address '{{ip_inURL}}'. Encoding private IP addresses in a URL can be a method used by attackers to exfiltrate data from a compromised system",
+          "alertDisplayNameFormat": "Detected a private ip address '{{ip_inURL}}' carved in URL"
         },
-        "triggerOperator": "gt",
-        "name": "Detect presence of private IP addresses in URLs (ASIM Web Session)",
+        "status": "Available",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
-        }
+        },
+        "triggerOperator": "gt",
+        "description": "'This rule identifies requests made to atypical URLs, as malware can exploit IP addresses for communication with command-and-control (C2) servers. The detection identifies network requests that contain either plain text or Base64 encoded IP addresses. Alerts are triggered when a private IP address is observed as plain text or base64 encoded in an outbound web request. This method of concealing the IP address was observed in the utilization of the RunningRAT tool by POLONIUM.'\n",
+        "query": "let lookback = 1h;\n// Identified base64 encoded IPv4 addresses\nlet ipv4_encoded_identification_regex = @\"\\=([a-zA-Z0-9\\/\\+]*(?:(?:MC|Au|wL|MS|Eu|xL|Mi|Iu|yL|My|Mu|zL|NC|Qu|0L|NS|Uu|1L|Ni|Yu|2L|Ny|cu|3L|OC|gu|4L|OS|ku|5L){1}[a-zA-Z0-9\\/\\+]{2,4}){3}[a-zA-Z0-9\\/\\+\\=]*)\";\n// Extractes IPv4 addresses as hex values\nlet ipv4_decoded_hex_extract = @\"((?:(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d),){6,14}(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d))\";\nlet ipV4_Private_FromPlainString = _Im_WebSession(starttime=ago(lookback), eventresult='Success')\n    | where isnotempty(Url)\n    | extend ip_inURL = extract(@\"\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b\", 0, Url)\n    | where ipv4_is_private(ip_inURL)\n    | where not(ipv4_is_private(DstIpAddr)) // only take traffic going to internet\n    | summarize\n        EventCount=count(),\n        EventEndTime = max(TimeGenerated),\n        EventStartTime = min(TimeGenerated),\n        Urls=tostring(make_set(Url, 100))\n        by SrcIpAddr, SrcUsername, SrcHostname, ip_inURL;\nlet ipV4_Private_FromEncodedString = \n    _Im_WebSession(starttime=ago(lookback), eventresult='Success')\n    | where isnotempty(Url)\n    // Identify requests with encoded IPv4 addresses\n    | where Url matches regex ipv4_encoded_identification_regex\n    | where not(ipv4_is_private(DstIpAddr)) // only take traffic going to internet\n    | project TimeGenerated, Url, SrcIpAddr, SrcUsername, SrcHostname\n    // Extract IP candidates in their base64 encoded format, significantly reducing the dataset\n    | extend extracted_encoded_ip_inURL = extract_all(ipv4_encoded_identification_regex, Url)\n    // We could have more than one ip, expand them out\n    | mv-expand extracted_encoded_ip_inURL to typeof(string)\n    | summarize\n        EventStartTime=min(TimeGenerated),\n        EventEndTime=max(TimeGenerated),\n        make_set(Url, 100),\n        EventCount=count()\n        by extracted_encoded_ip_inURL, SrcIpAddr, SrcUsername, SrcHostname\n    // Pad if we need to\n    | extend extracted_encoded_ip_inURL = iff(strlen(extracted_encoded_ip_inURL) % 2 == 0, extracted_encoded_ip_inURL, strcat(extracted_encoded_ip_inURL, \"=\"))\n    // Now decode the candidate to a long array, we cannot go straight to string as it cannot handle non-UTF8, we need to strip that first\n    | extend extracted_encoded_ip_inURL = tostring(base64_decode_toarray(extracted_encoded_ip_inURL))\n    // Extract the IP candidates from the array\n    | extend hex_extracted = extract_all(ipv4_decoded_hex_extract, extracted_encoded_ip_inURL)\n    // Expand, it's still possible that we might have more than 1 IP\n    | mv-expand hex_extracted\n    // Now we should have a clean string. We need to put it back into a dynamic array to convert back to a string.\n    | extend hex_extracted = trim_end(\",\", tostring(hex_extracted))\n    | extend hex_extracted = strcat(\"[\", hex_extracted, \"]\")\n    | extend hex_extracted = todynamic(hex_extracted)\n    // Convert the array back into a string\n    | extend decoded_ip_inURL = unicode_codepoints_to_string(hex_extracted)\n    | where ipv4_is_private(decoded_ip_inURL)\n    | project\n        ip_inURL=decoded_ip_inURL,\n        Urls=tostring(set_Url),\n        EventStartTime,\n        EventEndTime,\n        EventCount,\n        SrcIpAddr,\n        SrcUsername,\n        SrcHostname;\nunion ipV4_Private_FromPlainString, ipV4_Private_FromEncodedString\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n",
+        "customDetails": {
+          "EventEndTime": "EventEndTime",
+          "EventStartTime": "EventStartTime",
+          "EventCount": "EventCount",
+          "Urls": "Urls"
+        },
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "Detect presence of private IP addresses in URLs (ASIM Web Session)"
       }
     }
   ]
