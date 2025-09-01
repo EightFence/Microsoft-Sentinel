@@ -14,47 +14,47 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "name": "Email access via active sync",
-        "query": "let timeframe = 1d;\nlet cmdList = dynamic([\"Set-CASMailbox\",\"ActiveSyncAllowedDeviceIDs\",\"add\"]);\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(timeframe)\n| where EventID == 4688\n| where CommandLine has_all (cmdList)\n| project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine\n| extend timestamp = TimeGenerated, AccountEntity = Account, HostEntity = Computer\n),\n( WindowsEvent\n| where TimeGenerated >= ago(timeframe)\n| where EventID == 4688\n| where EventData has_all (cmdList)\n| extend CommandLine = tostring(EventData.CommandLine) \n| where CommandLine has_all (cmdList)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| extend ParentProcessName = tostring(EventData.ParentProcessName)\n| project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine\n| extend timestamp = TimeGenerated, AccountEntity = Account, HostEntity = Computer\n),\n(\nDeviceProcessEvents\n| where TimeGenerated >= ago(timeframe)\n| where InitiatingProcessCommandLine has_all (cmdList)\n| project Type, TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine\n| extend timestamp = TimeGenerated, AccountDomain = InitiatingProcessAccountDomain, AccountName = InitiatingProcessAccountName, HostEntity = DeviceName\n),\n(\nEvent\n| where TimeGenerated > ago(timeframe)\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| where TimeGenerated >= ago(timeframe)\n| where CommandLine has_all (cmdList)\n| extend Type = strcat(Type, \": \", Source)\n| project Type, TimeGenerated, Computer, User, Process, ParentImage, CommandLine\n| extend timestamp = TimeGenerated, AccountEntity = User, HostEntity = Computer\n)\n)\n| extend HostName = tostring(split(HostEntity, \".\")[0]), DomainIndex = toint(indexof(HostEntity, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(HostEntity, DomainIndex + 1), HostEntity)\n| extend AccountName = tostring(split(AccountEntity, @'\\')[1]), AccountDomain = tostring(split(AccountEntity, @'\\')[0])\n",
         "metadata": {
-          "source": {
-            "kind": "Community"
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
               "Security - Threat Protection"
             ]
           },
-          "support": {
-            "tier": "Community"
-          },
           "author": {
             "name": "Microsoft Security Research"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "query": "let timeframe = 1d;\nlet cmdList = dynamic([\"Set-CASMailbox\",\"ActiveSyncAllowedDeviceIDs\",\"add\"]);\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(timeframe)\n| where EventID == 4688\n| where CommandLine has_all (cmdList)\n| project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine\n| extend timestamp = TimeGenerated, AccountEntity = Account, HostEntity = Computer\n),\n( WindowsEvent\n| where TimeGenerated >= ago(timeframe)\n| where EventID == 4688\n| where EventData has_all (cmdList)\n| extend CommandLine = tostring(EventData.CommandLine) \n| where CommandLine has_all (cmdList)\n| extend Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend SubjectUserName = tostring(EventData.SubjectUserName)\n| extend SubjectDomainName = tostring(EventData.SubjectDomainName)\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| extend Process=tostring(split(NewProcessName, '\\\\')[-1])\n| extend ParentProcessName = tostring(EventData.ParentProcessName)\n| project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine\n| extend timestamp = TimeGenerated, AccountEntity = Account, HostEntity = Computer\n),\n(\nDeviceProcessEvents\n| where TimeGenerated >= ago(timeframe)\n| where InitiatingProcessCommandLine has_all (cmdList)\n| project Type, TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine\n| extend timestamp = TimeGenerated, AccountDomain = InitiatingProcessAccountDomain, AccountName = InitiatingProcessAccountName, HostEntity = DeviceName\n),\n(\nEvent\n| where TimeGenerated > ago(timeframe)\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| where TimeGenerated >= ago(timeframe)\n| where CommandLine has_all (cmdList)\n| extend Type = strcat(Type, \": \", Source)\n| project Type, TimeGenerated, Computer, User, Process, ParentImage, CommandLine\n| extend timestamp = TimeGenerated, AccountEntity = User, HostEntity = Computer\n)\n)\n| extend HostName = tostring(split(HostEntity, \".\")[0]), DomainIndex = toint(indexof(HostEntity, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(HostEntity, DomainIndex + 1), HostEntity)\n| extend AccountName = tostring(split(AccountEntity, @'\\')[1]), AccountDomain = tostring(split(AccountEntity, @'\\')[0])\n",
+        "name": "Email access via active sync",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "queryFrequency": "1d",
         "triggerOperator": "gt",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "AccountEntity"
+                "columnName": "AccountEntity",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "AccountDomain"
+                "columnName": "AccountDomain",
+                "identifier": "NTDomain"
               }
             ]
           },
@@ -62,16 +62,16 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "HostEntity"
+                "columnName": "HostEntity",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "NTDomain"
               }
             ]
           }
