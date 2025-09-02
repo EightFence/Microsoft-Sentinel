@@ -14,28 +14,27 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies a chain of events starting with disablement of Power Platform tenant isolation and removal of an environment's access security group. These events are correlated with Dataverse exfiltration alerts associated with the impacted environment and recently created Microsoft Entra guest users.\n\nNote: Activate other Dataverse analytics rules with the MITRE tactic 'Exfiltration' before enabling this rule.\n",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "tactics": [
           "DefenseEvasion",
           "Exfiltration"
         ],
-        "queryFrequency": "1h",
+        "status": "Available",
         "customDetails": {
           "Environment": "EnvironmentId"
         },
-        "triggerThreshold": 0,
-        "query": "let query_lookback = 14d;\nlet query_frequncy = 1h;\nlet defense_evasion_events = PowerPlatformAdminActivity\n    | where TimeGenerated >= ago(query_lookback)\n    | where EventOriginalType == \"TenantIsolationOperation\"\n    | mv-expand PropertyCollection\n    | where PropertyCollection.Name == \"powerplatform.analytics.resource.tenant.isolation_policy.enabled\"\n    | where PropertyCollection.Value == \"False\"\n    | summarize\n        TenantIsolationRemovalTimestamp = max(TimeGenerated)\n        by SecurityDisablingUser = ActorName\n    | join kind=inner (\n        PowerPlatformAdminActivity\n        | where TimeGenerated >= ago(query_lookback)\n        | where EventOriginalType == \"EnvironmentPropertyChange\"\n        | where PropertyCollection has \"Property: SecurityGroupId, Old Value: , New Value: \"\n        | mv-expand PropertyCollection\n        | extend\n            GroupRemovalTimestamp = TimeGenerated,\n            InstanceUrl = tostring(iif(PropertyCollection.Name == \"powerplatform.analytics.resource.environment.url\", PropertyCollection.Value, \"\")),\n            EnvironmentId = tostring(iif(PropertyCollection.Name == \"powerplatform.analytics.resource.environment.name\", PropertyCollection.Value, \"\"))\n        | summarize InstanceUrl = max(InstanceUrl), EnvironmentId = max(EnvironmentId) by GroupRemovalTimestamp, SecurityDisablingUser = ActorName)\n        on SecurityDisablingUser\n    | summarize\n        GroupRemovalTimestamp = max(GroupRemovalTimestamp),\n        TenantIsolationRemovalTimestamp = max(TenantIsolationRemovalTimestamp)\n        by SecurityDisablingUser, InstanceUrl, EnvironmentId;\nlet exfiltration_alerts = SecurityAlert\n    | where TimeGenerated >= ago(query_frequncy)\n    | where Tactics has \"Exfiltration\"\n    | where Entities has ('\"AppId\":32780')\n    | mv-expand todynamic(Entities)\n    | extend AlertUPN = iif(Entities.Type == \"account\", strcat(Entities.Name, \"@\", Entities.UPNSuffix), \"\")\n    | extend InstanceUrl = tostring(iif(Entities.AppId == 32780, Entities.InstanceName, \"\"))\n    | join kind=inner defense_evasion_events on InstanceUrl\n    | where StartTime > TenantIsolationRemovalTimestamp and StartTime > GroupRemovalTimestamp\n    | summarize InstanceUrl = max(InstanceUrl), AlertUPN = max(AlertUPN) by AlertName, SystemAlertId\n    | extend AlertDetails = bag_pack(\"AlertName\", AlertName, \"SystemAlertId\", SystemAlertId)\n    | summarize AlertDetails = make_set(AlertDetails, 100) by AlertUPN, InstanceUrl\n    | join kind=inner (\n        AuditLogs\n        | where OperationName == \"Update user\"\n        | where Identity == \"Microsoft Invitation Acceptance Portal\"\n        | mv-expand TargetResources\n        | extend ModifiedProperties = TargetResources.modifiedProperties\n        | mv-expand ModifiedProperties\n        | where ModifiedProperties.displayName == \"AcceptedAs\"\n        | summarize RedeemTime = max(TimeGenerated) by GuestUser = tostring(parse_json(replace_regex(tostring(ModifiedProperties.newValue), \"\\\\r\", \"\"))[0]))\n        on $left.AlertUPN == $right.GuestUser;\ndefense_evasion_events\n| join kind=inner exfiltration_alerts on InstanceUrl\n| extend\n    AccountName = tostring(split(SecurityDisablingUser, \"@\")[0]),\n    UPNSuffix = tostring(split(SecurityDisablingUser, \"@\")[1]),\n    GuestAccountName = tostring(split(GuestUser, \"@\")[0]),\n    GuestUPNSuffix = tostring(split(GuestUser, \"@\")[0]),\n    DataverseId = 32780\n| project\n    SecurityDisablingUser,\n    GuestUser,\n    AlertDetails,\n    TenantIsolationRemovalTimestamp,\n    GroupRemovalTimestamp,\n    InstanceUrl,\n    EnvironmentId,\n    AccountName,\n    UPNSuffix,\n    GuestAccountName,\n    GuestUPNSuffix,\n    DataverseId\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -43,12 +42,12 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "GuestAccountName"
+                "columnName": "GuestAccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "GuestUPNSuffix"
+                "columnName": "GuestUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -56,27 +55,28 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "DataverseId"
+                "columnName": "DataverseId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "InstanceUrl"
+                "columnName": "InstanceUrl",
+                "identifier": "InstanceName"
               }
             ]
           }
         ],
+        "description": "Identifies a chain of events starting with disablement of Power Platform tenant isolation and removal of an environment's access security group. These events are correlated with Dataverse exfiltration alerts associated with the impacted environment and recently created Microsoft Entra guest users.\n\nNote: Activate other Dataverse analytics rules with the MITRE tactic 'Exfiltration' before enabling this rule.\n",
+        "name": "Dataverse - Guest user exfiltration following Power Platform defense impairment",
+        "triggerOperator": "gt",
         "queryPeriod": "14d",
+        "query": "let query_lookback = 14d;\nlet query_frequncy = 1h;\nlet defense_evasion_events = PowerPlatformAdminActivity\n    | where TimeGenerated >= ago(query_lookback)\n    | where EventOriginalType == \"TenantIsolationOperation\"\n    | mv-expand PropertyCollection\n    | where PropertyCollection.Name == \"powerplatform.analytics.resource.tenant.isolation_policy.enabled\"\n    | where PropertyCollection.Value == \"False\"\n    | summarize\n        TenantIsolationRemovalTimestamp = max(TimeGenerated)\n        by SecurityDisablingUser = ActorName\n    | join kind=inner (\n        PowerPlatformAdminActivity\n        | where TimeGenerated >= ago(query_lookback)\n        | where EventOriginalType == \"EnvironmentPropertyChange\"\n        | where PropertyCollection has \"Property: SecurityGroupId, Old Value: , New Value: \"\n        | mv-expand PropertyCollection\n        | extend\n            GroupRemovalTimestamp = TimeGenerated,\n            InstanceUrl = tostring(iif(PropertyCollection.Name == \"powerplatform.analytics.resource.environment.url\", PropertyCollection.Value, \"\")),\n            EnvironmentId = tostring(iif(PropertyCollection.Name == \"powerplatform.analytics.resource.environment.name\", PropertyCollection.Value, \"\"))\n        | summarize InstanceUrl = max(InstanceUrl), EnvironmentId = max(EnvironmentId) by GroupRemovalTimestamp, SecurityDisablingUser = ActorName)\n        on SecurityDisablingUser\n    | summarize\n        GroupRemovalTimestamp = max(GroupRemovalTimestamp),\n        TenantIsolationRemovalTimestamp = max(TenantIsolationRemovalTimestamp)\n        by SecurityDisablingUser, InstanceUrl, EnvironmentId;\nlet exfiltration_alerts = SecurityAlert\n    | where TimeGenerated >= ago(query_frequncy)\n    | where Tactics has \"Exfiltration\"\n    | where Entities has ('\"AppId\":32780')\n    | mv-expand todynamic(Entities)\n    | extend AlertUPN = iif(Entities.Type == \"account\", strcat(Entities.Name, \"@\", Entities.UPNSuffix), \"\")\n    | extend InstanceUrl = tostring(iif(Entities.AppId == 32780, Entities.InstanceName, \"\"))\n    | join kind=inner defense_evasion_events on InstanceUrl\n    | where StartTime > TenantIsolationRemovalTimestamp and StartTime > GroupRemovalTimestamp\n    | summarize InstanceUrl = max(InstanceUrl), AlertUPN = max(AlertUPN) by AlertName, SystemAlertId\n    | extend AlertDetails = bag_pack(\"AlertName\", AlertName, \"SystemAlertId\", SystemAlertId)\n    | summarize AlertDetails = make_set(AlertDetails, 100) by AlertUPN, InstanceUrl\n    | join kind=inner (\n        AuditLogs\n        | where OperationName == \"Update user\"\n        | where Identity == \"Microsoft Invitation Acceptance Portal\"\n        | mv-expand TargetResources\n        | extend ModifiedProperties = TargetResources.modifiedProperties\n        | mv-expand ModifiedProperties\n        | where ModifiedProperties.displayName == \"AcceptedAs\"\n        | summarize RedeemTime = max(TimeGenerated) by GuestUser = tostring(parse_json(replace_regex(tostring(ModifiedProperties.newValue), \"\\\\r\", \"\"))[0]))\n        on $left.AlertUPN == $right.GuestUser;\ndefense_evasion_events\n| join kind=inner exfiltration_alerts on InstanceUrl\n| extend\n    AccountName = tostring(split(SecurityDisablingUser, \"@\")[0]),\n    UPNSuffix = tostring(split(SecurityDisablingUser, \"@\")[1]),\n    GuestAccountName = tostring(split(GuestUser, \"@\")[0]),\n    GuestUPNSuffix = tostring(split(GuestUser, \"@\")[0]),\n    DataverseId = 32780\n| project\n    SecurityDisablingUser,\n    GuestUser,\n    AlertDetails,\n    TenantIsolationRemovalTimestamp,\n    GroupRemovalTimestamp,\n    InstanceUrl,\n    EnvironmentId,\n    AccountName,\n    UPNSuffix,\n    GuestAccountName,\n    GuestUPNSuffix,\n    DataverseId\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "severity": "High",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "{{SecurityDisablingUser}} disabled Power Platform tenant isolation and removed the security group used to control access to {{{InstanceUrl}}. Exfiltration alerts associated with guest users were then detected from user {{{GuestUser}}",
           "alertDisplayNameFormat": "Dataverse - exfiltration alerts following defense impairment in {{InstanceUrl}} "
-        },
-        "status": "Available",
-        "severity": "High",
-        "name": "Dataverse - Guest user exfiltration following Power Platform defense impairment",
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
         }
       }
     }

@@ -14,22 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies changes to Microsoft Entra client apps registered for Finance & Operations, specifically when a new client is mapped to a predefined list of sensitive privileged user accounts, or when a user associates a client app with their own account.",
+        "queryFrequency": "15m",
+        "triggerThreshold": 0,
         "tactics": [
           "CredentialAccess",
           "Persistence",
           "PrivilegeEscalation"
         ],
-        "queryFrequency": "15m",
-        "triggerThreshold": 0,
-        "query": "// Add sensitive privilege accounts to the privileged_user_accounts variable.\n// Example: let privileged_user_accounts = dynamic([\"Admin1\", \"Admin\"]);\nlet privileged_user_accounts = dynamic([]);\nFinanceOperationsActivity_CL\n| where TableName == \"SysAADClientTable\" and LogType in (\"Insert\", \"Update\")\n| extend ClientId = tostring(parse_json(tostring(FormattedData.[\"03::AADClientId\"])).NewData)\n| extend User = parse_json(tostring(FormattedData.UserId))\n| extend\n    MappedUser = tostring(User.NewData),\n    PreviousUserId = tostring(User.OldData),\n    TargetAppName = tostring(parse_json(tostring(FormattedData.Name)).NewData),\n    FinOpsAppId = 32780\n| where MappedUser in (privileged_user_accounts) or LogCreatedBy == MappedUser\n| project\n    LogCreatedDateTime,\n    LogCreatedBy,\n    LogType,\n    TargetAppName,\n    MappedUser,\n    PreviousUserId,\n    ClientId,\n    FinOpsAppId\n",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "LogCreatedBy"
+                "columnName": "LogCreatedBy",
+                "identifier": "FullName"
               }
             ]
           },
@@ -37,8 +36,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "AadUserId",
-                "columnName": "ClientId"
+                "columnName": "ClientId",
+                "identifier": "AadUserId"
               }
             ]
           },
@@ -46,8 +45,8 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "FinOpsAppId"
+                "columnName": "FinOpsAppId",
+                "identifier": "AppId"
               }
             ]
           },
@@ -55,23 +54,24 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "MappedUser"
+                "columnName": "MappedUser",
+                "identifier": "FullName"
               }
             ]
           }
         ],
+        "description": "Identifies changes to Microsoft Entra client apps registered for Finance & Operations, specifically when a new client is mapped to a predefined list of sensitive privileged user accounts, or when a user associates a client app with their own account.",
+        "name": "F&O - Non-interactive account mapped to self or sensitive privileged user",
+        "triggerOperator": "gt",
         "queryPeriod": "15m",
+        "query": "// Add sensitive privilege accounts to the privileged_user_accounts variable.\n// Example: let privileged_user_accounts = dynamic([\"Admin1\", \"Admin\"]);\nlet privileged_user_accounts = dynamic([]);\nFinanceOperationsActivity_CL\n| where TableName == \"SysAADClientTable\" and LogType in (\"Insert\", \"Update\")\n| extend ClientId = tostring(parse_json(tostring(FormattedData.[\"03::AADClientId\"])).NewData)\n| extend User = parse_json(tostring(FormattedData.UserId))\n| extend\n    MappedUser = tostring(User.NewData),\n    PreviousUserId = tostring(User.OldData),\n    TargetAppName = tostring(parse_json(tostring(FormattedData.Name)).NewData),\n    FinOpsAppId = 32780\n| where MappedUser in (privileged_user_accounts) or LogCreatedBy == MappedUser\n| project\n    LogCreatedDateTime,\n    LogCreatedBy,\n    LogType,\n    TargetAppName,\n    MappedUser,\n    PreviousUserId,\n    ClientId,\n    FinOpsAppId\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "severity": "Medium",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "User account {{LogCreatedBy}} mapped an Azure AD App to senstitive privileged user account {{MappedUser}}. The associated Azure AD client ID is {{ClientId}}",
           "alertDisplayNameFormat": "F&O - Sensitive non-interactive user mapping detected"
-        },
-        "status": "Available",
-        "severity": "Medium",
-        "name": "F&O - Non-interactive account mapped to self or sensitive privileged user",
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
         }
       }
     }
