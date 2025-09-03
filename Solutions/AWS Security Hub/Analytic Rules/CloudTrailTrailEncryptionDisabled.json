@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9c2f6c3b-7fd8-4c5a-9d9d-3c4f9e6a7b21')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9c2f6c3b-7fd8-4c5a-9d9d-3c4f9e6a7b21')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "customDetails": {
+          "Region": "AwsRegion",
+          "FindingId": "AwsSecurityFindingId",
+          "ComplianceControlId": "ComplianceSecurityControlId"
+        },
+        "status": "Available",
+        "tactics": [
+          "Impact",
+          "DefenseEvasion"
+        ],
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "name": "AWS Security Hub - Detect CloudTrail trails lacking KMS encryption",
+        "queryPeriod": "1h",
+        "description": "This query detects AWS CloudTrail trails that are not configured to use server-side encryption with a customer managed KMS key using AWS Security Hub control CloudTrail.2 findings. \nUnencrypted CloudTrail logs increase the risk of unauthorized access to sensitive audit data at rest.\n",
+        "query": "AWSSecurityHubFindings\n| where RecordState == \"ACTIVE\" and ComplianceStatus == \"FAILED\"\n| where tostring(AwsSecurityFindingGeneratorId) == \"security-control/CloudTrail.2\"\n  or tostring(ComplianceSecurityControlId) == \"CloudTrail.2\"\n| mv-expand Resource = Resources\n| where tostring(Resource.Type) == \"AwsCloudTrailTrail\"\n| extend TrailId = tostring(Resource.Id)\n| summarize TimeGenerated = max(TimeGenerated)\n    by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,\n       AwsSecurityFindingId, ComplianceSecurityControlId, TrailId\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AwsAccountId"
+              },
+              {
+                "identifier": "CloudAppAccountId",
+                "columnName": "AwsAccountId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "TrailId"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "AWS CloudTrail trail ({{TrailId}}) lacks customer-managed KMS encryption for Account {{AwsAccountId}}.",
+          "alertDisplayNameFormat": "AWS CloudTrail trail {{TrailId}} lacks KMS encryption"
+        }
+      }
+    }
+  ]
+}
