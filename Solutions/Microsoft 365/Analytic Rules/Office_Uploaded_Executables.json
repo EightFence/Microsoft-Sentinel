@@ -14,17 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
         "tactics": [
           "CommandAndControl",
           "LateralMovement"
         ],
-        "triggerThreshold": 0,
-        "severity": "Low",
-        "name": "New executable via Office FileUploaded Operation",
         "queryPeriod": "8d",
-        "description": "'Identifies when executable file types are uploaded to Office services such as SharePoint and OneDrive.\nList currently includes 'exe', 'inf', 'gzip', 'cmd', 'bat' file extensions.\nAdditionally, identifies when a given user is uploading these files to another users workspace.\nThis may be indication of a staging location for malware or other malicious activity.'\n",
         "query": "// a threshold can be enabled, see commented line below for PrevSeenCount\nlet threshold = 2;\nlet uploadOp = 'FileUploaded';\n// Extensions that are interesting. Add/Remove to this list as you see fit\nlet execExt = dynamic(['exe', 'inf', 'gzip', 'cmd', 'bat']);\nlet starttime = 8d;\nlet endtime = 1d;\nOfficeActivity | where TimeGenerated >= ago(endtime)\n// Limited to File Uploads due to potential noise, comment out the Operation statement below to include any operation type\n// Additional, but potentially noisy operation types that include Uploads and Downloads can be included by adding the following - Operation contains \"upload\" or Operation contains \"download\"\n| where Operation =~ uploadOp\n| where SourceFileExtension has_any (execExt)\n| project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName\n| join kind= leftanti (\nOfficeActivity | where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where Operation =~ uploadOp\n| where SourceFileExtension has_any (execExt)\n| summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000) , PrevSeenCount = count() by SourceFileName\n// To exclude previous matches when only above a specific count, change threshold above and uncomment the line below\n//| where PrevSeenCount > threshold\n| mvexpand SourceRelativeUrl, UserId\n| extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)\n) on SourceFileName, SourceRelativeUrl, UserId\n| extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])\n| extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\\\.', '_'))\n// identify when UserId is not a match to the specific site url personal folder reference\n| extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true , false )\n| summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated),\nUserAgents = make_list(UserAgent, 100000), OfficeIds = make_list(OfficeId, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)\nby OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+        "severity": "Low",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "'Identifies when executable file types are uploaded to Office services such as SharePoint and OneDrive.\nList currently includes 'exe', 'inf', 'gzip', 'cmd', 'bat' file extensions.\nAdditionally, identifies when a given user is uploading these files to another users workspace.\nThis may be indication of a staging location for malware or other malicious activity.'\n",
+        "name": "New executable via Office FileUploaded Operation",
+        "queryFrequency": "1d",
+        "status": "Available",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -70,9 +72,7 @@
             ],
             "entityType": "File"
           }
-        ],
-        "queryFrequency": "1d",
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]

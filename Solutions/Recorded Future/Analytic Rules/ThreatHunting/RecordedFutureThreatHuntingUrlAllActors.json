@@ -14,29 +14,41 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "ActorInformation": "RecordedFuturePortalLink"
-        },
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "1h",
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          }
-        },
         "tactics": [
           "Persistence",
           "PrivilegeEscalation",
           "DefenseEvasion"
         ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "name": "RecordedFuture Threat Hunting Url All Actors",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "{{Description}}",
+          "alertDescriptionFormat": "*{{Description}}**\\n\\nCorrelation found on {{Url}} from the {{Type}} table.\\n",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "AlertLink",
+              "value": "RecordedFuturePortalLink"
+            }
+          ]
+        },
         "queryPeriod": "1d",
-        "description": "'Recorded Future Threat Hunting Url correlation for all actors.'\n",
         "query": "let ioc_lookBack = 1d;\n// The source table (_Im_WebSession) is a ASIM parser table, but can be replaced by any infrastructure table containing Url data.\n// The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns\n_Im_WebSession\n| where isnotempty(Url)\n| extend lowerUrl=tolower(Url)\n| join kind=inner (\nThreatIntelIndicators\n// Only look for IOCs\n| where ObservableKey == 'url:value'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend lowerUrl=tolower(ObservableValue)\n) on lowerUrl\n// select column from the source table to match with Recorded Future ThreatIntelIndicators $left.Url\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n| project Url=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "1h",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "'Recorded Future Threat Hunting Url correlation for all actors.'\n",
+        "name": "RecordedFuture Threat Hunting Url All Actors",
+        "queryFrequency": "15m",
+        "customDetails": {
+          "ActorInformation": "RecordedFuturePortalLink"
+        },
         "entityMappings": [
           {
             "fieldMappings": [
@@ -47,19 +59,7 @@
             ],
             "entityType": "URL"
           }
-        ],
-        "queryFrequency": "15m",
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "alertProperty": "AlertLink",
-              "value": "RecordedFuturePortalLink"
-            }
-          ],
-          "alertDescriptionFormat": "*{{Description}}**\\n\\nCorrelation found on {{Url}} from the {{Type}} table.\\n",
-          "alertDisplayNameFormat": "{{Description}}"
-        }
+        ]
       }
     }
   ]
