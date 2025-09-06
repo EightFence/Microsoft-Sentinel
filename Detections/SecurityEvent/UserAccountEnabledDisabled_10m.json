@@ -14,114 +14,114 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies when a user account is enabled and then disabled within 10 minutes. This can be an indication of compromise and an adversary attempting to hide in the noise.'\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountUsedToEnable",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "EnabledBySubjectUserName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "EnabledBySubjectDomainName",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountUsedToDisable",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "DisabledBySubjectUserName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "DisabledBySubjectDomainName",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "TargetAccount",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "TargetUserName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "TargetDomainName",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "TargetSid",
-                "identifier": "Sid"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Computer",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "HostName",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "HostNameDomain",
-                "identifier": "NTDomain"
-              }
-            ],
-            "entityType": "Host"
-          }
-        ],
+        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\n  (union isfuzzy=true\n    (SecurityEvent\n    | where TimeGenerated > ago(timeframe+spanoftime)\n    // A user account was enabled\n    | where EventID == 4722\n    | where AccountType =~ \"User\"\n    | where TargetAccount !endswith \"$\"\n    | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToEnable = SubjectAccount, EnabledBySubjectUserName = SubjectUserName, EnabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToEnable = SubjectUserSid, UserPrincipalName\n    ),\n    (\n    WindowsEvent\n    | where TimeGenerated > ago(timeframe+spanoftime)\n    // A user account was enabled\n    | where EventID == 4722\n    | extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n    | extend AccountType=case(EventData.SubjectUserName endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n    | where AccountType =~ \"User\"\n    | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n    | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)\n    | extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n    | where TargetAccount !endswith \"$\"\n    | extend Activity=\"4722 - A user account was enabled.\"\n    | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) \n    | extend TargetSid = tostring(EventData.TargetSid)\n    | extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n    | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToEnable = SubjectAccount, EnabledBySubjectUserName = SubjectUserName, EnabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToEnable = SubjectUserSid, UserPrincipalName\n    )\n  )\n| join kind= inner (\n  (union isfuzzy=true\n    (SecurityEvent\n    | where TimeGenerated > ago(timeframe)\n    // A user account was disabled\n    | where EventID == 4725\n    | where AccountType =~ \"User\"\n    | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToDisable = SubjectAccount, DisabledBySubjectUserName = SubjectUserName, DisabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToDisable = SubjectUserSid, UserPrincipalName\n    ),\n    (WindowsEvent\n    | where TimeGenerated > ago(timeframe)\n    // A user account was disabled\n    | where EventID == 4725\n    | extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n    | extend AccountType=case(EventData.SubjectUserName endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n    | where AccountType =~ \"User\"\n    | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n    | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)\n    | extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n    | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) \n    | extend TargetSid = tostring(EventData.TargetSid)\n    | extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n    | extend Activity = \"4725 - A user account was disabled.\"\n    | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToDisable = SubjectAccount, DisabledBySubjectUserName = SubjectUserName, DisabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToDisable = SubjectUserSid, UserPrincipalName\n    )\n  )\n) on Computer, TargetAccount\n| where DisableTime - EnableTime < spanoftime\n| extend TimeDelta = DisableTime - EnableTime\n| where tolong(TimeDelta) >= threshold\n| project TimeDelta, EnableTime, EnableEventID, EnableActivity, Computer, TargetAccount, TargetSid, TargetUserName, TargetDomainName, UserPrincipalName, \nAccountUsedToEnable, SIDofAccountUsedToEnable, DisableTime, DisableEventID, DisableActivity, AccountUsedToDisable, SIDofAccountUsedToDisable, \nEnabledBySubjectUserName, EnabledBySubjectDomainName, DisabledBySubjectUserName, DisabledBySubjectDomainName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| project-away DomainIndex\n",
         "queryFrequency": "1d",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "name": "User account enabled and disabled within 10 mins",
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
         ],
+        "queryPeriod": "25h",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "source": {
             "kind": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           }
         },
-        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\n  (union isfuzzy=true\n    (SecurityEvent\n    | where TimeGenerated > ago(timeframe+spanoftime)\n    // A user account was enabled\n    | where EventID == 4722\n    | where AccountType =~ \"User\"\n    | where TargetAccount !endswith \"$\"\n    | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToEnable = SubjectAccount, EnabledBySubjectUserName = SubjectUserName, EnabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToEnable = SubjectUserSid, UserPrincipalName\n    ),\n    (\n    WindowsEvent\n    | where TimeGenerated > ago(timeframe+spanoftime)\n    // A user account was enabled\n    | where EventID == 4722\n    | extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n    | extend AccountType=case(EventData.SubjectUserName endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n    | where AccountType =~ \"User\"\n    | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n    | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)\n    | extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n    | where TargetAccount !endswith \"$\"\n    | extend Activity=\"4722 - A user account was enabled.\"\n    | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) \n    | extend TargetSid = tostring(EventData.TargetSid)\n    | extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n    | project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToEnable = SubjectAccount, EnabledBySubjectUserName = SubjectUserName, EnabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToEnable = SubjectUserSid, UserPrincipalName\n    )\n  )\n| join kind= inner (\n  (union isfuzzy=true\n    (SecurityEvent\n    | where TimeGenerated > ago(timeframe)\n    // A user account was disabled\n    | where EventID == 4725\n    | where AccountType =~ \"User\"\n    | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToDisable = SubjectAccount, DisabledBySubjectUserName = SubjectUserName, DisabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToDisable = SubjectUserSid, UserPrincipalName\n    ),\n    (WindowsEvent\n    | where TimeGenerated > ago(timeframe)\n    // A user account was disabled\n    | where EventID == 4725\n    | extend SubjectUserSid = tostring(EventData.SubjectUserSid)\n    | extend AccountType=case(EventData.SubjectUserName endswith \"$\" or SubjectUserSid in (\"S-1-5-18\", \"S-1-5-19\", \"S-1-5-20\"), \"Machine\", isempty(SubjectUserSid), \"\", \"User\")\n    | where AccountType =~ \"User\"\n    | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n    | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)\n    | extend TargetAccount = strcat(EventData.TargetDomainName,\"\\\\\", EventData.TargetUserName)\n    | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) \n    | extend TargetSid = tostring(EventData.TargetSid)\n    | extend UserPrincipalName = tostring(EventData.UserPrincipalName)\n    | extend Activity = \"4725 - A user account was disabled.\"\n    | project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer = toupper(Computer), \n    TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, \n    AccountUsedToDisable = SubjectAccount, DisabledBySubjectUserName = SubjectUserName, DisabledBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToDisable = SubjectUserSid, UserPrincipalName\n    )\n  )\n) on Computer, TargetAccount\n| where DisableTime - EnableTime < spanoftime\n| extend TimeDelta = DisableTime - EnableTime\n| where tolong(TimeDelta) >= threshold\n| project TimeDelta, EnableTime, EnableEventID, EnableActivity, Computer, TargetAccount, TargetSid, TargetUserName, TargetDomainName, UserPrincipalName, \nAccountUsedToEnable, SIDofAccountUsedToEnable, DisableTime, DisableEventID, DisableActivity, AccountUsedToDisable, SIDofAccountUsedToDisable, \nEnabledBySubjectUserName, EnabledBySubjectDomainName, DisabledBySubjectUserName, DisabledBySubjectDomainName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| project-away DomainIndex\n",
+        "triggerOperator": "gt",
         "severity": "Medium",
-        "queryPeriod": "25h",
-        "name": "User account enabled and disabled within 10 mins",
-        "triggerThreshold": 0
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountUsedToEnable"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "EnabledBySubjectUserName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "EnabledBySubjectDomainName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountUsedToDisable"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "DisabledBySubjectUserName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "DisabledBySubjectDomainName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "TargetAccount"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "TargetUserName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "TargetDomainName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Sid",
+                "columnName": "TargetSid"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Computer"
+              },
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "HostNameDomain"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "description": "'Identifies when a user account is enabled and then disabled within 10 minutes. This can be an indication of compromise and an adversary attempting to hide in the noise.'\n"
       }
     }
   ]
