@@ -14,12 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let BEC_Keywords = dynamic([ 'invoice','payment','paycheck','transfer','bank statement','bank details','closing','funds','bank account','account details','remittance','purchase','deposit',\"PO#\",\"Zahlung\",\"Rechnung\",\"Paiement\", \"virement bancaire\",\"Bankuberweisung\",'hacked','phishing']);\nOfficeActivity\n| where Operation =~ \"New-InboxRule\"\n| where Parameters has \"Deleted Items\" or Parameters has \"Junk Email\"  or Parameters has \"DeleteMessage\"\n| extend Events=todynamic(Parameters)\n| parse Events  with * \"SubjectContainsWords\" SubjectContainsWords '}'*\n| parse Events  with * \"BodyContainsWords\" BodyContainsWords '}'*\n| parse Events  with * \"SubjectOrBodyContainsWords\" SubjectOrBodyContainsWords '}'*\n| where SubjectContainsWords has_any (BEC_Keywords)\n or BodyContainsWords has_any (BEC_Keywords)\n or SubjectOrBodyContainsWords has_any (BEC_Keywords)\n| extend ClientIPAddress = case( ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))), ClientIP )\n| extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))\n| extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\\\')[-1]))\n| summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail\n| extend UserName = split(UserId, '@')[0], DomainName = split(UserId, '@')[1]\n",
-        "queryPeriod": "1d",
         "severity": "Medium",
+        "triggerThreshold": 0,
+        "name": "Malicious BEC Inbox Rule",
+        "queryPeriod": "1d",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserId",
@@ -33,27 +33,27 @@
                 "columnName": "DomainName",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "ClientIPAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "tactics": [
           "Persistence",
           "DefenseEvasion"
         ],
-        "name": "Malicious BEC Inbox Rule",
-        "queryFrequency": "1d",
-        "triggerThreshold": 0,
         "description": "'Often times after the initial compromise in a BEC attack the attackers create inbox rules to delete emails that contain certain keywords related to their BEC attack.\n This is done so as to limit ability to warn compromised users that they've been compromised. \n",
-        "triggerOperator": "gt"
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "query": "let BEC_Keywords = dynamic([ 'invoice','payment','paycheck','transfer','bank statement','bank details','closing','funds','bank account','account details','remittance','purchase','deposit',\"PO#\",\"Zahlung\",\"Rechnung\",\"Paiement\", \"virement bancaire\",\"Bankuberweisung\",'hacked','phishing']);\nOfficeActivity\n| where Operation =~ \"New-InboxRule\"\n| where Parameters has \"Deleted Items\" or Parameters has \"Junk Email\"  or Parameters has \"DeleteMessage\"\n| extend Events=todynamic(Parameters)\n| parse Events  with * \"SubjectContainsWords\" SubjectContainsWords '}'*\n| parse Events  with * \"BodyContainsWords\" BodyContainsWords '}'*\n| parse Events  with * \"SubjectOrBodyContainsWords\" SubjectOrBodyContainsWords '}'*\n| where SubjectContainsWords has_any (BEC_Keywords)\n or BodyContainsWords has_any (BEC_Keywords)\n or SubjectOrBodyContainsWords has_any (BEC_Keywords)\n| extend ClientIPAddress = case( ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))), ClientIP )\n| extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))\n| extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\\\')[-1]))\n| summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail\n| extend UserName = split(UserId, '@')[0], DomainName = split(UserId, '@')[1]\n"
       }
     }
   ]
