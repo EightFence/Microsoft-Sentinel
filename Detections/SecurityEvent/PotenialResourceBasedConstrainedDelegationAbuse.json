@@ -14,59 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "SubjectAccount"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "SubjectUserName"
-              },
-              {
-                "identifier": "NTDomain",
-                "columnName": "SubjectDomainName"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Sid",
-                "columnName": "SubjectUserSid"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Computer"
-              },
-              {
-                "identifier": "HostName",
-                "columnName": "HostName"
-              },
-              {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
-              }
-            ]
-          }
-        ],
-        "triggerThreshold": 0,
+        "description": "'This query identifies Active Directory computer objects modifications that allow an adversary to abuse the Resource-based constrained delegation. \nThis query checks for event id 5136 that the Object Class field is \"computer\" and the LDAP Display Name is \"msDS-AllowedToActOnBehalfOfOtherIdentity\" which is an indicator of Resource-based constrained delegation.\nRef: https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html'\n",
+        "name": "Possible Resource-Based Constrained Delegation Abuse",
+        "query": "SecurityEvent\n| where EventID == 5136 \n| parse EventData with * 'ObjectClass\">' ObjectClass \"<\" *\n| parse EventData with * 'AttributeLDAPDisplayName\">' AttributeLDAPDisplayName \"<\" *\n| where ObjectClass == \"computer\" and AttributeLDAPDisplayName == \"msDS-AllowedToActOnBehalfOfOtherIdentity\"\n| parse EventData with * 'ObjectDN\">' ObjectDN \"<\" *\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserName, SubjectDomainName, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| project-away DomainIndex\n",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "author": {
             "name": "Vasileios Paschalidis"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -78,15 +34,59 @@
             "kind": "Community"
           }
         },
-        "query": "SecurityEvent\n| where EventID == 5136 \n| parse EventData with * 'ObjectClass\">' ObjectClass \"<\" *\n| parse EventData with * 'AttributeLDAPDisplayName\">' AttributeLDAPDisplayName \"<\" *\n| where ObjectClass == \"computer\" and AttributeLDAPDisplayName == \"msDS-AllowedToActOnBehalfOfOtherIdentity\"\n| parse EventData with * 'ObjectDN\">' ObjectDN \"<\" *\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Computer, SubjectAccount, SubjectUserName, SubjectDomainName, SubjectUserSid, SubjectLogonId, ObjectDN, AttributeLDAPDisplayName\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| project-away DomainIndex\n",
-        "triggerOperator": "gt",
-        "queryPeriod": "1h",
-        "name": "Possible Resource-Based Constrained Delegation Abuse",
-        "description": "'This query identifies Active Directory computer objects modifications that allow an adversary to abuse the Resource-based constrained delegation. \nThis query checks for event id 5136 that the Object Class field is \"computer\" and the LDAP Display Name is \"msDS-AllowedToActOnBehalfOfOtherIdentity\" which is an indicator of Resource-based constrained delegation.\nRef: https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html'\n",
-        "severity": "Medium",
         "tactics": [
           "PrivilegeEscalation"
-        ]
+        ],
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SubjectAccount",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "SubjectUserName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "SubjectDomainName",
+                "identifier": "NTDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SubjectUserSid",
+                "identifier": "Sid"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Computer",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
+              }
+            ]
+          }
+        ],
+        "severity": "Medium",
+        "queryPeriod": "1h"
       }
     }
   ]
