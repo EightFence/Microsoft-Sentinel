@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c1c6ba64-134e-403b-b9a6-1bebc90809a4')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c1c6ba64-134e-403b-b9a6-1bebc90809a4')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Contrast ADR - EDR Alert Correlation",
+        "queryPeriod": "5m",
+        "status": "Available",
+        "tactics": [
+          "Execution",
+          "DefenseEvasion",
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "triggerThreshold": 0,
+        "description": "'Correlates Contrast ADR incidents with specific high-risk attack patterns including command injection, deserialization attacks, and file upload vulnerabilities. This rule identifies confirmed security events that require immediate attention from security teams.'\n",
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "host_hostname_s",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "EDR Alert Confirmed {{result_s}} by Contrast ADR on {{application_name_s}}",
+          "alertDescriptionFormat": "EDR Alert Confirmed {{result_s}} by Contrast ADR on {{application_name_s}}"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "groupByEntities": [
+              "Host"
+            ],
+            "enabled": true,
+            "lookbackDuration": "PT1H",
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "triggerOperator": "gt",
+        "queryFrequency": "5m",
+        "query": "ContrastADRIncident_CL\n| project-rename  incident_id_s = incidentId_s\n| join kind=inner (ContrastADR_CL | where rule_s in~(\"class-loader-manipulation\", \"cmd-injection-semantic-chained-commands\", \"cmd-injection-semantic-dangerous-paths\", \"cmd-injection-command-backdoors\", \"cmd-injection-process-hardening\", \"cmd-injection\", \"expression-language-injection\", \"jndi-injection\", \"ssjs-injection\", \"unsafe-file-upload\", \"untrusted-deserialization\",\"xxe\")) on incident_id_s\n| project-rename hostname_s = host_hostname_s\n//Please add your EDR table name in place of ContrastWAFLogs_CL and hostname's column name in place of hostname_s below and uncomment the queries below\n//| join kind = inner ( ContrastWAFLogs_CL\n//| where TimeGenerated >= ago(5m)) on hostname_s\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1aac7737-d52f-483d-b225-6a27c1b29a9e')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1aac7737-d52f-483d-b225-6a27c1b29a9e')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Contrast ADR - DLP SQL Injection Correlation",
+        "queryPeriod": "5m",
+        "status": "Available",
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess",
+          "Collection",
+          "Exfiltration",
+          "CommandAndControl",
+          "Reconnaissance",
+          "CredentialAccess",
+          "LateralMovement",
+          "Discovery"
+        ],
+        "triggerThreshold": 0,
+        "description": "'Detects successful SQL injection attacks identified by Contrast ADR and correlates them with WAF/DLP logs. This rule identifies critical database security breaches that have bypassed initial defenses and may result in data exfiltration or unauthorized database access.'\n",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIP",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "host_hostname_s",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Confirmed active SQL Injection by Contrast ADR on {{request_headers_referer_s}}  endpoint of {{application_name_s}} ",
+          "alertDescriptionFormat": "Confirmed active SQL Injection by Contrast ADR on {{request_headers_referer_s}}  endpoint of {{application_name_s}} "
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "groupByEntities": [
+              "Host",
+              "IP"
+            ],
+            "enabled": true,
+            "lookbackDuration": "PT30M",
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "triggerOperator": "gt",
+        "queryFrequency": "5m",
+        "query": "ContrastADR_CL\n| where result_s =~ \"EXPLOITED\" and rule_s =~ \"SQL-INJECTION\"\n| project-rename hostname_s = host_hostname_s\n//please add your DLP logs table in place of ContrastWAFLogs_CL and hostname colomun in place of hostname_s below and uncomment the queries below\n//| join kind= inner (ContrastWAFLogs_CL | where TimeGenerated >= ago(5m)) on hostname_s\n"
+      }
+    }
+  ]
+}
