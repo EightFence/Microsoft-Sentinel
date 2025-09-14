@@ -14,45 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "name": "TI Map URL Entity to EmailUrlInfo",
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_ = materialize(EmailUrlInfo\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend EmailUrlInfo_TimeGenerated = TimeGenerated);\nlet EmailUrls = EmailUrlInfo_ | distinct Url | summarize make_list(Url);\nlet EmailUrlDomains = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);\nlet EmailEvents_ = materialize(EmailEvents\n    | where TimeGenerated >= ago(dt_lookBack));\nlet TI = materialize(ThreatIntelIndicators\n   //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | where tolower(Url) in (EmailUrls) or tolower(Url) in (EmailUrlDomains)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n    | where IsActive and (ValidUntil > now() or isempty(ValidUntil)));\n(union\n    (TI | join kind=innerunique (EmailUrlInfo_) on Url),\n    (TI | join kind=innerunique (EmailUrlInfo_) on $left.Url == $right.UrlDomain))\n| where EmailUrlInfo_TimeGenerated < ValidUntil\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, Type, ValidUntil, Confidence, Url, UrlDomain, UrlLocation, NetworkMessageId\n| extend timestamp = EmailUrlInfo_TimeGenerated\n| join kind=inner (EmailEvents_) on NetworkMessageId\n| where DeliveryAction !has \"Blocked\"\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n",
+        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in EmailUrlInfo.'\n",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "RecipientEmailAddress"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "Name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "Url"
+              }
+            ]
+          }
+        ],
         "queryPeriod": "14d",
         "tactics": [
           "CommandAndControl"
-        ],
-        "triggerThreshold": 0,
-        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in EmailUrlInfo.'\n",
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "RecipientEmailAddress",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "Name",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Url",
-                "identifier": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet EmailUrlInfo_ = materialize(EmailUrlInfo\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend EmailUrlInfo_TimeGenerated = TimeGenerated);\nlet EmailUrls = EmailUrlInfo_ | distinct Url | summarize make_list(Url);\nlet EmailUrlDomains = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);\nlet EmailEvents_ = materialize(EmailEvents\n    | where TimeGenerated >= ago(dt_lookBack));\nlet TI = materialize(ThreatIntelIndicators\n   //extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | where tolower(Url) in (EmailUrls) or tolower(Url) in (EmailUrlDomains)\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n    | where IsActive and (ValidUntil > now() or isempty(ValidUntil)));\n(union\n    (TI | join kind=innerunique (EmailUrlInfo_) on Url),\n    (TI | join kind=innerunique (EmailUrlInfo_) on $left.Url == $right.UrlDomain))\n| where EmailUrlInfo_TimeGenerated < ValidUntil\n| summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, Type, ValidUntil, Confidence, Url, UrlDomain, UrlLocation, NetworkMessageId\n| extend timestamp = EmailUrlInfo_TimeGenerated\n| join kind=inner (EmailEvents_) on NetworkMessageId\n| where DeliveryAction !has \"Blocked\"\n| extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])\n"
+        ]
       }
     }
   ]
