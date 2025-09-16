@@ -14,10 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "severity": "Low",
+        "triggerThreshold": 0,
+        "queryPeriod": "6h",
+        "status": "Available",
+        "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ChiaCryptoIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet process = (iocs | where Type =~ \"process\" | project IoC);\n//This query uses sysmon data, sections that have - | where Source == \"Microsoft-Windows-Sysmon\" - may need to be updated with latest\nWindowsEvent\n| where EventID == '4688' and EventData has_any (process)\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| where NewProcessName  has_any (process)\n| extend ParentProcessName = tostring(EventData.ParentProcessName)\n  , Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n  , NewProcessId = tostring(EventData.NewProcessId)\n| extend Computer, Account, File = tostring(split(NewProcessName, '\\\\', -1)[-1]), AlertDetail = 'Chia crypto IOC detected'\n| extend FilePath = replace_string(NewProcessName, File, '')\n| project TimeGenerated, File, AlertDetail, FilePath,Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
+        "tactics": [
+          "Impact"
+        ],
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Account",
@@ -31,10 +37,10 @@
                 "columnName": "AccountNTDomain",
                 "identifier": "NTDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Computer",
@@ -48,10 +54,10 @@
                 "columnName": "HostNameDomain",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "File",
             "fieldMappings": [
               {
                 "columnName": "File",
@@ -61,19 +67,13 @@
                 "columnName": "FilePath",
                 "identifier": "Directory"
               }
-            ],
-            "entityType": "File"
+            ]
           }
         ],
-        "queryPeriod": "6h",
+        "severity": "Low",
         "description": "'Identifies a match across IOC's related to Chia cryptocurrency farming/plotting activity'\n",
         "name": "Chia_Crypto_Mining IOC - June 2021",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ChiaCryptoIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet process = (iocs | where Type =~ \"process\" | project IoC);\n//This query uses sysmon data, sections that have - | where Source == \"Microsoft-Windows-Sysmon\" - may need to be updated with latest\nWindowsEvent\n| where EventID == '4688' and EventData has_any (process)\n| extend NewProcessName = tostring(EventData.NewProcessName)\n| where NewProcessName  has_any (process)\n| extend ParentProcessName = tostring(EventData.ParentProcessName)\n  , Account =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n  , NewProcessId = tostring(EventData.NewProcessId)\n| extend Computer, Account, File = tostring(split(NewProcessName, '\\\\', -1)[-1]), AlertDetail = 'Chia crypto IOC detected'\n| extend FilePath = replace_string(NewProcessName, File, '')\n| project TimeGenerated, File, AlertDetail, FilePath,Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
-        "tactics": [
-          "Impact"
-        ],
+        "triggerOperator": "gt",
         "queryFrequency": "6h"
       }
     }
