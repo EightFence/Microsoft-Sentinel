@@ -14,31 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Service Principal Assigned App Role With Sensitive Access",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "description": "'Detects a Service Principal being assigned an app role that has sensitive access such as Mail.Read.\n  A threat actor who compromises a Service Principal may assign it an app role to allow it to access sensitive data, or to perform other actions.\n  Ensure that any assignment to a Service Principal is valid and appropriate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#application-granted-highly-privileged-permissions'\n",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "query": "// Add other permissions to this list as needed\nlet permissions = dynamic([\".All\", \"ReadWrite\", \"Mail.\", \"offline_access\", \"Files.Read\", \"Notes.Read\", \"ChannelMessage.Read\", \"Chat.Read\", \"TeamsActivity.Read\",\n\"Group.Read\", \"EWS.AccessAsUser.All\", \"EAS.AccessAsUser.All\"]);\nlet auditList = \nAuditLogs\n| where OperationName =~ \"Add app role assignment to service principal\"\n| mv-expand TargetResources[0].modifiedProperties\n| extend TargetResources_0_modifiedProperties = column_ifexists(\"TargetResources_0_modifiedProperties\", '')\n| where isnotempty(TargetResources_0_modifiedProperties)\n;\nlet detailsList = auditList\n| where TargetResources_0_modifiedProperties.displayName =~ \"AppRole.Value\" or TargetResources_0_modifiedProperties.displayName =~ \"DelegatedPermissionGrant.Scope\"\n| extend Permissions = split((parse_json(tostring(TargetResources_0_modifiedProperties.newValue))), \" \")\n| where Permissions has_any (permissions)\n| summarize AddedPermissions=make_set(Permissions,200) by CorrelationId\n| join kind=inner auditList on CorrelationId\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n| extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n| extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n| where displayName == \"ServicePrincipal.ObjectID\" or displayName == \"ServicePrincipal.DisplayName\"\n| extend displayName = case(displayName == \"ServicePrincipal.ObjectID\", \"ServicePrincipalObjectID\", displayName == \"ServicePrincipal.DisplayName\", \"ServicePrincipalDisplayName\", displayName)\n| project TimeGenerated, CorrelationId, Id, AddedPermissions = tostring(AddedPermissions), InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIPAddress, InitiatingUserPrincipalName, InitiatedBy, displayName, newValue\n;\ndetailsList | project Id, displayName, newValue\n| evaluate pivot(displayName, make_set(newValue))\n| join kind=inner detailsList on Id\n| extend ServicePrincipalObjectID = todynamic(column_ifexists(\"ServicePrincipalObjectID\", \"\")), ServicePrincipalDisplayName = todynamic(column_ifexists(\"ServicePrincipalDisplayName\", \"\"))\n| mv-expand ServicePrincipalObjectID, ServicePrincipalDisplayName\n| project-away Id1, displayName, newValue\n| extend ServicePrincipalObjectID = tostring(ServicePrincipalObjectID), ServicePrincipalDisplayName = tostring(ServicePrincipalDisplayName)\n| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), EventIds = make_set(Id,200) by CorrelationId, AddedPermissions, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIPAddress, InitiatingUserPrincipalName, InitiatedBy, ServicePrincipalDisplayName, ServicePrincipalObjectID\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
+        "name": "Service Principal Assigned App Role With Sensitive Access",
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          },
           "categories": {
             "domains": [
               "Security - Others",
               "Identity"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
           "author": {
             "name": "Microsoft Security Research"
           }
         },
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -89,9 +91,7 @@
             ]
           }
         ],
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "description": "'Detects a Service Principal being assigned an app role that has sensitive access such as Mail.Read.\n  A threat actor who compromises a Service Principal may assign it an app role to allow it to access sensitive data, or to perform other actions.\n  Ensure that any assignment to a Service Principal is valid and appropriate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-applications#application-granted-highly-privileged-permissions'\n"
+        "query": "// Add other permissions to this list as needed\nlet permissions = dynamic([\".All\", \"ReadWrite\", \"Mail.\", \"offline_access\", \"Files.Read\", \"Notes.Read\", \"ChannelMessage.Read\", \"Chat.Read\", \"TeamsActivity.Read\",\n\"Group.Read\", \"EWS.AccessAsUser.All\", \"EAS.AccessAsUser.All\"]);\nlet auditList = \nAuditLogs\n| where OperationName =~ \"Add app role assignment to service principal\"\n| mv-expand TargetResources[0].modifiedProperties\n| extend TargetResources_0_modifiedProperties = column_ifexists(\"TargetResources_0_modifiedProperties\", '')\n| where isnotempty(TargetResources_0_modifiedProperties)\n;\nlet detailsList = auditList\n| where TargetResources_0_modifiedProperties.displayName =~ \"AppRole.Value\" or TargetResources_0_modifiedProperties.displayName =~ \"DelegatedPermissionGrant.Scope\"\n| extend Permissions = split((parse_json(tostring(TargetResources_0_modifiedProperties.newValue))), \" \")\n| where Permissions has_any (permissions)\n| summarize AddedPermissions=make_set(Permissions,200) by CorrelationId\n| join kind=inner auditList on CorrelationId\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n| extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))\n| extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))\n| where displayName == \"ServicePrincipal.ObjectID\" or displayName == \"ServicePrincipal.DisplayName\"\n| extend displayName = case(displayName == \"ServicePrincipal.ObjectID\", \"ServicePrincipalObjectID\", displayName == \"ServicePrincipal.DisplayName\", \"ServicePrincipalDisplayName\", displayName)\n| project TimeGenerated, CorrelationId, Id, AddedPermissions = tostring(AddedPermissions), InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIPAddress, InitiatingUserPrincipalName, InitiatedBy, displayName, newValue\n;\ndetailsList | project Id, displayName, newValue\n| evaluate pivot(displayName, make_set(newValue))\n| join kind=inner detailsList on Id\n| extend ServicePrincipalObjectID = todynamic(column_ifexists(\"ServicePrincipalObjectID\", \"\")), ServicePrincipalDisplayName = todynamic(column_ifexists(\"ServicePrincipalDisplayName\", \"\"))\n| mv-expand ServicePrincipalObjectID, ServicePrincipalDisplayName\n| project-away Id1, displayName, newValue\n| extend ServicePrincipalObjectID = tostring(ServicePrincipalObjectID), ServicePrincipalDisplayName = tostring(ServicePrincipalDisplayName)\n| summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), EventIds = make_set(Id,200) by CorrelationId, AddedPermissions, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIPAddress, InitiatingUserPrincipalName, InitiatedBy, ServicePrincipalDisplayName, ServicePrincipalObjectID\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n"
       }
     }
   ]
