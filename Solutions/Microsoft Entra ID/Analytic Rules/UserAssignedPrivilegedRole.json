@@ -14,20 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "tactics": [
-          "Persistence"
-        ],
-        "status": "Available",
-        "name": "New User Assigned to Privileged Role",
-        "description": "Identifies when a privileged role is assigned to a new user. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\n",
-        "queryPeriod": "14d",
-        "queryFrequency": "1h",
-        "query": "// Define the start and end times based on input values\nlet starttime = now()-1h;\nlet endtime = now();\n// Set a lookback period of 14 days\nlet lookback = starttime - 14d;\n// Define a reusable function to query audit logs\nlet awsFunc = (start:datetime, end:datetime) {\n  AuditLogs\n  | where TimeGenerated between (start..end)\n  | where Category =~ \"RoleManagement\"\n  | where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n  | where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n  | mv-apply TargetResource = TargetResources on\n    (\n      where TargetResource.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResource.type =~ \"ServicePrincipal\", tostring(TargetResource.displayName), tostring(TargetResource.userPrincipalName)),\n      props = TargetResource.modifiedProperties\n    )\n  | mv-apply Property = props on\n    (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"', tostring(Property.newValue))\n    )\n  | where RoleName contains \"Admin\" and Result == \"success\"\n};\n// Query for audit events in the current day\nlet EventInfo_CurrentDay = awsFunc(starttime, endtime);\n// Query for audit events in the historical period (lookback)\nlet EventInfo_historical = awsFunc(lookback, starttime);\n// Find unseen events by performing a left anti-join\nlet EventInfo_Unseen = (EventInfo_CurrentDay\n  | join kind=leftanti(EventInfo_historical) on Target, RoleName, OperationName\n);\n// Extend and clean up the results\nEventInfo_Unseen\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)\n// You can uncomment the lines below to filter out PIM activations\n// | where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"\n// | summarize StartTime=min(TimeGenerated), EndTime=min(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result\n// Project specific columns and split them for further analysis\n| project TimeGenerated, OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Target",
@@ -41,10 +29,10 @@
                 "columnName": "TargetUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingUserPrincipalName",
@@ -58,37 +46,49 @@
                 "columnName": "InitiatorUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingAadUserId",
                 "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingAppServicePrincipalId",
                 "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "InitiatingIpAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "severity": "High"
+        "description": "Identifies when a privileged role is assigned to a new user. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\n",
+        "query": "// Define the start and end times based on input values\nlet starttime = now()-1h;\nlet endtime = now();\n// Set a lookback period of 14 days\nlet lookback = starttime - 14d;\n// Define a reusable function to query audit logs\nlet awsFunc = (start:datetime, end:datetime) {\n  AuditLogs\n  | where TimeGenerated between (start..end)\n  | where Category =~ \"RoleManagement\"\n  | where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n  | where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n  | mv-apply TargetResource = TargetResources on\n    (\n      where TargetResource.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResource.type =~ \"ServicePrincipal\", tostring(TargetResource.displayName), tostring(TargetResource.userPrincipalName)),\n      props = TargetResource.modifiedProperties\n    )\n  | mv-apply Property = props on\n    (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"', tostring(Property.newValue))\n    )\n  | where RoleName contains \"Admin\" and Result == \"success\"\n};\n// Query for audit events in the current day\nlet EventInfo_CurrentDay = awsFunc(starttime, endtime);\n// Query for audit events in the historical period (lookback)\nlet EventInfo_historical = awsFunc(lookback, starttime);\n// Find unseen events by performing a left anti-join\nlet EventInfo_Unseen = (EventInfo_CurrentDay\n  | join kind=leftanti(EventInfo_historical) on Target, RoleName, OperationName\n);\n// Extend and clean up the results\nEventInfo_Unseen\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)\n// You can uncomment the lines below to filter out PIM activations\n// | where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"\n// | summarize StartTime=min(TimeGenerated), EndTime=min(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result\n// Project specific columns and split them for further analysis\n| project TimeGenerated, OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "name": "New User Assigned to Privileged Role",
+        "tactics": [
+          "Persistence"
+        ],
+        "triggerThreshold": 0,
+        "severity": "High",
+        "status": "Available",
+        "queryPeriod": "14d"
       }
     }
   ]
