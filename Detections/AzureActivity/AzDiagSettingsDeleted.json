@@ -14,9 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "queryFrequency": "1h",
+        "name": "Azure Diagnostic settings removed from a resource",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryPeriod": "2h",
+        "query": "AzureActivity\n| where OperationNameValue =~ \"MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE\"\n| summarize\n    TimeGenerated = arg_max(TimeGenerated, Properties),\n    ActivityStatusValue = make_set(ActivityStatusValue, 5),\n    take_any(Caller, CallerIpAddress, OperationName, ResourceGroup, Resource)\n    by CorrelationId, _ResourceId, OperationNameValue\n| extend ResourceHierarchy = split(_ResourceId, \"/\")\n| extend MonitoredResourcePath = strcat_array(array_slice(ResourceHierarchy, 0, array_length(ResourceHierarchy)-5), \"/\")\n| join kind=leftanti (\n    AzureActivity\n    | where OperationNameValue !~ \"MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE\" and OperationNameValue endswith \"/DELETE\" and ActivityStatusValue has_any (\"Success\", \"Succeeded\")\n    | project _ResourceId\n) on $left.MonitoredResourcePath == $right._ResourceId\n| extend\n    Name = iif(Caller has \"@\", tostring(split(Caller, \"@\")[0]), \"\"),\n    UPNSuffix = iif(Caller has \"@\", tostring(split(Caller, \"@\")[1]), \"\"),\n    AadUserId = iif(Caller has \"@\", \"\", Caller)\n| project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, OperationName, ActivityStatusValue, ResourceGroup, MonitoredResourcePath, Resource, Properties, Name, UPNSuffix, AadUserId, _ResourceId, CorrelationId\n",
+        "description": "'This query looks for diagnostic settings that are removed from a resource.\nThis could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.\nIf the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.'\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Caller",
@@ -30,41 +39,29 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AadUserId",
                 "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "CallerIpAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "name": "Azure Diagnostic settings removed from a resource",
-        "severity": "Medium",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerThreshold": 0,
-        "description": "'This query looks for diagnostic settings that are removed from a resource.\nThis could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.\nIf the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.'\n",
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "KennethMLdk"
-          },
           "support": {
             "tier": "Community"
           },
@@ -73,12 +70,15 @@
               "Security - Others",
               "Platform"
             ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "KennethMLdk"
           }
         },
-        "triggerOperator": "gt",
-        "queryPeriod": "2h",
-        "query": "AzureActivity\n| where OperationNameValue =~ \"MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE\"\n| summarize\n    TimeGenerated = arg_max(TimeGenerated, Properties),\n    ActivityStatusValue = make_set(ActivityStatusValue, 5),\n    take_any(Caller, CallerIpAddress, OperationName, ResourceGroup, Resource)\n    by CorrelationId, _ResourceId, OperationNameValue\n| extend ResourceHierarchy = split(_ResourceId, \"/\")\n| extend MonitoredResourcePath = strcat_array(array_slice(ResourceHierarchy, 0, array_length(ResourceHierarchy)-5), \"/\")\n| join kind=leftanti (\n    AzureActivity\n    | where OperationNameValue !~ \"MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE\" and OperationNameValue endswith \"/DELETE\" and ActivityStatusValue has_any (\"Success\", \"Succeeded\")\n    | project _ResourceId\n) on $left.MonitoredResourcePath == $right._ResourceId\n| extend\n    Name = iif(Caller has \"@\", tostring(split(Caller, \"@\")[0]), \"\"),\n    UPNSuffix = iif(Caller has \"@\", tostring(split(Caller, \"@\")[1]), \"\"),\n    AadUserId = iif(Caller has \"@\", \"\", Caller)\n| project TimeGenerated, Caller, CallerIpAddress, OperationNameValue, OperationName, ActivityStatusValue, ResourceGroup, MonitoredResourcePath, Resource, Properties, Name, UPNSuffix, AadUserId, _ResourceId, CorrelationId\n",
-        "queryFrequency": "1h"
+        "triggerThreshold": 0
       }
     }
   ]

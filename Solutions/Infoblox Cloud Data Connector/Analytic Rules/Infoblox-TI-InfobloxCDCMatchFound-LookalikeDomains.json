@@ -14,81 +14,81 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1h",
+        "description": "'InfobloxCDC Lookalike Domain match found in your Infoblox TIDE Threat Intelligence. Customize query count, scheduling, responses and more. Modify data sources, types and threat properties as desired. This rule depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser).'\n",
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIP",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DeviceName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "InfobloxB1SrcOSVersion",
+                "identifier": "OSVersion"
+              },
+              {
+                "columnName": "SourceUserName",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DestinationDnsDomain",
+                "identifier": "DomainName"
+              }
+            ],
+            "entityType": "DNS"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ThreatProperty",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "ThreatClass",
+                "identifier": "Category"
+              }
+            ],
+            "entityType": "Malware"
+          }
+        ],
+        "triggerThreshold": 0,
         "status": "Available",
+        "customDetails": {
+          "InfobloxB1Network": "InfobloxB1Network",
+          "InfobloxB1FeedName": "InfobloxB1FeedName",
+          "SourceMACAddress": "SourceMACAddress",
+          "InfobloxB1PolicyName": "InfobloxB1PolicyName",
+          "InfobloxB1Action": "InfobloxB1PolicyAction"
+        },
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet TI = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()  \n| where Description == \"Infoblox - HOST - Policy\"\n| where Tags has_cs \"Property: Policy_LookalikeDomains\" \n| where isnotempty(DomainName)\n;\nlet Data = InfobloxCDC\n| extend HitTime = TimeGenerated\n| where TimeGenerated >= ago(dt_lookBack)\n| where isnotempty(DestinationDnsDomain)\n//Remove trailing period at end of domain\n| extend DestinationDnsDomain = trim_end(@\"\\.$\", DestinationDnsDomain)\n;\nTI | join kind=innerunique Data on $left.DomainName == $right.DestinationDnsDomain\n| where HitTime >= TimeGenerated and HitTime < ExpirationDateTime\n| project LatestIndicatorTime, HitTime, DeviceEventClassID, ThreatLevel, ThreatLevel_Score, ThreatConfidence, DestinationDnsDomain, InfobloxB1FeedName, ThreatClass, ThreatProperty, InfobloxB1PolicyAction, DeviceAction, InfobloxB1PolicyName, SourceIP, DeviceName, SourceMACAddress, SourceUserName, InfobloxB1SrcOSVersion, InfobloxB1ConnectionType, InfobloxB1Network, AdditionalExtensionsParsedNested, \nAdditionalInformation, Description, ThreatType, TrafficLightProtocolLevel, Type, ConfidenceScore, ExpirationDateTime, SourceSystem, Action, IndicatorId, ExternalIndicatorId, Tags\n",
+        "severity": "Medium",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
-        "name": "Infoblox - TI - InfobloxCDC Match Found - Lookalike Domains",
-        "description": "'InfobloxCDC Lookalike Domain match found in your Infoblox TIDE Threat Intelligence. Customize query count, scheduling, responses and more. Modify data sources, types and threat properties as desired. This rule depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser).'\n",
-        "severity": "Medium",
-        "triggerOperator": "gt",
-        "customDetails": {
-          "InfobloxB1PolicyName": "InfobloxB1PolicyName",
-          "InfobloxB1Action": "InfobloxB1PolicyAction",
-          "InfobloxB1Network": "InfobloxB1Network",
-          "SourceMACAddress": "SourceMACAddress",
-          "InfobloxB1FeedName": "InfobloxB1FeedName"
-        },
-        "queryFrequency": "1h",
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIP"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "DeviceName"
-              },
-              {
-                "identifier": "OSVersion",
-                "columnName": "InfobloxB1SrcOSVersion"
-              },
-              {
-                "identifier": "FullName",
-                "columnName": "SourceUserName"
-              }
-            ]
-          },
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "DestinationDnsDomain"
-              }
-            ]
-          },
-          {
-            "entityType": "Malware",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "ThreatProperty"
-              },
-              {
-                "identifier": "Category",
-                "columnName": "ThreatClass"
-              }
-            ]
-          }
-        ],
-        "incidentConfiguration": {
-          "createIncident": true
-        },
-        "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet TI = ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()  \n| where Description == \"Infoblox - HOST - Policy\"\n| where Tags has_cs \"Property: Policy_LookalikeDomains\" \n| where isnotempty(DomainName)\n;\nlet Data = InfobloxCDC\n| extend HitTime = TimeGenerated\n| where TimeGenerated >= ago(dt_lookBack)\n| where isnotempty(DestinationDnsDomain)\n//Remove trailing period at end of domain\n| extend DestinationDnsDomain = trim_end(@\"\\.$\", DestinationDnsDomain)\n;\nTI | join kind=innerunique Data on $left.DomainName == $right.DestinationDnsDomain\n| where HitTime >= TimeGenerated and HitTime < ExpirationDateTime\n| project LatestIndicatorTime, HitTime, DeviceEventClassID, ThreatLevel, ThreatLevel_Score, ThreatConfidence, DestinationDnsDomain, InfobloxB1FeedName, ThreatClass, ThreatProperty, InfobloxB1PolicyAction, DeviceAction, InfobloxB1PolicyName, SourceIP, DeviceName, SourceMACAddress, SourceUserName, InfobloxB1SrcOSVersion, InfobloxB1ConnectionType, InfobloxB1Network, AdditionalExtensionsParsedNested, \nAdditionalInformation, Description, ThreatType, TrafficLightProtocolLevel, Type, ConfidenceScore, ExpirationDateTime, SourceSystem, Action, IndicatorId, ExternalIndicatorId, Tags\n",
         "tactics": [
           "Impact"
         ],
-        "queryPeriod": "14d"
+        "name": "Infoblox - TI - InfobloxCDC Match Found - Lookalike Domains",
+        "incidentConfiguration": {
+          "createIncident": true
+        }
       }
     }
   ]

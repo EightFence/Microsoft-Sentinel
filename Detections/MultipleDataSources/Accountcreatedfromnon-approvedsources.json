@@ -14,9 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "Persistence"
+        ],
+        "queryFrequency": "1d",
+        "name": "Account created from non-approved sources",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "queryPeriod": "7d",
+        "query": "let core_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where ResultType == 0\n  | extend domain = tolower(split(UserPrincipalName, \"@\")[1])\n  | summarize by tostring(domain));\n  let alternative_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where isnotempty(AlternateSignInName)\n  | where ResultType == 0\n  | extend domain = tolower(split(AlternateSignInName, \"@\")[1])\n  | summarize by tostring(domain));\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add User\"\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)\n  | extend UserAddedDomain = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[1]),\n  UserAdded !has \"#EXT#\", tostring(split(UserAdded, \"@\")[1]),\n  UserAdded)\n  | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)\n  | extend AddedByName = case(\n  InitiatingUserPrincipalName has \"#EXT#\", tostring(split(tostring(split(InitiatingUserPrincipalName, \"#EXT#\")[0]), \"_\")[0]),\n  InitiatingUserPrincipalName !has \"#EXT#\", tostring(split(InitiatingUserPrincipalName, \"@\")[0]),\n  InitiatingUserPrincipalName)\n  | extend AddedByUPNSuffix = case(\n  InitiatingUserPrincipalName has \"#EXT#\", tostring(split(tostring(split(InitiatingUserPrincipalName, \"#EXT#\")[0]), \"_\")[1]),\n  InitiatingUserPrincipalName !has \"#EXT#\", tostring(split(InitiatingUserPrincipalName, \"@\")[1]),\n  InitiatingUserPrincipalName)\n  | extend UserAddedName = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[0]),\n  UserAdded !has \"#EXT#\", tostring(split(UserAdded, \"@\")[0]),\n  UserAdded)\n",
+        "description": "'This query looks for an account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to confirm expected creation.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingAppName",
@@ -26,10 +35,10 @@
                 "columnName": "InitiatingAppServicePrincipalId",
                 "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingUserPrincipalName",
@@ -43,28 +52,28 @@
                 "columnName": "AddedByUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingAadUserId",
                 "identifier": "AadUserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "InitiatingIpAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserAdded",
@@ -78,21 +87,11 @@
                 "columnName": "UserAddedDomain",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "name": "Account created from non-approved sources",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "description": "'This query looks for an account being created from a domain that is not regularly seen in a tenant.\n  Attackers may attempt to add accounts from these sources as a means of establishing persistant access to an environment.\n  Created accounts should be investigated to confirm expected creation.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#short-lived-accounts'\n",
-        "queryFrequency": "1d",
         "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
           "support": {
             "tier": "Community"
           },
@@ -101,14 +100,15 @@
               "Security - Others",
               "Identity"
             ]
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
           }
         },
-        "triggerOperator": "gt",
-        "query": "let core_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where ResultType == 0\n  | extend domain = tolower(split(UserPrincipalName, \"@\")[1])\n  | summarize by tostring(domain));\n  let alternative_domains = (SigninLogs\n  | where TimeGenerated > ago(7d)\n  | where isnotempty(AlternateSignInName)\n  | where ResultType == 0\n  | extend domain = tolower(split(AlternateSignInName, \"@\")[1])\n  | summarize by tostring(domain));\n  AuditLogs\n  | where TimeGenerated > ago(1d)\n  | where OperationName =~ \"Add User\"\n  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n  | extend UserAdded = tostring(TargetResources[0].userPrincipalName)\n  | extend UserAddedDomain = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[1]),\n  UserAdded !has \"#EXT#\", tostring(split(UserAdded, \"@\")[1]),\n  UserAdded)\n  | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)\n  | extend AddedByName = case(\n  InitiatingUserPrincipalName has \"#EXT#\", tostring(split(tostring(split(InitiatingUserPrincipalName, \"#EXT#\")[0]), \"_\")[0]),\n  InitiatingUserPrincipalName !has \"#EXT#\", tostring(split(InitiatingUserPrincipalName, \"@\")[0]),\n  InitiatingUserPrincipalName)\n  | extend AddedByUPNSuffix = case(\n  InitiatingUserPrincipalName has \"#EXT#\", tostring(split(tostring(split(InitiatingUserPrincipalName, \"#EXT#\")[0]), \"_\")[1]),\n  InitiatingUserPrincipalName !has \"#EXT#\", tostring(split(InitiatingUserPrincipalName, \"@\")[1]),\n  InitiatingUserPrincipalName)\n  | extend UserAddedName = case(\n  UserAdded has \"#EXT#\", tostring(split(tostring(split(UserAdded, \"#EXT#\")[0]), \"_\")[0]),\n  UserAdded !has \"#EXT#\", tostring(split(UserAdded, \"@\")[0]),\n  UserAdded)\n",
-        "queryPeriod": "7d",
-        "tactics": [
-          "Persistence"
-        ]
+        "triggerThreshold": 0
       }
     }
   ]
