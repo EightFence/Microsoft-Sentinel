@@ -14,86 +14,86 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "AWSInstanceType": "InstanceType",
-          "AWSAPICallCount": "APICallCount",
-          "AzAuthRequirement": "AuthenticationRequirement",
-          "AWSAPICallName": "APICallName",
-          "AzureOperationName": "OperationName",
-          "AzureClientAppUsed": "ClientAppUsed",
-          "AzureRiskDetail": "RiskDetail",
-          "alertSeverity": "Severity",
-          "AzureUserAgent": "UserAgent",
-          "AWSAlertUserName": "AWSAlertUserNameEntity",
-          "AzureUser": "UserPrincipalName",
-          "AWSresourceType": "AWSresourceType",
-          "AzConditionalAccess": "ConditionalAccessStatus",
-          "AWSArn": "Arn"
-        },
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPAddress"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "Name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              }
-            ]
-          }
-        ],
-        "name": "Unauthorized user access across AWS and Azure",
-        "query": "// Define a variable 'AwsAlert' to collect Unauthorized user access alerts from AWS GuardDuty table\nlet AwsAlert = materialize (\n    AWSGuardDuty\n    | where ActivityType has_any (\"UnauthorizedAccess:IAMUser/TorIPCaller\", \"UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom\", \n    \"UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS\", \"UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.InsideAWS\",\n    \"UnauthorizedAccess:IAMUser/ConsoleLoginSuccess.B\",\"UnauthorizedAccess:IAMUser/MaliciousIPCaller\")\n    | extend\n        AWSAlertId = Id, \n        AWSAlertTitle = Title,\n        AWSAlertDescription = Description,\n        AWSresourceType = tostring(parse_json(ResourceDetails).resourceType),\n        AWSNetworkEntity = tostring(parse_json(ServiceDetails).action.awsApiCallAction.remoteIpDetails.ipAddressV4),\n        AWSAlertUserNameEntity = tostring(parse_json(ResourceDetails).accessKeyDetails.userName),\n        InstanceType = tostring(parse_json(ResourceDetails).instanceDetails.instanceType),\n        AWSTargetingService = parse_json(ServiceDetails).additionalInfo.apiCalls,\n        AWSAlertTime = TimeCreated,\n        AWSAlertLink= tostring(strcat('https://us-east-1.console.aws.amazon.com/guardduty/home?region=us-east-1#/findings?macros=current&fId=',Id)),\n        Severity = \n  case (\n    Severity >= 7.0, \"High\",\n    Severity between (4.0 .. 6.9), \"Medium\",\n    Severity between (1.0 .. 3.9), \"Low\",\n    \"Unknown\")\n    | mv-apply AIPCall = AWSTargetingService on \n        ( \n        where AIPCall has \"name\"    \n        | extend APICallName = tostring(AIPCall.name), APICallCount = tostring(AIPCall[\"count\"])\n        ) \n    | distinct\n        AWSAlertTime,\n        ActivityType,\n        Severity,\n        AWSAlertId,\n        AWSAlertTitle,\n        AWSAlertDescription,\n        AWSAlertLink,\n        Arn,\n        AWSresourceType,\n        AWSNetworkEntity,\n        AWSAlertUserNameEntity,\n        InstanceType,\n        APICallName,\n        APICallCount      \n    );\n    // Define a variable 'Azure_sigin' to collect Azure portal Signing activity from SigninLogs Table\n    let Azure_sigin = materialize (SigninLogs\n        | where AppDisplayName == \"Azure Portal\"\n        | where isnotempty(OriginalRequestId)\n        | summarize \n            totalAzureLoginEventId = dcount(OriginalRequestId), \n            AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), \n            AzureSuccessfulEventsCount = dcountif(OriginalRequestId, ResultType == 0),\n            AzureSetOfFailedEvents = makeset(iff(ResultType != 0, OriginalRequestId, \"\"), 5), \n            AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, \"\"), 5) \n        by \n            IPAddress, \n            UserPrincipalName, \n            bin(TimeGenerated, 1min), \n            UserAgent,\n            ConditionalAccessStatus,\n            OperationName,\n            RiskDetail,\n            AuthenticationRequirement,\n            ClientAppUsed \n        // Extracting the name and UPN suffix from UserPrincipalName\n        | extend\n            Name = tostring(split(UserPrincipalName, \"@\")[0]),\n            UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n    );\n    // Join 'AwsAlert' and 'Azure_sigin' on the AWS Network Entity and Azure IP Address\n    AwsAlert\n    | join kind=inner Azure_sigin on $left.AWSNetworkEntity == $right.IPAddress\n",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "description": "'This detection compiles and correlates unauthorized user access alerts originating from AWS GuardDuty with Azure portal sign-in activities. It focuses on AWS GuardDuty alerts related to unauthorized user access, specifically targeting network IP associations tied to activities such as logins from malicious IP addresses or instance credential exfiltration attempts. The ditection leverages these common network IP advisories to detect and pinpoint unauthorized users attempting to access both AWS and Azure resources.'\n",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "  This detection compiles and correlates unauthorized user access alerts originating from AWS GuardDuty With Alert Description '{{AWSAlertDescription}}' with Azure portal sign-in activities. It focuses on AWS GuardDuty alerts related to unauthorized user access, specifically targeting network IP associations tied to activities such as logins from malicious IP addresses or instance credential exfiltration attempts. The detection leverages these common network IP advisories to detect and pinpoint unauthorized users attempting to access both AWS and Azure resources.  \n\n AWS ALert Link : '{{AWSAlertLink}}' \n\n Find More Details :https://docs.aws.amazon.com/guardduty/latest/ug/guardduty_finding-types-active.html",
           "alertDisplayNameFormat": "{{AWSNetworkEntity}} from {{AWSAlertTitle}} observed in Azure Singins with {{UserPrincipalName}}",
-          "alertSeverityColumnName": "Severity",
           "alertDynamicProperties": [
             {
-              "value": "AWSAlertLink",
-              "alertProperty": "AlertLink"
+              "alertProperty": "AlertLink",
+              "value": "AWSAlertLink"
             },
             {
-              "value": "AWS",
-              "alertProperty": "ProviderName"
+              "alertProperty": "ProviderName",
+              "value": "AWS"
             },
             {
-              "value": "AWSGuardDuty",
-              "alertProperty": "ProductName"
+              "alertProperty": "ProductName",
+              "value": "AWSGuardDuty"
             },
             {
-              "value": "AWSGuardDuty",
-              "alertProperty": "ProductComponentName"
+              "alertProperty": "ProductComponentName",
+              "value": "AWSGuardDuty"
             }
-          ]
+          ],
+          "alertSeverityColumnName": "Severity"
         },
-        "triggerOperator": "gt",
         "tactics": [
           "CredentialAccess",
           "Exfiltration",
           "Discovery"
-        ]
+        ],
+        "description": "'This detection compiles and correlates unauthorized user access alerts originating from AWS GuardDuty with Azure portal sign-in activities. It focuses on AWS GuardDuty alerts related to unauthorized user access, specifically targeting network IP associations tied to activities such as logins from malicious IP addresses or instance credential exfiltration attempts. The ditection leverages these common network IP advisories to detect and pinpoint unauthorized users attempting to access both AWS and Azure resources.'\n",
+        "triggerOperator": "gt",
+        "name": "Unauthorized user access across AWS and Azure",
+        "queryFrequency": "1d",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "IPAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "queryPeriod": "1d",
+        "customDetails": {
+          "AWSInstanceType": "InstanceType",
+          "AWSresourceType": "AWSresourceType",
+          "AWSArn": "Arn",
+          "alertSeverity": "Severity",
+          "AWSAPICallName": "APICallName",
+          "AzureUser": "UserPrincipalName",
+          "AWSAPICallCount": "APICallCount",
+          "AzureOperationName": "OperationName",
+          "AzAuthRequirement": "AuthenticationRequirement",
+          "AWSAlertUserName": "AWSAlertUserNameEntity",
+          "AzureUserAgent": "UserAgent",
+          "AzConditionalAccess": "ConditionalAccessStatus",
+          "AzureClientAppUsed": "ClientAppUsed",
+          "AzureRiskDetail": "RiskDetail"
+        },
+        "query": "// Define a variable 'AwsAlert' to collect Unauthorized user access alerts from AWS GuardDuty table\nlet AwsAlert = materialize (\n    AWSGuardDuty\n    | where ActivityType has_any (\"UnauthorizedAccess:IAMUser/TorIPCaller\", \"UnauthorizedAccess:IAMUser/MaliciousIPCaller.Custom\", \n    \"UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.OutsideAWS\", \"UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration.InsideAWS\",\n    \"UnauthorizedAccess:IAMUser/ConsoleLoginSuccess.B\",\"UnauthorizedAccess:IAMUser/MaliciousIPCaller\")\n    | extend\n        AWSAlertId = Id, \n        AWSAlertTitle = Title,\n        AWSAlertDescription = Description,\n        AWSresourceType = tostring(parse_json(ResourceDetails).resourceType),\n        AWSNetworkEntity = tostring(parse_json(ServiceDetails).action.awsApiCallAction.remoteIpDetails.ipAddressV4),\n        AWSAlertUserNameEntity = tostring(parse_json(ResourceDetails).accessKeyDetails.userName),\n        InstanceType = tostring(parse_json(ResourceDetails).instanceDetails.instanceType),\n        AWSTargetingService = parse_json(ServiceDetails).additionalInfo.apiCalls,\n        AWSAlertTime = TimeCreated,\n        AWSAlertLink= tostring(strcat('https://us-east-1.console.aws.amazon.com/guardduty/home?region=us-east-1#/findings?macros=current&fId=',Id)),\n        Severity = \n  case (\n    Severity >= 7.0, \"High\",\n    Severity between (4.0 .. 6.9), \"Medium\",\n    Severity between (1.0 .. 3.9), \"Low\",\n    \"Unknown\")\n    | mv-apply AIPCall = AWSTargetingService on \n        ( \n        where AIPCall has \"name\"    \n        | extend APICallName = tostring(AIPCall.name), APICallCount = tostring(AIPCall[\"count\"])\n        ) \n    | distinct\n        AWSAlertTime,\n        ActivityType,\n        Severity,\n        AWSAlertId,\n        AWSAlertTitle,\n        AWSAlertDescription,\n        AWSAlertLink,\n        Arn,\n        AWSresourceType,\n        AWSNetworkEntity,\n        AWSAlertUserNameEntity,\n        InstanceType,\n        APICallName,\n        APICallCount      \n    );\n    // Define a variable 'Azure_sigin' to collect Azure portal Signing activity from SigninLogs Table\n    let Azure_sigin = materialize (SigninLogs\n        | where AppDisplayName == \"Azure Portal\"\n        | where isnotempty(OriginalRequestId)\n        | summarize \n            totalAzureLoginEventId = dcount(OriginalRequestId), \n            AzureFailedEventsCount = dcountif(OriginalRequestId, ResultType != 0), \n            AzureSuccessfulEventsCount = dcountif(OriginalRequestId, ResultType == 0),\n            AzureSetOfFailedEvents = makeset(iff(ResultType != 0, OriginalRequestId, \"\"), 5), \n            AzureSetOfSuccessfulEvents = makeset(iff(ResultType == 0, OriginalRequestId, \"\"), 5) \n        by \n            IPAddress, \n            UserPrincipalName, \n            bin(TimeGenerated, 1min), \n            UserAgent,\n            ConditionalAccessStatus,\n            OperationName,\n            RiskDetail,\n            AuthenticationRequirement,\n            ClientAppUsed \n        // Extracting the name and UPN suffix from UserPrincipalName\n        | extend\n            Name = tostring(split(UserPrincipalName, \"@\")[0]),\n            UPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n    );\n    // Join 'AwsAlert' and 'Azure_sigin' on the AWS Network Entity and Azure IP Address\n    AwsAlert\n    | join kind=inner Azure_sigin on $left.AWSNetworkEntity == $right.IPAddress\n"
       }
     }
   ]
