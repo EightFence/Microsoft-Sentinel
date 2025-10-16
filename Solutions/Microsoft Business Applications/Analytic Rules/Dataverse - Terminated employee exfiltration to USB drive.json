@@ -14,59 +14,59 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
+        "customDetails": {},
+        "triggerThreshold": 0,
         "severity": "High",
-        "query": "let drive_mount_lookback = 14d;\nlet query_frequency = 1h;\nDataverseActivity\n| distinct InstanceUrl\n| join kind=inner (DeviceFileEvents\n    | where TimeGenerated >= ago(query_frequency))\n    on $left.InstanceUrl == $right.FileOriginUrl\n| join kind=inner (MSBizAppsTerminatedEmployees()) on $left.InitiatingProcessAccountUpn == $right.UserPrincipalName\n| join kind=inner (DeviceEvents\n    | where TimeGenerated >= ago(drive_mount_lookback)\n    | where ActionType == \"UsbDriveMounted\"\n    | extend DriveLetter = tostring(AdditionalFields.DriveLetter)\n    | summarize MountedDriveLetters = make_set(DriveLetter, 26) by DeviceId, DeviceName)\n    on DeviceId\n| extend TargetDriveLetter = tostring(split(FolderPath, \"\\\\\")[0])\n| where set_has_element(MountedDriveLetters, TargetDriveLetter)\n| join kind=inner (DeviceInfo\n    | summarize arg_max(TimeGenerated, DeviceId, PublicIP) by DeviceName)\n    on DeviceId\n| project-rename\n    UserId = UserPrincipalName\n| summarize LatestEvent = arg_max(TimeGenerated, *), Files = make_set(FileName, 100) by UserId, InstanceUrl\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    LatestEvent,\n    UserId,\n    PublicIP,\n    Files,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "triggerOperator": "gt",
+        "query": "let drive_mount_lookback = 14d;\nlet query_frequency = 1h;\nDataverseActivity\n| distinct InstanceUrl\n| join kind=inner (DeviceFileEvents\n    | where TimeGenerated >= ago(query_frequency))\n    on $left.InstanceUrl == $right.FileOriginUrl\n| join kind=inner (MSBizAppsTerminatedEmployees()) on $left.InitiatingProcessAccountUpn == $right.UserPrincipalName\n| join kind=inner (DeviceEvents\n    | where TimeGenerated >= ago(drive_mount_lookback)\n    | where ActionType == \"UsbDriveMounted\"\n    | extend DriveLetter = tostring(AdditionalFields.DriveLetter)\n    | summarize MountedDriveLetters = make_set(DriveLetter, 26) by DeviceId, DeviceName)\n    on DeviceId\n| extend TargetDriveLetter = tostring(split(FolderPath, \"\\\\\")[0])\n| where set_has_element(MountedDriveLetters, TargetDriveLetter)\n| join kind=inner (DeviceInfo\n    | summarize arg_max(TimeGenerated, DeviceId, PublicIP) by DeviceName)\n    on DeviceId\n| project-rename\n    UserId = UserPrincipalName\n| summarize LatestEvent = arg_max(TimeGenerated, *), Files = make_set(FileName, 100) by UserId, InstanceUrl\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    LatestEvent,\n    UserId,\n    PublicIP,\n    Files,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "queryFrequency": "1h",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Dataverse - terminated user copied files from {{InstanceUrl}} to USB",
           "alertDescriptionFormat": "{{UserId}} , on the TerminatedUsers watchlist, was found to copy files to a USB mounted drive."
         },
+        "name": "Dataverse - Terminated employee exfiltration to USB drive",
+        "description": "Identifies files downloaded from Dataverse by departing or terminated employees which are copied to USB mounted drives.",
+        "queryPeriod": "14d",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "PublicIP"
+                "columnName": "PublicIP",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "CloudAppId"
+                "columnName": "CloudAppId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "InstanceUrl"
+                "columnName": "InstanceUrl",
+                "identifier": "InstanceName"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
         ],
-        "name": "Dataverse - Terminated employee exfiltration to USB drive",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {},
-        "queryFrequency": "1h",
-        "description": "Identifies files downloaded from Dataverse by departing or terminated employees which are copied to USB mounted drives.",
-        "triggerThreshold": 0,
         "status": "Available",
         "tactics": [
           "Exfiltration"
