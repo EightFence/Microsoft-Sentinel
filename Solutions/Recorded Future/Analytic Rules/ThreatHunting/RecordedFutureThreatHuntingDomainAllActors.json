@@ -14,53 +14,53 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "severity": "Medium",
+        "customDetails": {
+          "ActorInformation": "RecordedFuturePortalLink"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "tactics": [
           "InitialAccess",
           "CommandAndControl"
         ],
-        "name": "RecordedFuture Threat Hunting Domain All Actors",
-        "customDetails": {
-          "ActorInformation": "RecordedFuturePortalLink"
-        },
-        "queryFrequency": "15m",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "lookbackDuration": "1h",
-            "matchingMethod": "AllEntities",
-            "enabled": true
-          }
-        },
         "entityMappings": [
           {
+            "entityType": "DNS",
             "fieldMappings": [
               {
-                "identifier": "DomainName",
-                "columnName": "Domain"
+                "columnName": "Domain",
+                "identifier": "DomainName"
               }
-            ],
-            "entityType": "DNS"
+            ]
           }
         ],
+        "queryFrequency": "15m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false,
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "name": "RecordedFuture Threat Hunting Domain All Actors",
+        "query": "let ioc_lookBack = 1d;\n// The source table (_Im_Dns) is an ASIM parser table, but can be replaced by any infrastructure table containing domain/dns data.\n// The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns\n_Im_Dns\n| where isnotempty(Domain)\n| extend lowerDomain=tolower(Domain)\n| join kind=inner (\nThreatIntelIndicators\n// Only look at Domain IOCs\n| where ObservableKey == 'domain-name:value'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend lowerDomain=tolower(ObservableValue)\n) on lowerDomain\n// select column from the source table to match with Recorded Future $left.Domain\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n| project Domain=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n",
+        "triggerThreshold": 0,
+        "description": "'Recorded Future Threat Hunting domain correlation for all actors.'\n",
         "triggerOperator": "gt",
-        "severity": "Medium",
+        "queryPeriod": "1d",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Domain}} from the {{Type}} table.\\n",
           "alertDynamicProperties": [
             {
               "value": "RecordedFuturePortalLink",
               "alertProperty": "AlertLink"
             }
           ],
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Domain}} from the {{Type}} table.\\n",
           "alertDisplayNameFormat": "{{Description}}"
-        },
-        "queryPeriod": "1d",
-        "description": "'Recorded Future Threat Hunting domain correlation for all actors.'\n",
-        "query": "let ioc_lookBack = 1d;\n// The source table (_Im_Dns) is an ASIM parser table, but can be replaced by any infrastructure table containing domain/dns data.\n// The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns\n_Im_Dns\n| where isnotempty(Domain)\n| extend lowerDomain=tolower(Domain)\n| join kind=inner (\nThreatIntelIndicators\n// Only look at Domain IOCs\n| where ObservableKey == 'domain-name:value'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend lowerDomain=tolower(ObservableValue)\n) on lowerDomain\n// select column from the source table to match with Recorded Future $left.Domain\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n| project Domain=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
         }
       }
     }
