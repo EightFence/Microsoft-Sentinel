@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "value": "RecordedFuturePortalLink",
-              "alertProperty": "AlertLink"
-            }
-          ],
-          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{NetworkIP}} from the {{Type}} table.\\n",
-          "alertDisplayNameFormat": "{{Description}}"
-        },
-        "name": "RecordedFuture Threat Hunting IP All Actors",
         "severity": "Medium",
         "triggerThreshold": 0,
-        "queryFrequency": "15m",
-        "queryPeriod": "1d",
-        "description": "'Recorded Future Threat Hunting IP correlation for all actors.'\n",
         "customDetails": {
           "ActorInformation": "RecordedFuturePortalLink"
-        },
-        "tactics": [
-          "Exfiltration",
-          "CommandAndControl"
-        ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "lookbackDuration": "1h",
-            "matchingMethod": "AllEntities",
-            "enabled": true
-          },
-          "createIncident": true
         },
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "description": "'Recorded Future Threat Hunting IP correlation for all actors.'\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "1h"
+          }
+        },
+        "queryFrequency": "15m",
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "NetworkIP",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
+        "query": "let ioc_lookBack = 1d;\n// The source table (_Im_NetworkSession) is a ASIM parser table, but can be replaced by any infrastructure table containing ip data.\n// The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| join kind=inner (\nThreatIntelIndicators\n// Only look for IOCs\n| where ObservableKey == 'ipv4-addr:value'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n) on $left.DstIpAddr == $right.ObservableValue\n// select column from the source table to match with Recorded Future ThreatIntelIndicators $left.DstIpAddr\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n| project NetworkIP=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n",
         "triggerOperator": "gt",
-        "query": "let ioc_lookBack = 1d;\n// The source table (_Im_NetworkSession) is a ASIM parser table, but can be replaced by any infrastructure table containing ip data.\n// The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| join kind=inner (\nThreatIntelIndicators\n// Only look for IOCs\n| where ObservableKey == 'ipv4-addr:value'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n) on $left.DstIpAddr == $right.ObservableValue\n// select column from the source table to match with Recorded Future ThreatIntelIndicators $left.DstIpAddr\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n| project NetworkIP=ObservableValue, Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n"
+        "tactics": [
+          "Exfiltration",
+          "CommandAndControl"
+        ],
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{NetworkIP}} from the {{Type}} table.\\n",
+          "alertDisplayNameFormat": "{{Description}}",
+          "alertDynamicProperties": [
+            {
+              "value": "RecordedFuturePortalLink",
+              "alertProperty": "AlertLink"
+            }
+          ]
+        },
+        "queryPeriod": "1d",
+        "name": "RecordedFuture Threat Hunting IP All Actors"
       }
     }
   ]

@@ -14,18 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "TI map Email entity to Cloud App Events",
-        "query": "let dt_lookBack = 10d;\nlet ioc_lookBack = 30d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n//extract key part of kv pair\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"email-addr\"\n  | extend EmailSenderAddress = ObservableValue\n  | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n  | project-reorder *, EmailSenderAddress, EmailSourceDomain, Type\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | join kind=innerunique (CloudAppEvents\n| extend User_Id = tostring(RawEventData.UserId)\n| where isnotempty(User_Id)\n| where TimeGenerated >= ago(dt_lookBack) and isnotempty(Application)\n| extend CloudAppEvents_TimeGenerated = TimeGenerated \n| where User_Id matches regex emailregex) on $left.EmailSenderAddress == $right.User_Id\n| where CloudAppEvents_TimeGenerated < ValidUntil\n| summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId, User_Id\n| extend Name = tostring(split(User_Id, '@', 0)[0]), UPNSuffix = tostring(split(User_Id, '@', 1)[0])\n| extend timestamp = CloudAppEvents_TimeGenerated\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "description": "'Identifies compromises and attacks and detect malicious activities in one's email entity from TI'\n",
         "severity": "Medium",
-        "tactics": [
-          "InitialAccess"
-        ],
+        "triggerThreshold": 0,
+        "query": "let dt_lookBack = 10d;\nlet ioc_lookBack = 30d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n//extract key part of kv pair\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"email-addr\"\n  | extend EmailSenderAddress = ObservableValue\n  | extend EmailSourceDomain = substring(EmailSenderAddress, indexof(EmailSenderAddress, \"@\") + 1, strlen(EmailSenderAddress) - indexof(EmailSenderAddress, \"@\") - 1)\n  | project-reorder *, EmailSenderAddress, EmailSourceDomain, Type\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | join kind=innerunique (CloudAppEvents\n| extend User_Id = tostring(RawEventData.UserId)\n| where isnotempty(User_Id)\n| where TimeGenerated >= ago(dt_lookBack) and isnotempty(Application)\n| extend CloudAppEvents_TimeGenerated = TimeGenerated \n| where User_Id matches regex emailregex) on $left.EmailSenderAddress == $right.User_Id\n| where CloudAppEvents_TimeGenerated < ValidUntil\n| summarize CloudAppEvents_TimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by IndicatorId, User_Id\n| extend Name = tostring(split(User_Id, '@', 0)[0]), UPNSuffix = tostring(split(User_Id, '@', 1)[0])\n| extend timestamp = CloudAppEvents_TimeGenerated\n",
+        "description": "'Identifies compromises and attacks and detect malicious activities in one's email entity from TI'\n",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Name",
@@ -39,11 +35,15 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "triggerOperator": "gt"
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "queryPeriod": "14d",
+        "name": "TI map Email entity to Cloud App Events"
       }
     }
   ]

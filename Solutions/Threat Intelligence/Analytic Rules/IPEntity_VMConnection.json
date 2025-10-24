@@ -14,18 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "TI Map IP Entity to VMConnection",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now();\n// Perform a join between IP indicators and VMConnection events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      VMConnection\n      | where TimeGenerated >= ago(dt_lookBack)\n      | extend VMConnection_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.RemoteIp\n  // Filter out VMConnection events that occurred after the expiration of the corresponding indicator\n  | where VMConnection_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and keep the VMConnection event with the latest timestamp\n  | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by IndicatorId, RemoteIp\n  // Select the desired output fields\n  | project VMConnection_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n  | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in VMConnection.\n",
         "severity": "Medium",
-        "tactics": [
-          "CommandAndControl"
-        ],
+        "triggerThreshold": 0,
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now();\n// Perform a join between IP indicators and VMConnection events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      VMConnection\n      | where TimeGenerated >= ago(dt_lookBack)\n      | extend VMConnection_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.RemoteIp\n  // Filter out VMConnection events that occurred after the expiration of the corresponding indicator\n  | where VMConnection_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and keep the VMConnection event with the latest timestamp\n  | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by IndicatorId, RemoteIp\n  // Select the desired output fields\n  | project VMConnection_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n  | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in VMConnection.\n",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "HostName",
@@ -35,29 +31,33 @@
                 "columnName": "DnsDomain",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "RemoteIp",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "triggerOperator": "gt"
+        "triggerOperator": "gt",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "queryPeriod": "14d",
+        "name": "TI Map IP Entity to VMConnection"
       }
     }
   ]
