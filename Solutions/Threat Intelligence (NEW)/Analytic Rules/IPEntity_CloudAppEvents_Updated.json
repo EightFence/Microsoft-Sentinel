@@ -14,11 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1d;\nlet ioc_lookBack = 14d; \nlet IP_Indicators = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\nor isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n  | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity);\n//  | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity);\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  | join kind=innerunique (\n  CloudAppEvents\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_ipEntity == $right.IPAddress\n    | where CloudAppEvents_TimeGenerated < ValidUntil\n    | summarize CloudAppEventsTimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by Id, IPAddress\n    | extend\n      Description = column_ifexists(\"max_CloudAppEvents_TimeGenerated_Description\", \"\"),\n      ActivityGroupNames = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ActivityGroupNames\", \"\"),\n      ThreatType = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatType\", \"\"),\n      ExpirationDateTime = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ExpirationDateTime\", \"\"),\n      ConfidenceScore = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ConfidenceScore\", \"\"),\n      TI_ipEntity = column_ifexists(\"max_CloudAppEvents_TimeGenerated_TI_ipEntity\", \"\"),\n      NetworkDestinationIP = column_ifexists(\"max_CloudAppEvents_TimeGenerated_NetworkDestinationIP\", \"\"),\n      NetworkSourceIP = column_ifexists(\"max_CloudAppEvents_TimeGenerated_NetworkSourceIP\", \"\"),\n      EmailSourceIPAddress = column_ifexists(\"max_CloudAppEvents_TimeGenerated_EmailSourceIpAddress\", \"\")\n    | project CloudAppEventsTimeGenerated, Description, ActivityGroupNames, Id, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, NetworkDestinationIP, NetworkSourceIP, EmailSourceIPAddress\n",
-        "description": "'Identifies compromises and attacks and detect malicious activities in one's IP entity from TI'\n",
+        "name": "TI map IP entity to Cloud App Events",
         "queryFrequency": "1h",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "entityMappings": [
           {
             "entityType": "IP",
@@ -57,12 +59,10 @@
             ]
           }
         ],
-        "triggerOperator": "gt",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "queryPeriod": "14d",
-        "name": "TI map IP entity to Cloud App Events"
+        "query": "let dt_lookBack = 1d;\nlet ioc_lookBack = 14d; \nlet IP_Indicators = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\nor isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n  | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity);\n//  | extend TIipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity);\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  | join kind=innerunique (\n  CloudAppEvents\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend CloudAppEvents_TimeGenerated = TimeGenerated) on $left.TI_ipEntity == $right.IPAddress\n    | where CloudAppEvents_TimeGenerated < ValidUntil\n    | summarize CloudAppEventsTimeGenerated = argmax(CloudAppEvents_TimeGenerated, *) by Id, IPAddress\n    | extend\n      Description = column_ifexists(\"max_CloudAppEvents_TimeGenerated_Description\", \"\"),\n      ActivityGroupNames = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ActivityGroupNames\", \"\"),\n      ThreatType = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ThreatType\", \"\"),\n      ExpirationDateTime = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ExpirationDateTime\", \"\"),\n      ConfidenceScore = column_ifexists(\"max_CloudAppEvents_TimeGenerated_ConfidenceScore\", \"\"),\n      TI_ipEntity = column_ifexists(\"max_CloudAppEvents_TimeGenerated_TI_ipEntity\", \"\"),\n      NetworkDestinationIP = column_ifexists(\"max_CloudAppEvents_TimeGenerated_NetworkDestinationIP\", \"\"),\n      NetworkSourceIP = column_ifexists(\"max_CloudAppEvents_TimeGenerated_NetworkSourceIP\", \"\"),\n      EmailSourceIPAddress = column_ifexists(\"max_CloudAppEvents_TimeGenerated_EmailSourceIpAddress\", \"\")\n    | project CloudAppEventsTimeGenerated, Description, ActivityGroupNames, Id, ThreatType, ExpirationDateTime, ConfidenceScore, TI_ipEntity, NetworkDestinationIP, NetworkSourceIP, EmailSourceIPAddress\n",
+        "triggerThreshold": 0,
+        "description": "'Identifies compromises and attacks and detect malicious activities in one's IP entity from TI'\n",
+        "severity": "Medium"
       }
     }
   ]
