@@ -14,15 +14,82 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UpdatingAppName"
+              },
+              {
+                "identifier": "AadUserId",
+                "columnName": "UpdatingServicePrincipalId"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UpdatingUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "UpdatingUserAadUserId"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UpdatedUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "TargetAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "TargetAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "UpdatingUserIPAddress"
+              }
+            ]
+          }
+        ],
         "triggerThreshold": 0,
+        "description": "'Detects when a guest account in a tenant is converted to a member of the tenant.\n  Monitoring guest accounts and the access they are provided is important to detect potential account abuse.\n  Accounts converted to members should be investigated to ensure the activity was legitimate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
+        "name": "User State changed from Guest to Member",
+        "queryPeriod": "1d",
+        "query": "AuditLogs\n  | where OperationName =~ \"Update user\"\n  | where Result =~ \"success\"\n  | mv-expand TargetResources\n  | mv-expand TargetResources.modifiedProperties\n  | where TargetResources_modifiedProperties.displayName =~ \"TargetId.UserType\"\n  | extend UpdatingAppName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  | extend UpdatingServicePrincipalId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)\n  | extend UpdatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend UpdatingUserAadUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)\n  | extend UpdatingUserIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | extend UpdatingUser = iif(isnotempty(UpdatingServicePrincipalId), UpdatingServicePrincipalId, UpdatingUserPrincipalName)\n  | extend UpdatedUserPrincipalName = tostring(TargetResources.userPrincipalName)\n  | project-reorder TimeGenerated, UpdatedUserPrincipalName, UpdatingUser\n  | where parse_json(tostring(TargetResources_modifiedProperties.newValue)) =~ \"\\\"Member\\\"\" and parse_json(tostring(TargetResources_modifiedProperties.oldValue)) =~ \"\\\"Guest\\\"\"\n  | extend InitiatingAccountName = tostring(split(UpdatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(UpdatingUserPrincipalName, \"@\")[1])\n  | extend TargetAccountName = tostring(split(UpdatedUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(UpdatedUserPrincipalName, \"@\")[1])\n",
         "severity": "Medium",
         "tactics": [
           "Persistence"
         ],
-        "queryPeriod": "1d",
-        "description": "'Detects when a guest account in a tenant is converted to a member of the tenant.\n  Monitoring guest accounts and the access they are provided is important to detect potential account abuse.\n  Accounts converted to members should be investigated to ensure the activity was legitimate.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-failed-unusual-sign-ins'\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
         "metadata": {
           "categories": {
             "domains": [
@@ -30,85 +97,18 @@
               "Identity"
             ]
           },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
           "source": {
             "kind": "Community"
           },
           "support": {
             "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           }
         },
-        "query": "AuditLogs\n  | where OperationName =~ \"Update user\"\n  | where Result =~ \"success\"\n  | mv-expand TargetResources\n  | mv-expand TargetResources.modifiedProperties\n  | where TargetResources_modifiedProperties.displayName =~ \"TargetId.UserType\"\n  | extend UpdatingAppName = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n  | extend UpdatingServicePrincipalId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)\n  | extend UpdatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend UpdatingUserAadUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)\n  | extend UpdatingUserIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n  | extend UpdatingUser = iif(isnotempty(UpdatingServicePrincipalId), UpdatingServicePrincipalId, UpdatingUserPrincipalName)\n  | extend UpdatedUserPrincipalName = tostring(TargetResources.userPrincipalName)\n  | project-reorder TimeGenerated, UpdatedUserPrincipalName, UpdatingUser\n  | where parse_json(tostring(TargetResources_modifiedProperties.newValue)) =~ \"\\\"Member\\\"\" and parse_json(tostring(TargetResources_modifiedProperties.oldValue)) =~ \"\\\"Guest\\\"\"\n  | extend InitiatingAccountName = tostring(split(UpdatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(UpdatingUserPrincipalName, \"@\")[1])\n  | extend TargetAccountName = tostring(split(UpdatedUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(UpdatedUserPrincipalName, \"@\")[1])\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UpdatingAppName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UpdatingServicePrincipalId",
-                "identifier": "AadUserId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UpdatingUserPrincipalName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "InitiatingAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "InitiatingAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UpdatingUserAadUserId",
-                "identifier": "AadUserId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UpdatedUserPrincipalName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "TargetAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "TargetAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "UpdatingUserIPAddress",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "name": "User State changed from Guest to Member"
+        "queryFrequency": "1d",
+        "triggerOperator": "gt"
       }
     }
   ]
