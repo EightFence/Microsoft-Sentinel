@@ -14,6 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "Discovery"
+        ],
+        "query": "// In User & Groups and in Applications, the following \"AccessType\" values in columns PremodifiedOutboundSettings and ModifiedOutboundSettings are interpreted accordingly\n// When Access Type in premodified outbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified outbound settings value was 2 that means that the initial access was blocked.\n// When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked.\nAuditLogs\n| where OperationName has \"Update a partner cross-tenant access setting\"\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"Policy\"\n      | extend Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on\n  (\n      where Property.displayName =~ \"b2bDirectConnectOutbound\"\n      | extend PremodifiedOutboundSettings = trim('\"',tostring(Property.oldValue)),\n               ModifiedOutboundSettings = trim(@'\"',tostring(Property.newValue))\n  )\n| where PremodifiedOutboundSettings != ModifiedOutboundSettings\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -64,19 +70,13 @@
             "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "queryFrequency": "2d",
-        "query": "// In User & Groups and in Applications, the following \"AccessType\" values in columns PremodifiedOutboundSettings and ModifiedOutboundSettings are interpreted accordingly\n// When Access Type in premodified outbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified outbound settings value was 2 that means that the initial access was blocked.\n// When Access Type in modified outbound settings value is 1 that means that now access is allowed. When Access Type in modified outbound settings value is 2 that means that now access is blocked.\nAuditLogs\n| where OperationName has \"Update a partner cross-tenant access setting\"\n| mv-apply TargetResource = TargetResources on\n  (\n      where TargetResource.type =~ \"Policy\"\n      | extend Properties = TargetResource.modifiedProperties\n  )\n| mv-apply Property = Properties on\n  (\n      where Property.displayName =~ \"b2bDirectConnectOutbound\"\n      | extend PremodifiedOutboundSettings = trim('\"',tostring(Property.oldValue)),\n               ModifiedOutboundSettings = trim(@'\"',tostring(Property.newValue))\n  )\n| where PremodifiedOutboundSettings != ModifiedOutboundSettings\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "Discovery"
-        ],
-        "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Outbound Direct Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
-        "severity": "Medium",
         "name": "Cross-tenant Access Settings Organization Outbound Direct Settings Changed",
-        "status": "Available",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "description": "'Organizations are added in the Cross-tenant Access Settings to control communication inbound or outbound for users and applications. This detection notifies when Organization Outbound Direct Settings are changed for \"Users & Groups\" and for \"Applications\".'\n",
         "triggerOperator": "gt",
+        "queryFrequency": "2d",
+        "status": "Available",
         "queryPeriod": "2d"
       }
     }
