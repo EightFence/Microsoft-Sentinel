@@ -14,53 +14,53 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "queryPeriod": "14d",
-        "customDetails": {
-          "IoCIPDirection": "IoCDirection",
-          "EventEndTime": "imNWS_maxtime",
-          "IndicatorId": "Id",
-          "EventStartTime": "imNWS_mintime",
-          "IoCDescription": "Description",
-          "ActivityGroupNames": "ActivityGroupNames",
-          "IoCConfidenceScore": "Confidence",
-          "ThreatType": "Type",
-          "IoCExpirationTime": "ValidUntil"
-        },
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = materialize (\n  ThreatIntelIndicators\n  //extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = NetworkSourceIP\n  | where TI_ipEntity != \"NO_IP\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n);\nIP_TI\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n | join kind=innerunique \n (\n   _Im_NetworkSession (starttime=ago(dt_lookBack))\n   | where isnotempty(SrcIpAddr)\n   | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor \n   | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.SrcIpAddr == $right.TI_ipEntity\n   | project-rename SrcMatch = IsActive\n   | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.DstIpAddr == $right.TI_ipEntity\n   | project-rename DstMatch = IsActive\n   | where SrcMatch or DstMatch\n   | extend \n       IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),\n       IoCDirection = iff(SrcMatch, \"Source\", \"Destination\")\n )on $left.TI_ipEntity == $right.IoCIP\n | where imNWS_mintime < ValidUntil\n | extend Description = tostring(parse_json(Data).description)\n | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n | project imNWS_mintime, imNWS_maxtime, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct\n",
-        "description": "'This rule identifies a match Network Sessions for which the source or destination IP address is a known IoC. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'\n",
-        "triggerThreshold": 0,
         "triggerOperator": "gt",
-        "severity": "Medium",
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "IoCIP",
-                "identifier": "Address"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "SrcIpAddr",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
+        "description": "'This rule identifies a match Network Sessions for which the source or destination IP address is a known IoC. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'\n",
         "tactics": [
           "CommandAndControl"
         ],
-        "name": "TI map IP entity to Network Session Events (ASIM Network Session schema)",
-        "queryFrequency": "1h",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{Type}}. Consult the threat intelligence blead for more information on the indicator.",
-          "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC."
-        }
+          "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC.",
+          "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{Type}}. Consult the threat intelligence blead for more information on the indicator."
+        },
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = materialize (\n  ThreatIntelIndicators\n  //extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = NetworkSourceIP\n  | where TI_ipEntity != \"NO_IP\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n);\nIP_TI\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n | join kind=innerunique \n (\n   _Im_NetworkSession (starttime=ago(dt_lookBack))\n   | where isnotempty(SrcIpAddr)\n   | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor \n   | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.SrcIpAddr == $right.TI_ipEntity\n   | project-rename SrcMatch = IsActive\n   | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.DstIpAddr == $right.TI_ipEntity\n   | project-rename DstMatch = IsActive\n   | where SrcMatch or DstMatch\n   | extend \n       IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),\n       IoCDirection = iff(SrcMatch, \"Source\", \"Destination\")\n )on $left.TI_ipEntity == $right.IoCIP\n | where imNWS_mintime < ValidUntil\n | extend Description = tostring(parse_json(Data).description)\n | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n | project imNWS_mintime, imNWS_maxtime, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct\n",
+        "customDetails": {
+          "IndicatorId": "Id",
+          "IoCDescription": "Description",
+          "ActivityGroupNames": "ActivityGroupNames",
+          "ThreatType": "Type",
+          "IoCExpirationTime": "ValidUntil",
+          "IoCIPDirection": "IoCDirection",
+          "IoCConfidenceScore": "Confidence",
+          "EventStartTime": "imNWS_mintime",
+          "EventEndTime": "imNWS_maxtime"
+        },
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IoCIP"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "status": "Available",
+        "name": "TI map IP entity to Network Session Events (ASIM Network Session schema)"
       }
     }
   ]
