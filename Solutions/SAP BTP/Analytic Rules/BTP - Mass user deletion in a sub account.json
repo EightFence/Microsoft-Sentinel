@@ -14,18 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "description": "Identifies user account deletion activity where the amount of deleted users exceeds a predefined threshold.",
-        "tactics": [
-          "Impact"
-        ],
-        "query": "let bulk_delete_threshold = 10;\nSAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| where Message.object has \"scim user\" and Message.object has \"DELETE\"\n| mv-expand Attributes = Message.attributes\n| where isnotempty(Attributes.old)\n| extend DeletedUserName = tostring(parse_json(tostring(Attributes.old)).userName)\n| where isnotempty(DeletedUserName)\n| summarize\n    Start = min(UpdatedOn),\n    End = max(UpdatedOn),\n    DeletedUsers = make_set(DeletedUserName, 100)\n    by UserName, Tenant, SpaceId\n| where array_length(DeletedUsers) > bulk_delete_threshold\n| project Start, End, UserName, DeletedUsers, Tenant, SpaceId, CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "queryPeriod": "1h",
-        "queryFrequency": "1h",
-        "severity": "Medium",
         "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryPeriod": "1h",
+        "description": "Identifies user account deletion activity where the amount of deleted users exceeds a predefined threshold.",
+        "severity": "Medium",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,24 +34,25 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "CloudApp"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
         "status": "Available",
-        "name": "BTP - Mass user deletion in a sub account"
+        "query": "let bulk_delete_threshold = 10;\nSAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| where Message.object has \"scim user\" and Message.object has \"DELETE\"\n| mv-expand Attributes = Message.attributes\n| where isnotempty(Attributes.old)\n| extend DeletedUserName = tostring(parse_json(tostring(Attributes.old)).userName)\n| where isnotempty(DeletedUserName)\n| summarize\n    Start = min(UpdatedOn),\n    End = max(UpdatedOn),\n    DeletedUsers = make_set(DeletedUserName, 100)\n    by UserName, Tenant, SpaceId\n| where array_length(DeletedUsers) > bulk_delete_threshold\n| project Start, End, UserName, DeletedUsers, Tenant, SpaceId, CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "queryFrequency": "1h",
+        "name": "BTP - Mass user deletion in a sub account",
+        "tactics": [
+          "Impact"
+        ]
       }
     }
   ]
