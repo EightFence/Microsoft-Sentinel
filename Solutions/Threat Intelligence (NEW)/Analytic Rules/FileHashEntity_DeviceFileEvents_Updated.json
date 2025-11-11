@@ -14,14 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'\n",
         "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,10 +30,10 @@
                 "identifier": "NTDomain",
                 "columnName": "RequestAccountDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "identifier": "Value",
@@ -48,24 +43,29 @@
                 "identifier": "Algorithm",
                 "columnName": "FileHashType"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "DeviceName"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelIndicators\n//extract key part of kv pair\n      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n      | where IndicatorType == \"file\"\n      | extend FileHashType = replace(\"'\", \"\", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7, strlen(ObservableKey) - indexof(ObservableKey, \"hashes.\") - 7))\n      | extend FileHashValue = ObservableValue\n      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n//  | where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n  | project-reorder *, FileHashType, FileHashValue, Type\n| join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, FileHashValue, FileHashType, ValidUntil, Confidence, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated\n",
-        "queryFrequency": "1h",
         "name": "TI map File Hash to DeviceFileEvents Event",
+        "description": "'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'\n",
+        "queryFrequency": "1h",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DeviceFileEvents_ = (union\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),\n(DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));\nlet Hashes = DeviceFileEvents_ | distinct FileHashValue;\nThreatIntelIndicators\n//extract key part of kv pair\n      | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n      | where IndicatorType == \"file\"\n      | extend FileHashType = replace(\"'\", \"\", substring(ObservableKey, indexof(ObservableKey, \"hashes.\") + 7, strlen(ObservableKey) - indexof(ObservableKey, \"hashes.\") - 7))\n      | extend FileHashValue = ObservableValue\n      | extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where isnotempty(FileHashValue)\n| where TimeGenerated > ago(ioc_lookBack)\n//  | where FileHashValue in (Hashes)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n  | project-reorder *, FileHashType, FileHashValue, Type\n| join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue\n| where TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, FileHashValue, FileHashType, ValidUntil, Confidence, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup\n| extend timestamp = TimeGenerated\n",
+        "triggerOperator": "gt",
         "tactics": [
           "CommandAndControl"
-        ]
+        ],
+        "queryPeriod": "14d",
+        "triggerThreshold": 0
       }
     }
   ]
