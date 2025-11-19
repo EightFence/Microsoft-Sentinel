@@ -14,30 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "metadata": {
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - 0-day Vulnerability"
-            ]
-          }
-        },
-        "name": "Dev-0228 File Path Hashes November 2021",
-        "queryPeriod": "6h",
-        "description": "'This hunting query looks for file paths/hashes related to observed activity by Dev-0228. The actor is known to use custom version of popular tool like PsExec, Procdump etc. to carry its activity.\n The risk score associated with each result is based on a number of factors, hosts with higher risk events should be investigated first.'\n",
-        "tactics": [
-          "CredentialAccess",
-          "Execution"
-        ],
-        "triggerOperator": "gt",
+        "query": "let files1 = dynamic([\"C:\\\\Windows\\\\TAPI\\\\lsa.exe\", \"C:\\\\Windows\\\\TAPI\\\\pa.exe\", \"C:\\\\Windows\\\\TAPI\\\\pc.exe\", \"C:\\\\Windows\\\\TAPI\\\\Rar.exe\"]);\nlet files2 = dynamic([\"svchost.exe\",\"wdmsvc.exe\"]);\nlet FileHash1 = dynamic([\"43109fbe8b752f7a9076eaafa417d9ae5c6e827cd5374b866672263fdebd5ec3\", \"ab50d8d707b97712178a92bbac74ccc2a5699eb41c17aa77f713ff3e568dcedb\", \"010e32be0f86545e116a8bc3381a8428933eb8789f32c261c81fd5e7857d4a77\",         \"56cd102b9fc7f3523dad01d632525ff673259dbc9a091be0feff333c931574f7\"]);\nlet FileHash2 = dynamic([\"2a1044e9e6e87a032f80c6d9ea6ae61bbbb053c0a21b186ecb3b812b49eb03b7\", \"9ab7e99ed84f94a7b6409b87e56dc6e1143b05034a5e4455e8c555dbbcd0d2dd\", \"18a072ccfab239e140d8f682e2874e8ff19d94311fc8bb9564043d3e0deda54b\"]);\nDeviceProcessEvents\n| where ( FolderPath has_any (files1) and SHA256 has_any (FileHash1)) or (FolderPath has_any (files2) and SHA256 has_any (FileHash2))\n| extend DvcId = DeviceId\n| join kind=leftouter (SecurityAlert\n| where ProviderName =~ \"MDATP\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| mv-expand todynamic(Entities)\n| extend DvcId = tostring(parse_json(Entities).MdatpDeviceId)\n| where isnotempty(DvcId)\n// Higher risk score are for Defender alerts related to threat actor\n| extend AlertRiskScore = iif(ThreatName has_any (\"Backdoor:MSIL/ShellClient.A\", \"Backdoor:MSIL/ShellClient.A!dll\", \"Trojan:MSIL/Mimikatz.BA!MTB\"), 1.0, 0.5)\n| project DvcId, AlertRiskScore) on DvcId\n| extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0, AlertRiskScore)\n| extend InitiatingProcessAccount = strcat(InitiatingProcessAccountDomain, \"\\\\\", InitiatingProcessAccountName)\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n| extend timestamp = TimeGenerated\n",
+        "severity": "High",
         "entityMappings": [
           {
             "entityType": "Host",
@@ -83,10 +61,32 @@
             ]
           }
         ],
+        "name": "Dev-0228 File Path Hashes November 2021",
+        "metadata": {
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - 0-day Vulnerability"
+            ]
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "tactics": [
+          "CredentialAccess",
+          "Execution"
+        ],
+        "queryFrequency": "6h",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "severity": "High",
-        "query": "let files1 = dynamic([\"C:\\\\Windows\\\\TAPI\\\\lsa.exe\", \"C:\\\\Windows\\\\TAPI\\\\pa.exe\", \"C:\\\\Windows\\\\TAPI\\\\pc.exe\", \"C:\\\\Windows\\\\TAPI\\\\Rar.exe\"]);\nlet files2 = dynamic([\"svchost.exe\",\"wdmsvc.exe\"]);\nlet FileHash1 = dynamic([\"43109fbe8b752f7a9076eaafa417d9ae5c6e827cd5374b866672263fdebd5ec3\", \"ab50d8d707b97712178a92bbac74ccc2a5699eb41c17aa77f713ff3e568dcedb\", \"010e32be0f86545e116a8bc3381a8428933eb8789f32c261c81fd5e7857d4a77\",         \"56cd102b9fc7f3523dad01d632525ff673259dbc9a091be0feff333c931574f7\"]);\nlet FileHash2 = dynamic([\"2a1044e9e6e87a032f80c6d9ea6ae61bbbb053c0a21b186ecb3b812b49eb03b7\", \"9ab7e99ed84f94a7b6409b87e56dc6e1143b05034a5e4455e8c555dbbcd0d2dd\", \"18a072ccfab239e140d8f682e2874e8ff19d94311fc8bb9564043d3e0deda54b\"]);\nDeviceProcessEvents\n| where ( FolderPath has_any (files1) and SHA256 has_any (FileHash1)) or (FolderPath has_any (files2) and SHA256 has_any (FileHash2))\n| extend DvcId = DeviceId\n| join kind=leftouter (SecurityAlert\n| where ProviderName =~ \"MDATP\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| mv-expand todynamic(Entities)\n| extend DvcId = tostring(parse_json(Entities).MdatpDeviceId)\n| where isnotempty(DvcId)\n// Higher risk score are for Defender alerts related to threat actor\n| extend AlertRiskScore = iif(ThreatName has_any (\"Backdoor:MSIL/ShellClient.A\", \"Backdoor:MSIL/ShellClient.A!dll\", \"Trojan:MSIL/Mimikatz.BA!MTB\"), 1.0, 0.5)\n| project DvcId, AlertRiskScore) on DvcId\n| extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0, AlertRiskScore)\n| extend InitiatingProcessAccount = strcat(InitiatingProcessAccountDomain, \"\\\\\", InitiatingProcessAccountName)\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n| extend timestamp = TimeGenerated\n",
-        "queryFrequency": "6h"
+        "queryPeriod": "6h",
+        "description": "'This hunting query looks for file paths/hashes related to observed activity by Dev-0228. The actor is known to use custom version of popular tool like PsExec, Procdump etc. to carry its activity.\n The risk score associated with each result is based on a number of factors, hosts with higher risk events should be investigated first.'\n"
       }
     }
   ]
