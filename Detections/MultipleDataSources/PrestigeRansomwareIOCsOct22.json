@@ -15,13 +15,15 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "triggerOperator": "gt",
-        "description": "'This query looks for file hashes and AV signatures associated with Prestige ransomware payload.'\n",
         "queryPeriod": "1d",
-        "queryFrequency": "1d",
+        "name": "Prestige ransomware IOCs Oct 2022",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Execution"
+        ],
+        "query": "let sha256Hashes = dynamic([\"5dd1ca0d471dee41eb3ea0b6ea117810f228354fc3b7b47400a812573d40d91d\", \"5fc44c7342b84f50f24758e39c8848b2f0991e8817ef5465844f5f2ff6085a57\", \"6cff0bbd62efe99f381e5cc0c4182b0fb7a9a34e4be9ce68ee6b0d0ea3eee39c\"]);\nlet signames = dynamic([\"Ransom:Win32/Prestige\"]);\n(union isfuzzy=true\n(CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated, Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, Algorithm = \"SHA256\", AccountNTName = SourceUserID\n),\n(imFileEvent\n| where TargetFileSHA256 has_any (sha256Hashes)\n| extend AccountNT = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256\n| project Type, TimeGenerated, Computer, AccountNT, IPAddress, CommandLine, FileHash, Algorithm = \"SHA256\"\n),\n(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend ProcessId = tolong(EventDetail.[3].[\"#text\"]), Image = tostring(EventDetail.[4].[\"#text\"]), CommandLine = tostring(EventDetail.[10].[\"#text\"]), Hashes = tostring(EventDetail.[17].[\"#text\"])\n| extend Hashes = extract_all(@\"(?P<key>\\w+)=(?P<value>[a-zA-Z0-9]+)\", dynamic([\"key\",\"value\"]), Hashes)\n| extend Hashes = column_ifexists(\"Hashes\", dynamic([\"\", \"\"])), CommandLine = column_ifexists(\"CommandLine\", \"\")\n| mv-expand Hashes\n| where Hashes[0] =~ \"SHA256\" and Hashes[1] has_any (sha256Hashes)  \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, ProcessId, Hashes, CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend AccountNT = UserName, InitiatingProcessId = ProcessId\n| extend Process = tostring(split(Image, '\\\\', -1)[-1]), Algorithm = \"SHA256\", FileHash = tostring(Hashes[1]) \n),\n(DeviceEvents\n| where InitiatingProcessSHA256 has_any (sha256Hashes) or SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend AccountNT = InitiatingProcessAccountName, Computer = DeviceName\n| extend Algorithm = \"SHA256\", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine, Image = InitiatingProcessFolderPath\n),\n(DeviceFileEvents\n| where SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend AccountNT = InitiatingProcessAccountName, Computer = DeviceName\n| extend Algorithm = \"SHA256\", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine, Image = InitiatingProcessFolderPath\n),\n(DeviceImageLoadEvents\n| where SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend AccountNT = InitiatingProcessAccountName, Computer = DeviceName\n| extend Algorithm = \"SHA256\", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine, Image = InitiatingProcessFolderPath\n),\n(SecurityAlert\n| where ProductName == \"Microsoft Defender Advanced Threat Protection\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| where isnotempty(ThreatName)\n| where ThreatName has_any (signames)\n| extend Computer = tostring(parse_json(Entities)[0].HostName)\n)\n)\n| extend AccountNTName = tostring(split(AccountNT, \"\\\\\")[0]), AccountNTDomain = tostring(split(AccountNT, \"\\\\\")[1])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| project-away DomainIndex\n",
+        "description": "'This query looks for file hashes and AV signatures associated with Prestige ransomware payload.'\n",
         "metadata": {
-          "support": {
-            "tier": "Community"
-          },
           "categories": {
             "domains": [
               "Security - Others"
@@ -32,13 +34,13 @@
           },
           "source": {
             "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           }
         },
-        "severity": "High",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "identifier": "Algorithm",
@@ -48,10 +50,10 @@
                 "identifier": "Value",
                 "columnName": "FileHash"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           },
           {
-            "entityType": "Process",
             "fieldMappings": [
               {
                 "identifier": "ProcessId",
@@ -61,10 +63,10 @@
                 "identifier": "CommandLine",
                 "columnName": "CommandLine"
               }
-            ]
+            ],
+            "entityType": "Process"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -78,10 +80,10 @@
                 "identifier": "UPNSuffix",
                 "columnName": "AccountNTDomain"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -95,14 +97,12 @@
                 "identifier": "NTDomain",
                 "columnName": "HostNameDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
-        "name": "Prestige ransomware IOCs Oct 2022",
-        "query": "let sha256Hashes = dynamic([\"5dd1ca0d471dee41eb3ea0b6ea117810f228354fc3b7b47400a812573d40d91d\", \"5fc44c7342b84f50f24758e39c8848b2f0991e8817ef5465844f5f2ff6085a57\", \"6cff0bbd62efe99f381e5cc0c4182b0fb7a9a34e4be9ce68ee6b0d0ea3eee39c\"]);\nlet signames = dynamic([\"Ransom:Win32/Prestige\"]);\n(union isfuzzy=true\n(CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated, Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, Algorithm = \"SHA256\", AccountNTName = SourceUserID\n),\n(imFileEvent\n| where TargetFileSHA256 has_any (sha256Hashes)\n| extend AccountNT = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256\n| project Type, TimeGenerated, Computer, AccountNT, IPAddress, CommandLine, FileHash, Algorithm = \"SHA256\"\n),\n(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend ProcessId = tolong(EventDetail.[3].[\"#text\"]), Image = tostring(EventDetail.[4].[\"#text\"]), CommandLine = tostring(EventDetail.[10].[\"#text\"]), Hashes = tostring(EventDetail.[17].[\"#text\"])\n| extend Hashes = extract_all(@\"(?P<key>\\w+)=(?P<value>[a-zA-Z0-9]+)\", dynamic([\"key\",\"value\"]), Hashes)\n| extend Hashes = column_ifexists(\"Hashes\", dynamic([\"\", \"\"])), CommandLine = column_ifexists(\"CommandLine\", \"\")\n| mv-expand Hashes\n| where Hashes[0] =~ \"SHA256\" and Hashes[1] has_any (sha256Hashes)  \n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, ProcessId, Hashes, CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend AccountNT = UserName, InitiatingProcessId = ProcessId\n| extend Process = tostring(split(Image, '\\\\', -1)[-1]), Algorithm = \"SHA256\", FileHash = tostring(Hashes[1]) \n),\n(DeviceEvents\n| where InitiatingProcessSHA256 has_any (sha256Hashes) or SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend AccountNT = InitiatingProcessAccountName, Computer = DeviceName\n| extend Algorithm = \"SHA256\", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine, Image = InitiatingProcessFolderPath\n),\n(DeviceFileEvents\n| where SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend AccountNT = InitiatingProcessAccountName, Computer = DeviceName\n| extend Algorithm = \"SHA256\", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine, Image = InitiatingProcessFolderPath\n),\n(DeviceImageLoadEvents\n| where SHA256 has_any (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend AccountNT = InitiatingProcessAccountName, Computer = DeviceName\n| extend Algorithm = \"SHA256\", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine, Image = InitiatingProcessFolderPath\n),\n(SecurityAlert\n| where ProductName == \"Microsoft Defender Advanced Threat Protection\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| where isnotempty(ThreatName)\n| where ThreatName has_any (signames)\n| extend Computer = tostring(parse_json(Entities)[0].HostName)\n)\n)\n| extend AccountNTName = tostring(split(AccountNT, \"\\\\\")[0]), AccountNTDomain = tostring(split(AccountNT, \"\\\\\")[1])\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| project-away DomainIndex\n",
-        "tactics": [
-          "Execution"
-        ]
+        "queryFrequency": "1d",
+        "severity": "High"
       }
     }
   ]
