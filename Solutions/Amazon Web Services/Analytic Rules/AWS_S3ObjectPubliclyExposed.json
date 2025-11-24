@@ -14,13 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
+        "name": "S3 object publicly exposed",
         "severity": "Medium",
-        "query": "AWSCloudTrail\n  | where EventName == \"PutObjectAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n  | mvexpand Grant\n  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n  | where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n    or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | extend timestamp = TimeGenerated\n",
-        "queryFrequency": "1h",
-        "status": "Available",
+        "queryPeriod": "1h",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -34,26 +33,27 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
         "tactics": [
           "Exfiltration"
         ],
+        "query": "AWSCloudTrail\n  | where EventName == \"PutObjectAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n  | mvexpand Grant\n  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n  | where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n    or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | extend timestamp = TimeGenerated\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "description": "'Detected S3 bucket that's publicly exposed, which could lead to sensitive information leakage to the public. Verify the S3 object configurations.'\n",
-        "name": "S3 object publicly exposed",
-        "queryPeriod": "1h",
-        "triggerThreshold": 0
+        "queryFrequency": "1h",
+        "status": "Available"
       }
     }
   ]
