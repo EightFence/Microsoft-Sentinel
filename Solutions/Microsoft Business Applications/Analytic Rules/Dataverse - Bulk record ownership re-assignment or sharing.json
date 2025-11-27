@@ -14,17 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
         "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "name": "Dataverse - Bulk record ownership re-assignment or sharing",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "query": "// Set threshold for number of shared/assigned records\nlet detection_threshold = 100;\nlet query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message in (\"ModifyAccess\", \"Assign\", \"GrantAccess\")\n| summarize\n    FirstEvent = min(TimeGenerated),\n    LastEvent = max(TimeGenerated),\n    Events = count()\n    by UserId, Message, InstanceUrl, ClientIp\n| where Events > detection_threshold\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    LastEvent,\n    Message,\n    Events,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
         "severity": "Medium",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
+        "description": "Identifies individual record ownership changes including sharing of records with other users/teams or re-assignment of ownership exceeding a pre-defined threshold.",
+        "triggerThreshold": 0,
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -34,19 +36,19 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "ClientIp",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "CloudAppId",
@@ -56,20 +58,18 @@
                 "columnName": "InstanceUrl",
                 "identifier": "InstanceName"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "1h",
-        "description": "Identifies individual record ownership changes including sharing of records with other users/teams or re-assignment of ownership exceeding a pre-defined threshold.",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Dataverse - High number of record access modification events detected",
           "alertDescriptionFormat": "{{Events}} events of type {{Message}} detected in {{InstanceUrl}} could indicate suspicious or malicious activity."
         },
-        "query": "// Set threshold for number of shared/assigned records\nlet detection_threshold = 100;\nlet query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message in (\"ModifyAccess\", \"Assign\", \"GrantAccess\")\n| summarize\n    FirstEvent = min(TimeGenerated),\n    LastEvent = max(TimeGenerated),\n    Events = count()\n    by UserId, Message, InstanceUrl, ClientIp\n| where Events > detection_threshold\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    LastEvent,\n    Message,\n    Events,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n"
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "name": "Dataverse - Bulk record ownership re-assignment or sharing",
+        "queryPeriod": "1d"
       }
     }
   ]
