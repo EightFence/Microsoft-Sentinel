@@ -14,11 +14,36 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "Impact"
+        ],
+        "queryFrequency": "1d",
+        "description": "'Dev-0530 actors are known to encrypt the contents of the victims device as well as renaming the file extensions. This query looks for the creation of files with .h0lyenc extension or presence of ransom note.'\n",
+        "queryPeriod": "1d",
+        "metadata": {
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others"
+            ]
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
+          }
+        },
+        "name": "Dev-0530 File Extension Rename",
         "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "severity": "High",
         "query": "union isfuzzy=true\n    (DeviceFileEvents\n    | where ActionType == \"FileCreated\"\n    | where FileName endswith \".h0lyenc\" or FolderPath == \"C:\\\\FOR_DECRYPT.html\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n        by\n        AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain,\n        DeviceName,\n        Type,\n        InitiatingProcessId,\n        FileName,\n        FolderPath,\n        EventType = ActionType,\n        Commandline = InitiatingProcessCommandLine,\n        InitiatingProcessFileName,\n        InitiatingProcessSHA256,\n        FileHashCustomEntity = SHA256,\n        AlgorithmCustomEntity = \"SHA256\"\n    | extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n    | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n    ),\n    (imFileEvent\n    | where EventType == \"FileCreated\"\n    | where TargetFilePath endswith \".h0lyenc\" or TargetFilePath == \"C:\\\\FOR_DECRYPT.html\"\n    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated)\n        by\n        ActorUsername,\n        DvcHostname,\n        DvcDomain,\n        DvcId,\n        Type,\n        EventType,\n        FileHashCustomEntity = TargetFileSHA256,\n        Hash,\n        TargetFilePath,\n        Commandline = ActingProcessCommandLine,\n        AlgorithmCustomEntity = \"SHA256\"\n    | extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountDomain = tostring(split(ActorUsername, @'\\')[0])\n    | extend HostName = DvcHostname, HostNameDomain = DvcDomain\n    | extend DeviceName = strcat(DvcHostname, \".\", DvcDomain )\n    )\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "ActorUserName",
@@ -32,10 +57,10 @@
                 "columnName": "AccountDomain",
                 "identifier": "NTDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
@@ -49,10 +74,10 @@
                 "columnName": "HostNameDomain",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "AlgorithmCustomEntity",
@@ -62,33 +87,8 @@
                 "columnName": "FileHashCustomEntity",
                 "identifier": "Value"
               }
-            ],
-            "entityType": "FileHash"
-          }
-        ],
-        "queryPeriod": "1d",
-        "severity": "High",
-        "description": "'Dev-0530 actors are known to encrypt the contents of the victims device as well as renaming the file extensions. This query looks for the creation of files with .h0lyenc extension or presence of ransom note.'\n",
-        "name": "Dev-0530 File Extension Rename",
-        "queryFrequency": "1d",
-        "metadata": {
-          "support": {
-            "tier": "Community"
-          },
-          "source": {
-            "kind": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others"
             ]
           }
-        },
-        "tactics": [
-          "Impact"
         ]
       }
     }
