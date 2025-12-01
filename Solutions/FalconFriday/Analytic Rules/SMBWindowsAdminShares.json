@@ -14,24 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "description": "This query is based on detecting incoming RPC/TCP on the SCM, followed by the start of a child process of services.exe. Remotely interacting with the SCM triggers the RPC/TCP traffic on services.exe, and the creation of the child processes is a result of starting the service. \nThe query might look intimidating given its size. That's why we've commented the query per logic block to walk you through the details.\n",
-        "queryFrequency": "1h",
-        "queryPeriod": "1h",
         "tactics": [
           "LateralMovement"
         ],
-        "status": "Available",
-        "query": "// This rule is fairly complex, hence this documentation.\n// The rule tries to detect network activity from services.exe followed by the start of a new childvprocess of services.exe (i.e. a service start).\n// The rule tries to filter false positives as much as possible. \n// Since the FileProfile info is currently super-unreliable (unsure why), we have to work around it.\n// \n// The following list of LOLBINs is used to include all results which have a high reputation, but are LOLBINs.\nlet lolbins = dynamic([\"At.exe\", \"Atbroker.exe\", \"Bash.exe\", \"Bitsadmin.exe\", \"CertReq.exe\", \"Certutil.exe\", \"Cmd.exe\", \"Cmdkey.exe\", \"Cmstp.exe\", \"Control.exe\", \"Csc.exe\", \"Cscript.exe\", \"Desktopimgdownldr.exe\", \"Dfsvc.exe\", \"Diantz.exe\", \"Diskshadow.exe\", \"Dnscmd.exe\", \"Esentutl.exe\", \"Eventvwr.exe\", \"Expand.exe\", \"Extexport.exe\", \"Extrac32.exe\", \"Findstr.exe\", \"Forfiles.exe\", \"Ftp.exe\", \"GfxDownloadWrapper.exe\", \"Gpscript.exe\", \"Hh.exe\", \"Ie4uinit.exe\", \"Ieexec.exe\", \"Ilasm.exe\", \"Infdefaultinstall.exe\", \"Installutil.exe\", \"Jsc.exe\", \"Makecab.exe\", \"Mavinject.exe\", \"Microsoft.Workflow.Compiler.exe\", \"Mmc.exe\", \"MpCmdRun.exe\", \"Msbuild.exe\", \"Msconfig.exe\", \"Msdt.exe\", \"Mshta.exe\", \"Msiexec.exe\", \"Netsh.exe\", \"Odbcconf.exe\", \"Pcalua.exe\", \"Pcwrun.exe\", \"Pktmon.exe\", \"Presentationhost.exe\", \"Print.exe\", \"Psr.exe\", \"Rasautou.exe\", \"Reg.exe\", \"Regasm.exe\", \"Regedit.exe\", \"Regini.exe\", \"Register-cimprovider.exe\", \"Regsvcs.exe\", \"Regsvr32.exe\", \"Replace.exe\", \"Rpcping.exe\", \"Rundll32.exe\", \"Runonce.exe\", \"Runscripthelper.exe\", \"Sc.exe\", \"Schtasks.exe\", \"Scriptrunner.exe\", \"SyncAppvPublishingServer.exe\", \"Ttdinject.exe\", \"Tttracer.exe\", \"vbc.exe\", \"Verclsid.exe\", \"Wab.exe\", \"Wmic.exe\", \"Wscript.exe\", \"Wsreset.exe\", \"Xwizard.exe\", \"AgentExecutor.exe\", \"Appvlp.exe\", \"Bginfo.exe\", \"Cdb.exe\", \"csi.exe\", \"Devtoolslauncher.exe\", \"dnx.exe\", \"Dotnet.exe\", \"Dxcap.exe\", \"Excel.exe\", \"Mftrace.exe\", \"Msdeploy.exe\", \"msxsl.exe\", \"ntdsutil.exe\", \"Powerpnt.exe\", \"rcsi.exe\", \"Sqldumper.exe\", \"Sqlps.exe\", \"SQLToolsPS.exe\", \"Squirrel.exe\", \"te.exe\", \"Tracker.exe\", \"Update.exe\", \"vsjitdebugger.exe\", \"Winword.exe\", \"Wsl.exe\"]);\n// First, we want to get all the network events triggered by services.exe.\nlet networkEvents = materialize(DeviceNetworkEvents\n| where InitiatingProcessFileName in~ (\"services.exe\")\n| where ActionType == \"InboundConnectionAccepted\"\n| project-rename TimestampNetworkAct=Timestamp);\n// Next, we want to get the list of child processes created by services.exe. \nlet allServices = materialize ((\nDeviceProcessEvents \n// This is for optimization purposes, as filtering is way faster than joins.\n| where DeviceId in ((networkEvents | project DeviceId))\n//svchost and sppsvc are created very often as child processes of services.exe\n| where InitiatingProcessFileName =~ \"services.exe\" \n| project TimestampChild=Timestamp, DeviceId, DeviceName, FileName, ProcessCommandLine, SHA1, \nInitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessSHA1, InitiatingProcessId, TimestampServicesExe=InitiatingProcessCreationTime));\n// Now we are going to join the process creations and network events \n// and filter out all the tables _after_ the join where the child process \n// of svchost is not created shortly after the network activity (between 0 and 10 seconds). \nlet serviceNetworkEvents = materialize(\n(networkEvents \n    | join kind=inner hint.strategy=shuffle allServices on DeviceId, InitiatingProcessId, InitiatingProcessFileName\n) \n| where datetime_diff(\"Second\", TimestampChild, TimestampNetworkAct) between (0 .. 10)\n// Only get the results where the network activity occured more than 1 minute after services.exe has started (i.e. system boot).\n| where datetime_diff(\"Second\", TimestampNetworkAct, TimestampServicesExe) > 60);\n// Next, we want to check the reputation of all procssess.\n// Since FileProfile is not properly working, we use the built-in DeviceFileCertificateInfo for the AntiJoin.\n// The goal is to create a list of SHA1 hashes of the spawned processess \n// which have a low prevelance and are not in de DeviceFileCertificateInfo.\nlet serviceNetworkEventsWithSHA1 = materialize(serviceNetworkEvents\n| summarize count() by SHA1\n| join kind=leftanti hint.strategy=broadcast DeviceFileCertificateInfo on SHA1\n| where count_ < 100);\n// Finally, we need to bring everything together.\n// We take our subset of the child processess created by services.exe (serviceNetworkEvents).\n// Everything which is on our deny-list of SHA1 processess OR are LOLBINs, are filtered out.\n// Additionally, we filter out msiexec, since that appears to come very often.\nserviceNetworkEvents\n| where SHA1 in ((serviceNetworkEventsWithSHA1 | project SHA1)) or FileName in~ (lolbins) \n| where ProcessCommandLine !~ \"msiexec.exe /V\" \n// This summarize is optional if you want to group similar stuff.\n//| summarize ActionType=make_set(ActionType), RemoteIPs=make_set(strcat(RemoteIP, \":\", RemotePort, \" (\", RemoteUrl, \")\")), LocalPort=make_set(LocalPort) by bin(TimestampNetworkAct, 1m), DeviceId, DeviceName, LocalIP, Protocol, AdditionalFields, bin(TimestampChild, 1m), FileName, ProcessCommandLine, SHA1, InitiatingProcessFileName, InitiatingProcessCommandLine1, bin(TimestampServicesExe, 1m) \n",
+        "queryPeriod": "1h",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "name": "SMB/Windows Admin Shares",
+        "status": "Available",
+        "severity": "Medium",
+        "query": "// This rule is fairly complex, hence this documentation.\n// The rule tries to detect network activity from services.exe followed by the start of a new childvprocess of services.exe (i.e. a service start).\n// The rule tries to filter false positives as much as possible. \n// Since the FileProfile info is currently super-unreliable (unsure why), we have to work around it.\n// \n// The following list of LOLBINs is used to include all results which have a high reputation, but are LOLBINs.\nlet lolbins = dynamic([\"At.exe\", \"Atbroker.exe\", \"Bash.exe\", \"Bitsadmin.exe\", \"CertReq.exe\", \"Certutil.exe\", \"Cmd.exe\", \"Cmdkey.exe\", \"Cmstp.exe\", \"Control.exe\", \"Csc.exe\", \"Cscript.exe\", \"Desktopimgdownldr.exe\", \"Dfsvc.exe\", \"Diantz.exe\", \"Diskshadow.exe\", \"Dnscmd.exe\", \"Esentutl.exe\", \"Eventvwr.exe\", \"Expand.exe\", \"Extexport.exe\", \"Extrac32.exe\", \"Findstr.exe\", \"Forfiles.exe\", \"Ftp.exe\", \"GfxDownloadWrapper.exe\", \"Gpscript.exe\", \"Hh.exe\", \"Ie4uinit.exe\", \"Ieexec.exe\", \"Ilasm.exe\", \"Infdefaultinstall.exe\", \"Installutil.exe\", \"Jsc.exe\", \"Makecab.exe\", \"Mavinject.exe\", \"Microsoft.Workflow.Compiler.exe\", \"Mmc.exe\", \"MpCmdRun.exe\", \"Msbuild.exe\", \"Msconfig.exe\", \"Msdt.exe\", \"Mshta.exe\", \"Msiexec.exe\", \"Netsh.exe\", \"Odbcconf.exe\", \"Pcalua.exe\", \"Pcwrun.exe\", \"Pktmon.exe\", \"Presentationhost.exe\", \"Print.exe\", \"Psr.exe\", \"Rasautou.exe\", \"Reg.exe\", \"Regasm.exe\", \"Regedit.exe\", \"Regini.exe\", \"Register-cimprovider.exe\", \"Regsvcs.exe\", \"Regsvr32.exe\", \"Replace.exe\", \"Rpcping.exe\", \"Rundll32.exe\", \"Runonce.exe\", \"Runscripthelper.exe\", \"Sc.exe\", \"Schtasks.exe\", \"Scriptrunner.exe\", \"SyncAppvPublishingServer.exe\", \"Ttdinject.exe\", \"Tttracer.exe\", \"vbc.exe\", \"Verclsid.exe\", \"Wab.exe\", \"Wmic.exe\", \"Wscript.exe\", \"Wsreset.exe\", \"Xwizard.exe\", \"AgentExecutor.exe\", \"Appvlp.exe\", \"Bginfo.exe\", \"Cdb.exe\", \"csi.exe\", \"Devtoolslauncher.exe\", \"dnx.exe\", \"Dotnet.exe\", \"Dxcap.exe\", \"Excel.exe\", \"Mftrace.exe\", \"Msdeploy.exe\", \"msxsl.exe\", \"ntdsutil.exe\", \"Powerpnt.exe\", \"rcsi.exe\", \"Sqldumper.exe\", \"Sqlps.exe\", \"SQLToolsPS.exe\", \"Squirrel.exe\", \"te.exe\", \"Tracker.exe\", \"Update.exe\", \"vsjitdebugger.exe\", \"Winword.exe\", \"Wsl.exe\"]);\n// First, we want to get all the network events triggered by services.exe.\nlet networkEvents = materialize(DeviceNetworkEvents\n| where InitiatingProcessFileName in~ (\"services.exe\")\n| where ActionType == \"InboundConnectionAccepted\"\n| project-rename TimestampNetworkAct=Timestamp);\n// Next, we want to get the list of child processes created by services.exe. \nlet allServices = materialize ((\nDeviceProcessEvents \n// This is for optimization purposes, as filtering is way faster than joins.\n| where DeviceId in ((networkEvents | project DeviceId))\n//svchost and sppsvc are created very often as child processes of services.exe\n| where InitiatingProcessFileName =~ \"services.exe\" \n| project TimestampChild=Timestamp, DeviceId, DeviceName, FileName, ProcessCommandLine, SHA1, \nInitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessSHA1, InitiatingProcessId, TimestampServicesExe=InitiatingProcessCreationTime));\n// Now we are going to join the process creations and network events \n// and filter out all the tables _after_ the join where the child process \n// of svchost is not created shortly after the network activity (between 0 and 10 seconds). \nlet serviceNetworkEvents = materialize(\n(networkEvents \n    | join kind=inner hint.strategy=shuffle allServices on DeviceId, InitiatingProcessId, InitiatingProcessFileName\n) \n| where datetime_diff(\"Second\", TimestampChild, TimestampNetworkAct) between (0 .. 10)\n// Only get the results where the network activity occured more than 1 minute after services.exe has started (i.e. system boot).\n| where datetime_diff(\"Second\", TimestampNetworkAct, TimestampServicesExe) > 60);\n// Next, we want to check the reputation of all procssess.\n// Since FileProfile is not properly working, we use the built-in DeviceFileCertificateInfo for the AntiJoin.\n// The goal is to create a list of SHA1 hashes of the spawned processess \n// which have a low prevelance and are not in de DeviceFileCertificateInfo.\nlet serviceNetworkEventsWithSHA1 = materialize(serviceNetworkEvents\n| summarize count() by SHA1\n| join kind=leftanti hint.strategy=broadcast DeviceFileCertificateInfo on SHA1\n| where count_ < 100);\n// Finally, we need to bring everything together.\n// We take our subset of the child processess created by services.exe (serviceNetworkEvents).\n// Everything which is on our deny-list of SHA1 processess OR are LOLBINs, are filtered out.\n// Additionally, we filter out msiexec, since that appears to come very often.\nserviceNetworkEvents\n| where SHA1 in ((serviceNetworkEventsWithSHA1 | project SHA1)) or FileName in~ (lolbins) \n| where ProcessCommandLine !~ \"msiexec.exe /V\" \n// This summarize is optional if you want to group similar stuff.\n//| summarize ActionType=make_set(ActionType), RemoteIPs=make_set(strcat(RemoteIP, \":\", RemotePort, \" (\", RemoteUrl, \")\")), LocalPort=make_set(LocalPort) by bin(TimestampNetworkAct, 1m), DeviceId, DeviceName, LocalIP, Protocol, AdditionalFields, bin(TimestampChild, 1m), FileName, ProcessCommandLine, SHA1, InitiatingProcessFileName, InitiatingProcessCommandLine1, bin(TimestampServicesExe, 1m) \n",
+        "queryFrequency": "1h",
+        "description": "This query is based on detecting incoming RPC/TCP on the SCM, followed by the start of a child process of services.exe. Remotely interacting with the SCM triggers the RPC/TCP traffic on services.exe, and the creation of the child processes is a result of starting the service. \nThe query might look intimidating given its size. That's why we've commented the query per logic block to walk you through the details.\n",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "DeviceName"
               }
             ]
           },
@@ -39,16 +40,16 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "InitiatingProcessAccountSid",
-                "identifier": "Sid"
+                "identifier": "Sid",
+                "columnName": "InitiatingProcessAccountSid"
               },
               {
-                "columnName": "InitiatingProcessAccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "InitiatingProcessAccountName"
               },
               {
-                "columnName": "InitiatingProcessAccountDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "InitiatingProcessAccountDomain"
               }
             ]
           },
@@ -56,8 +57,8 @@
             "entityType": "Process",
             "fieldMappings": [
               {
-                "columnName": "InitiatingProcessCommandLine",
-                "identifier": "CommandLine"
+                "identifier": "CommandLine",
+                "columnName": "InitiatingProcessCommandLine"
               }
             ]
           },
@@ -65,13 +66,12 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "RemoteIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "RemoteIP"
               }
             ]
           }
-        ],
-        "name": "SMB/Windows Admin Shares"
+        ]
       }
     }
   ]

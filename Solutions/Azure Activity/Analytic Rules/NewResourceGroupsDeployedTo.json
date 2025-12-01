@@ -14,32 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Low",
-        "triggerThreshold": 0,
-        "description": "'Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen caller.'\n",
-        "queryFrequency": "1d",
-        "queryPeriod": "14d",
         "tactics": [
           "Impact"
         ],
-        "status": "Available",
-        "query": "// Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all\nlet szOperationNames = dynamic([\"Microsoft.Compute/virtualMachines/write\", \"Microsoft.Resources/deployments/write\", \"Microsoft.Resources/subscriptions/resourceGroups/write\"]);\nlet starttime = 14d;\nlet endtime = 1d;\nlet RareCaller = AzureActivity\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationNameValue in~ (szOperationNames)\n| summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)\n// Returns all the records from the right side that don't have matches from the left.\n| join kind=rightantisemi (\nAzureActivity\n| where TimeGenerated > ago(endtime)\n| where OperationNameValue in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated,100), ActivityStatusValue = make_set(ActivityStatusValue,100), CorrelationIds = make_set(CorrelationId,100), ResourceGroups = make_set(ResourceGroup,100), ResourceIds = make_set(_ResourceId,100), ActivityCountByCallerIPAddress = count()\nby CallerIpAddress, Caller, OperationNameValue) on CallerIpAddress, Caller, OperationNameValue;\nRareCaller\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
+        "name": "Suspicious Resource deployment",
+        "status": "Available",
+        "severity": "Low",
+        "query": "// Add or remove operation names below as per your requirements. For operations lists, please refer to https://learn.microsoft.com/en-us/Azure/role-based-access-control/resource-provider-operations#all\nlet szOperationNames = dynamic([\"Microsoft.Compute/virtualMachines/write\", \"Microsoft.Resources/deployments/write\", \"Microsoft.Resources/subscriptions/resourceGroups/write\"]);\nlet starttime = 14d;\nlet endtime = 1d;\nlet RareCaller = AzureActivity\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationNameValue in~ (szOperationNames)\n| summarize count() by CallerIpAddress, Caller, OperationNameValue, bin(TimeGenerated,1d)\n// Returns all the records from the right side that don't have matches from the left.\n| join kind=rightantisemi (\nAzureActivity\n| where TimeGenerated > ago(endtime)\n| where OperationNameValue in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated,100), ActivityStatusValue = make_set(ActivityStatusValue,100), CorrelationIds = make_set(CorrelationId,100), ResourceGroups = make_set(ResourceGroup,100), ResourceIds = make_set(_ResourceId,100), ActivityCountByCallerIPAddress = count()\nby CallerIpAddress, Caller, OperationNameValue) on CallerIpAddress, Caller, OperationNameValue;\nRareCaller\n| extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),\"\")\n| extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),\"\")\n| extend AadUserId = iif(Caller !has '@',Caller,\"\")\n",
+        "queryFrequency": "1d",
+        "description": "'Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen caller.'\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Caller",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Caller"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -47,8 +48,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AadUserId",
-                "identifier": "AadUserId"
+                "identifier": "AadUserId",
+                "columnName": "AadUserId"
               }
             ]
           },
@@ -56,13 +57,12 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "CallerIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "CallerIpAddress"
               }
             ]
           }
-        ],
-        "name": "Suspicious Resource deployment"
+        ]
       }
     }
   ]

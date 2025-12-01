@@ -14,34 +14,34 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "// Retrieve Azure AD SigninLogs within the last day\nSigninLogs \n// Filter for specific AppDisplayNames, ResultType, and Risk Levels\n| where AppDisplayName in (\"Azure Portal\", \"ADFS Trust\", \"Microsoft Azure PowerShell\")\n    and RiskLevelAggregated == \"high\"\n    and RiskLevelDuringSignIn == \"high\"\n// Summarize AppDisplayNames by relevant attributes\n| extend Result = iff(ResultType == 0, \"Successful Signin\", \"Failed Signin\")\n| summarize make_set(AppDisplayName)\n    by\n    IPAddress,\n    signInTime=TimeGenerated,\n    UserPrincipalName,\n    RiskEventTypes,\n    RiskEventTypes_V2\n// Inner join with AWS CloudTrail events\n| join kind=inner (\n    AWSCloudTrail\n    | where isempty(ErrorMessage)\n    | where EventSource in (\"iam.amazonaws.com\", \"identitystore.amazonaws.com\", \"workmail.amazonaws.com\", \"workdocs.amazonaws.com\")\n    // List of AWS event names\n    | where EventName in~ (\"CreateRole\", \"DeleteRole\", \"CreateUser\", \"CreateAccessKey\", \"DeleteAccessKey\", \"CreateGroup\", \"AddUserToGroup\", \"ChangePassword\", \"DeleteGroup\", \"DeleteUser\", \"RemoveUserFromGroup\", \"CreateVirtualMFADevice\", \"DeleteLoginProfile\", \"CreateOrganization\", \"SetDefaultMailDomain\", \"SetMailUserDetails\", \"CreateMailUser\", \"ResetPassword\", \"RegisterToWorkMail\", \"DisableMailUsers\", \"EnableMailUsers\", \"DeleteServiceSpecificCredential\", \"CreateServiceSpecificCredential\", \"UpdateAccountEmailAddress\", \"DeleteGroupPolicy\", \"UploadServerCertificate\")  \n    // Summarize relevant attributes\n    | summarize make_set(RequestParameters), make_set(ResponseElements)\n        by\n        SourceIpAddress,\n        UserIdentityArn,\n        UserIdentityType,\n        EventName,\n        EventTime=TimeGenerated,\n        EventSource\n    )\n    on $left.IPAddress == $right.SourceIpAddress  \n// Calculate time difference in hours between AWS event and Azure sign-in\n| extend timedef = datetime_diff(\"hour\", EventTime, signInTime)\n// Filter for time differences within a certain range\n| where timedef between (0 .. 8)\n",
-        "description": "'This detection focuses on identifying high-risk cross-cloud activities and sign-in anomalies that may indicate potential security threats. The query starts by analyzing Microsoft Entra ID Signin Logs to pinpoint instances where specific applications, risk levels, and result types align. It then correlates this information with relevant AWS CloudTrail events to identify activities across Azure and AWS environments.'\n",
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
         "tactics": [
           "PrivilegeEscalation"
         ],
+        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "name": "High-Risk Cross-Cloud User Impersonation",
         "customDetails": {
-          "AzureUser": "UserPrincipalName",
-          "RiskEventTypes": "RiskEventTypes",
           "AWSEventName": "EventName",
+          "RiskEventTypes": "RiskEventTypes",
+          "AzureUser": "UserPrincipalName",
           "AwsUser": "UserIdentityArn"
         },
-        "triggerOperator": "gt",
+        "severity": "Medium",
+        "query": "// Retrieve Azure AD SigninLogs within the last day\nSigninLogs \n// Filter for specific AppDisplayNames, ResultType, and Risk Levels\n| where AppDisplayName in (\"Azure Portal\", \"ADFS Trust\", \"Microsoft Azure PowerShell\")\n    and RiskLevelAggregated == \"high\"\n    and RiskLevelDuringSignIn == \"high\"\n// Summarize AppDisplayNames by relevant attributes\n| extend Result = iff(ResultType == 0, \"Successful Signin\", \"Failed Signin\")\n| summarize make_set(AppDisplayName)\n    by\n    IPAddress,\n    signInTime=TimeGenerated,\n    UserPrincipalName,\n    RiskEventTypes,\n    RiskEventTypes_V2\n// Inner join with AWS CloudTrail events\n| join kind=inner (\n    AWSCloudTrail\n    | where isempty(ErrorMessage)\n    | where EventSource in (\"iam.amazonaws.com\", \"identitystore.amazonaws.com\", \"workmail.amazonaws.com\", \"workdocs.amazonaws.com\")\n    // List of AWS event names\n    | where EventName in~ (\"CreateRole\", \"DeleteRole\", \"CreateUser\", \"CreateAccessKey\", \"DeleteAccessKey\", \"CreateGroup\", \"AddUserToGroup\", \"ChangePassword\", \"DeleteGroup\", \"DeleteUser\", \"RemoveUserFromGroup\", \"CreateVirtualMFADevice\", \"DeleteLoginProfile\", \"CreateOrganization\", \"SetDefaultMailDomain\", \"SetMailUserDetails\", \"CreateMailUser\", \"ResetPassword\", \"RegisterToWorkMail\", \"DisableMailUsers\", \"EnableMailUsers\", \"DeleteServiceSpecificCredential\", \"CreateServiceSpecificCredential\", \"UpdateAccountEmailAddress\", \"DeleteGroupPolicy\", \"UploadServerCertificate\")  \n    // Summarize relevant attributes\n    | summarize make_set(RequestParameters), make_set(ResponseElements)\n        by\n        SourceIpAddress,\n        UserIdentityArn,\n        UserIdentityType,\n        EventName,\n        EventTime=TimeGenerated,\n        EventSource\n    )\n    on $left.IPAddress == $right.SourceIpAddress  \n// Calculate time difference in hours between AWS event and Azure sign-in\n| extend timedef = datetime_diff(\"hour\", EventTime, signInTime)\n// Filter for time differences within a certain range\n| where timedef between (0 .. 8)\n",
+        "queryFrequency": "1d",
+        "description": "'This detection focuses on identifying high-risk cross-cloud activities and sign-in anomalies that may indicate potential security threats. The query starts by analyzing Microsoft Entra ID Signin Logs to pinpoint instances where specific applications, risk levels, and result types align. It then correlates this information with relevant AWS CloudTrail events to identify activities across Azure and AWS environments.'\n",
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ]
           }
-        ],
-        "name": "High-Risk Cross-Cloud User Impersonation"
+        ]
       }
     }
   ]
