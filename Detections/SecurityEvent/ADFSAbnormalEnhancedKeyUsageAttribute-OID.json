@@ -14,9 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "// change the starttime value for a longer period of known OIDs\nlet starttime = 1d;\n// change the lookback value for a longer period of lookback for suspicious/abnormal\nlet lookback = 1h;\nlet OIDList = SecurityEvent\n| where TimeGenerated >= ago(starttime)\n| where EventSourceName == 'AD FS Auditing'\n| where EventID == 501\n| where EventData has '/eku'\n| extend OIDs = extract_all(@\"<Data>([\\d+\\.]+)</Data>\", EventData)\n| mv-expand OIDs\n| extend OID = tostring(OIDs)\n| extend OID_Length = strlen(OID)\n| project TimeGenerated, Computer, EventSourceName, EventID, OID, OID_Length, EventData\n;\nOIDList\n| where TimeGenerated >= ago(lookback)\n| join kind=leftanti (\nOIDList\n| where TimeGenerated between (ago(starttime) .. ago(lookback))\n| summarize by OID\n) on OID\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n",
+        "severity": "High",
         "triggerOperator": "gt",
+        "description": "'This detection uses Security events from the \"AD FS Auditing\" provider to detect suspicious object identifiers (OIDs) as part EventID 501 and specifically part of the Enhanced Key Usage attributes.\nThis query checks to see if you have any new OIDs in the last hour that have not been seen in the previous day. New OIDs should be validated and OIDs that are very long, as indicated\nby the OID_Length field, could also be an indicator of malicious activity.\nIn order to use this query you need to enable AD FS auditing on the AD FS Server.\nReferences:\nhttps://www.microsoft.com/security/blog/2022/08/24/magicweb-nobeliums-post-compromise-trick-to-authenticate-as-anyone/\nhttps://docs.microsoft.com/windows-server/identity/ad-fs/troubleshooting/ad-fs-tshoot-logging\n'\n",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "FullName",
@@ -30,15 +34,18 @@
                 "identifier": "DnsDomain",
                 "columnName": "HostNameDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ],
+        "queryPeriod": "1d",
         "triggerThreshold": 0,
-        "description": "'This detection uses Security events from the \"AD FS Auditing\" provider to detect suspicious object identifiers (OIDs) as part EventID 501 and specifically part of the Enhanced Key Usage attributes.\nThis query checks to see if you have any new OIDs in the last hour that have not been seen in the previous day. New OIDs should be validated and OIDs that are very long, as indicated\nby the OID_Length field, could also be an indicator of malicious activity.\nIn order to use this query you need to enable AD FS auditing on the AD FS Server.\nReferences:\nhttps://www.microsoft.com/security/blog/2022/08/24/magicweb-nobeliums-post-compromise-trick-to-authenticate-as-anyone/\nhttps://docs.microsoft.com/windows-server/identity/ad-fs/troubleshooting/ad-fs-tshoot-logging\n'\n",
+        "name": "AD FS Abnormal EKU object identifier attribute",
         "metadata": {
-          "author": {
-            "name": "Microsoft Security Research"
+          "source": {
+            "kind": "Community"
+          },
+          "support": {
+            "tier": "Community"
           },
           "categories": {
             "domains": [
@@ -46,21 +53,14 @@
               "Identity"
             ]
           },
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
+          "author": {
+            "name": "Microsoft Security Research"
           }
         },
-        "queryPeriod": "1d",
-        "queryFrequency": "1h",
-        "name": "AD FS Abnormal EKU object identifier attribute",
-        "severity": "High",
         "tactics": [
           "CredentialAccess"
         ],
-        "query": "// change the starttime value for a longer period of known OIDs\nlet starttime = 1d;\n// change the lookback value for a longer period of lookback for suspicious/abnormal\nlet lookback = 1h;\nlet OIDList = SecurityEvent\n| where TimeGenerated >= ago(starttime)\n| where EventSourceName == 'AD FS Auditing'\n| where EventID == 501\n| where EventData has '/eku'\n| extend OIDs = extract_all(@\"<Data>([\\d+\\.]+)</Data>\", EventData)\n| mv-expand OIDs\n| extend OID = tostring(OIDs)\n| extend OID_Length = strlen(OID)\n| project TimeGenerated, Computer, EventSourceName, EventID, OID, OID_Length, EventData\n;\nOIDList\n| where TimeGenerated >= ago(lookback)\n| join kind=leftanti (\nOIDList\n| where TimeGenerated between (ago(starttime) .. ago(lookback))\n| summarize by OID\n) on OID\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n"
+        "queryFrequency": "1h"
       }
     }
   ]
