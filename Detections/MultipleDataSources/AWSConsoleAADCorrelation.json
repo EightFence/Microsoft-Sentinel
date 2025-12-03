@@ -14,9 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "triggerOperator": "gt",
+        "query": "//Adjust this threshold to fit environment\nlet  signin_threshold = 5;\n//Make a list of IPs with failed AWS console logins\nlet aws_fails = AWSCloudTrail\n| where EventName == \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult != \"Success\"\n| where SourceIpAddress != \"127.0.0.1\"\n| summarize count() by SourceIpAddress\n| where count_ >  signin_threshold\n| summarize make_set(SourceIpAddress);\n//See if any of those IPs have sucessfully logged into Azure AD.\nSigninLogs\n| where ResultType in (\"0\", \"50125\", \"50140\")\n| where IPAddress in (aws_fails)\n| extend Reason = \"Multiple failed AWS Console logins from IP address\"\n| extend timestamp = TimeGenerated, AccountName = tostring(split(UserPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
+        "triggerThreshold": 0,
         "description": "'Identifies a list of IP addresses with a minimum number (default of 5) of failed logon attempts to AWS Console.\nUses that list to identify any successful Microsoft Entra ID logons from these IPs within the same timeframe.'\n",
+        "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
+          "source": {
+            "kind": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Others",
+              "Identity"
+            ]
+          }
+        },
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess"
+        ],
+        "name": "Failed AWS Console logons but success logon to AzureAD",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -54,32 +78,8 @@
             ]
           }
         ],
-        "query": "//Adjust this threshold to fit environment\nlet  signin_threshold = 5;\n//Make a list of IPs with failed AWS console logins\nlet aws_fails = AWSCloudTrail\n| where EventName == \"ConsoleLogin\"\n| extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)\n| where LoginResult != \"Success\"\n| where SourceIpAddress != \"127.0.0.1\"\n| summarize count() by SourceIpAddress\n| where count_ >  signin_threshold\n| summarize make_set(SourceIpAddress);\n//See if any of those IPs have sucessfully logged into Azure AD.\nSigninLogs\n| where ResultType in (\"0\", \"50125\", \"50140\")\n| where IPAddress in (aws_fails)\n| extend Reason = \"Multiple failed AWS Console logins from IP address\"\n| extend timestamp = TimeGenerated, AccountName = tostring(split(UserPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\n",
-        "triggerThreshold": 0,
-        "name": "Failed AWS Console logons but success logon to AzureAD",
-        "metadata": {
-          "source": {
-            "kind": "Community"
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "categories": {
-            "domains": [
-              "Security - Others",
-              "Identity"
-            ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
-          }
-        },
-        "tactics": [
-          "InitialAccess",
-          "CredentialAccess"
-        ],
-        "queryPeriod": "1d",
-        "queryFrequency": "1d"
+        "queryFrequency": "1d",
+        "queryPeriod": "1d"
       }
     }
   ]

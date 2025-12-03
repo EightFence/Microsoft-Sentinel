@@ -14,50 +14,50 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in VMConnection.\n",
         "triggerThreshold": 0,
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
         "tactics": [
           "CommandAndControl"
         ],
-        "name": "TI Map IP Entity to VMConnection",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform a join between IP indicators and VMConnection events\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      VMConnection\n      | where TimeGenerated >= ago(dt_lookBack)\n      | extend VMConnection_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.RemoteIp\n  // Filter out VMConnection events that occurred after the expiration of the corresponding indicator\n  | where VMConnection_TimeGenerated < ValidUntil\n  // Group the results by IndicatorId and keep the VMConnection event with the latest timestamp\n  | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by Id, RemoteIp\n  // Select the desired output fields\n  | extend Description = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n  | project VMConnection_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,\n    TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkSourceIP, Type, Url\n  | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
-        "severity": "Medium",
-        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in VMConnection.\n",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "HostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName"
               },
               {
-                "columnName": "DnsDomain",
-                "identifier": "DnsDomain"
+                "identifier": "DnsDomain",
+                "columnName": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "RemoteIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "RemoteIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
-        ]
+        ],
+        "name": "TI Map IP Entity to VMConnection",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for VMConnection events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform a join between IP indicators and VMConnection events\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      VMConnection\n      | where TimeGenerated >= ago(dt_lookBack)\n      | extend VMConnection_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.RemoteIp\n  // Filter out VMConnection events that occurred after the expiration of the corresponding indicator\n  | where VMConnection_TimeGenerated < ValidUntil\n  // Group the results by IndicatorId and keep the VMConnection event with the latest timestamp\n  | summarize VMConnection_TimeGenerated = arg_max(VMConnection_TimeGenerated, *) by Id, RemoteIp\n  // Select the desired output fields\n  | extend Description = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n  | project VMConnection_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,\n    TI_ipEntity, Computer, Direction, ProcessName, SourceIp, DestinationIp, RemoteIp, Protocol, DestinationPort, NetworkSourceIP, Type, Url\n  | extend timestamp = VMConnection_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h"
       }
     }
   ]
