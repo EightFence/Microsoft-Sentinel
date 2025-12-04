@@ -14,40 +14,40 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "description": "Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).\nDisabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.\n",
-        "triggerThreshold": 0,
         "tactics": [
           "Collection",
           "CommandAndControl",
           "DefenseEvasion"
         ],
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ResourceName"
+                "columnName": "ResourceName",
+                "identifier": "Name"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
         ],
-        "name": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
         "queryPeriod": "1h",
-        "customDetails": {
-          "ManagedZone": "ManagedZone",
-          "ExternalUri": "ExternalUri",
-          "ProjectName": "ProjectName"
-        },
+        "name": "GCP Security Command Center - Detect DNSSEC disabled for DNS zones",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "DNSSEC is disabled for managed zone {{ManagedZone}} in project {{ProjectName}}. Review the zone configuration and enable DNSSEC where appropriate.",
           "alertDisplayNameFormat": "GCP DNS zone {{ManagedZone}} has DNSSEC disabled"
         },
+        "description": "Detects Google Cloud DNS zones where DNSSEC is disabled using Security Command Center findings (DNSSEC_DISABLED).\nDisabling DNSSEC increases risk of DNS hijacking and man-in-the-middle attacks. This analytic rule alerts on findings where DNSSEC is reported as disabled for a managed zone.\n",
         "severity": "Medium",
+        "status": "Available",
         "query": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingsJson = parse_json(Findings)\n| extend FindingCategory = tostring(FindingsJson.category)\n| where FindingCategory == \"DNSSEC_DISABLED\"\n| extend ResourceName = tostring(FindingsJson.resourceName)\n| extend\n  ResourceType = tostring(FindingsResource.type),\n  ExternalUri = tostring(FindingsJson.externalUri),\n  SourceProps = parse_json(tostring(FindingsJson.sourceProperties)),\n  GcpResource = parse_json(tostring(FindingsJson.resource))\n// Extract project and managed zone from resourceName like //dns.googleapis.com/projects/PROJECT/managedZones/ZONE\n| extend ProjectName = extract(@\"projects/([^/]+)\", 1, ResourceName)\n| extend ManagedZone = extract(@\"managedZones/([^/]+)\", 1, ResourceName)\n| extend Severity = tostring(FindingsJson.severity)\n| summarize\n  TimeGenerated = max(TimeGenerated)\n  by ProjectName, ManagedZone, ResourceType, ResourceName, Severity, ExternalUri\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h"
+        "customDetails": {
+          "ProjectName": "ProjectName",
+          "ManagedZone": "ManagedZone",
+          "ExternalUri": "ExternalUri"
+        }
       }
     }
   ]
