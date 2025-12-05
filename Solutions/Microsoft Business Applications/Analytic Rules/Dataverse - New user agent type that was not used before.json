@@ -14,26 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "InitialAccess",
-          "DefenseEvasion"
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "status": "Available",
         "triggerOperator": "gt",
+        "name": "Dataverse - New user agent type that was not used before",
+        "description": "Identifies users accessing Dataverse from a User Agent that has not been seen in any Dataverse instance in the last 14 days.",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -41,12 +38,12 @@
           {
             "fieldMappings": [
               {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
               },
               {
-                "columnName": "InstanceUrl",
-                "identifier": "InstanceName"
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
               }
             ],
             "entityType": "CloudApplication"
@@ -54,23 +51,26 @@
           {
             "fieldMappings": [
               {
-                "columnName": "LatestIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "LatestIP"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryPeriod": "14d",
-        "name": "Dataverse - New user agent type that was not used before",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{UserId}} with new agent not seen previously in the Dataverse activity log.\nAgent: {{UserAgent}}\nLatest IP: {{LatestIP}}\n",
-          "alertDisplayNameFormat": "Dataverse - new user agent detected in {{{InstanceUrl}} "
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
-        "description": "Identifies users accessing Dataverse from a User Agent that has not been seen in any Dataverse instance in the last 14 days.",
         "severity": "Low",
-        "status": "Available",
-        "query": "let query_lookback = 14d;\nlet query_frequency = 1h;\nlet known_useragents = dynamic([\n    // Enter known user agents to exclude.\n    // example:\n    // \"Agent1\", \"Agent2\", \"Agent3\"\n    ]);\nDataverseActivity\n| where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n| where isnotempty(UserAgent)\n| summarize by UserAgent\n| join kind = rightanti (DataverseActivity\n    | where TimeGenerated > ago(query_frequency)\n    | where not (UserId has_any (\"@onmicrosoft.com\", \"@microsoft.com\", \"Unknown\"))\n    | where isnotempty(UserAgent)\n    | where UserAgent !in~ (known_useragents)\n    | where UserAgent !hasprefix \"azure-logic-apps\" and UserAgent !hasprefix \"PowerApps\")\n    on UserAgent\n// Exclude user agents with a render agent to reduce noise.\n| join kind = leftanti(\n    DataverseActivity\n    | where TimeGenerated > ago(query_frequency)\n    | where UserAgent has_any (\"Gecko\", \"WebKit\", \"Presto\", \"Trident\", \"EdgeHTML\", \"Blink\"))\n    on UserAgent\n| summarize\n    FirstSeen = min(TimeGenerated),\n    LatestIP = arg_max(ClientIp, TimeGenerated)\n    by UserAgent, UserId, InstanceUrl\n| extend\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1]),\n    CloudAppId = int(32780)\n| project\n    FirstSeen,\n    UserId,\n    UserAgent,\n    LatestIP,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - new user agent detected in {{{InstanceUrl}} ",
+          "alertDescriptionFormat": "{{UserId}} with new agent not seen previously in the Dataverse activity log.\nAgent: {{UserAgent}}\nLatest IP: {{LatestIP}}\n"
+        },
+        "query": "let query_lookback = 14d;\nlet query_frequency = 1h;\nlet known_useragents = dynamic([\n    // Enter known user agents to exclude.\n    // example:\n    // \"Agent1\", \"Agent2\", \"Agent3\"\n    ]);\nDataverseActivity\n| where TimeGenerated between(ago(query_lookback) .. ago(query_frequency))\n| where isnotempty(UserAgent)\n| summarize by UserAgent\n| join kind = rightanti (DataverseActivity\n    | where TimeGenerated > ago(query_frequency)\n    | where not (UserId has_any (\"@onmicrosoft.com\", \"@microsoft.com\", \"Unknown\"))\n    | where isnotempty(UserAgent)\n    | where UserAgent !in~ (known_useragents)\n    | where UserAgent !hasprefix \"azure-logic-apps\" and UserAgent !hasprefix \"PowerApps\")\n    on UserAgent\n// Exclude user agents with a render agent to reduce noise.\n| join kind = leftanti(\n    DataverseActivity\n    | where TimeGenerated > ago(query_frequency)\n    | where UserAgent has_any (\"Gecko\", \"WebKit\", \"Presto\", \"Trident\", \"EdgeHTML\", \"Blink\"))\n    on UserAgent\n| summarize\n    FirstSeen = min(TimeGenerated),\n    LatestIP = arg_max(ClientIp, TimeGenerated)\n    by UserAgent, UserId, InstanceUrl\n| extend\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1]),\n    CloudAppId = int(32780)\n| project\n    FirstSeen,\n    UserId,\n    UserAgent,\n    LatestIP,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "tactics": [
+          "InitialAccess",
+          "DefenseEvasion"
+        ]
       }
     }
   ]

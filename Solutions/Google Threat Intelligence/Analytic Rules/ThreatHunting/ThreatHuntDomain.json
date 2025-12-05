@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d9e1646c-dc17-4150-ac85-581f5c9cb41f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d9e1646c-dc17-4150-ac85-581f5c9cb41f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "name": "Google Threat Intelligence - Threat Hunting Domain",
+        "description": "'Google Threat Intelligence domain correlation.'\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "30m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "Domain"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ],
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "1h",
+            "matchingMethod": "AllEntities",
+            "enabled": true,
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Google Threat Intelligence Match",
+          "alertDescriptionFormat": "Correlation found from the {{Type}} table."
+        },
+        "query": "let ioc_lookBack = 1d;\n_Im_Dns\n| where isnotempty(DnsQuery)\n| extend lowerDomain=tolower(DnsQuery)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey == 'domain-name:value'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n| extend lowerDomain=tolower(ObservableValue)\n) on lowerDomain\n| project Domain=ObservableValue, Description=Data.description, Type, TimeGenerated\n",
+        "tactics": [
+          "CommandAndControl"
+        ]
+      }
+    }
+  ]
+}

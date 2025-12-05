@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7edb2abb-7ef7-4685-92eb-a628703ccf9f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7edb2abb-7ef7-4685-92eb-a628703ccf9f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "name": "Google Threat Intelligence - Threat Hunting IP",
+        "description": "'Google Threat Intelligence IP correlation.'\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "30m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "NetworkIP"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "1h",
+            "matchingMethod": "AllEntities",
+            "enabled": true,
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Google Threat Intelligence Match",
+          "alertDescriptionFormat": "Correlation found from the {{Type}} table."
+        },
+        "query": "let ioc_lookBack = 1d;\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey == 'ipv4-addr:value'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n) on $left.DstIpAddr == $right.ObservableValue\n| project NetworkIP=ObservableValue, Description=Data.description, Type, TimeGenerated\n",
+        "tactics": [
+          "CommandAndControl"
+        ]
+      }
+    }
+  ]
+}
