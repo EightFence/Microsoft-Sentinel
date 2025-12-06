@@ -14,15 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "status": "Available",
-        "triggerOperator": "gt",
-        "name": "AWS Security Hub - Detect EC2 Security groups allowing unrestricted high-risk ports",
-        "description": "This query detects EC2 Security Groups that allow unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports using AWS Security Hub control EC2.19 findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
+        "query": "let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);\nAWSSecurityHubFindings\n| where RecordState == \"ACTIVE\" and ComplianceStatus == \"FAILED\"\n| where tostring(AwsSecurityFindingGeneratorId) == \"security-control/EC2.19\"\n      or tostring(ComplianceSecurityControlId) == \"EC2.19\"\n| mv-expand Resource = Resources\n| where tostring(Resource.Type) == \"AwsEc2SecurityGroup\"\n| extend SGDetails = Resource.Details.AwsEc2SecurityGroup\n| extend IpPermissions = SGDetails.IpPermissions\n| mv-expand Perm = IpPermissions\n| where toint(Perm.FromPort) in (HighRiskPorts)\n| mv-expand Range = Perm.IpRanges\n| where tostring(Range.CidrIp) in (\"0.0.0.0/0\", \"::/0\")\n| summarize TimeGenerated = max(TimeGenerated), OpenHighRiskPorts = make_set(tostring(Perm.FromPort))\n    by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,\n       AwsSecurityFindingId, ComplianceSecurityControlId, SecurityGroupId = tostring(SGDetails.GroupId), SecurityGroupARN = tostring(Resource.Id)\n| extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, \", \")\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -32,37 +27,42 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "AwsAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "SecurityGroupARN"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
         "severity": "High",
+        "name": "AWS Security Hub - Detect EC2 Security groups allowing unrestricted high-risk ports",
+        "description": "This query detects EC2 Security Groups that allow unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports using AWS Security Hub control EC2.19 findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.\n",
         "customDetails": {
-          "Region": "AwsRegion",
+          "OpenHighRiskPorts": "OpenHighRiskPorts",
           "FindingId": "AwsSecurityFindingId",
           "ComplianceControlId": "ComplianceSecurityControlId",
           "SecurityGroupId": "SecurityGroupId",
-          "OpenHighRiskPorts": "OpenHighRiskPorts"
+          "Region": "AwsRegion"
         },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted high-risk ports",
-          "alertDescriptionFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports: {{OpenHighRiskPorts}}. Restrict or remove the offending rules."
-        },
-        "query": "let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);\nAWSSecurityHubFindings\n| where RecordState == \"ACTIVE\" and ComplianceStatus == \"FAILED\"\n| where tostring(AwsSecurityFindingGeneratorId) == \"security-control/EC2.19\"\n      or tostring(ComplianceSecurityControlId) == \"EC2.19\"\n| mv-expand Resource = Resources\n| where tostring(Resource.Type) == \"AwsEc2SecurityGroup\"\n| extend SGDetails = Resource.Details.AwsEc2SecurityGroup\n| extend IpPermissions = SGDetails.IpPermissions\n| mv-expand Perm = IpPermissions\n| where toint(Perm.FromPort) in (HighRiskPorts)\n| mv-expand Range = Perm.IpRanges\n| where tostring(Range.CidrIp) in (\"0.0.0.0/0\", \"::/0\")\n| summarize TimeGenerated = max(TimeGenerated), OpenHighRiskPorts = make_set(tostring(Perm.FromPort))\n    by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,\n       AwsSecurityFindingId, ComplianceSecurityControlId, SecurityGroupId = tostring(SGDetails.GroupId), SecurityGroupARN = tostring(Resource.Id)\n| extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, \", \")\n",
         "tactics": [
           "InitialAccess",
           "LateralMovement",
           "Discovery"
-        ]
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted high-risk ports",
+          "alertDescriptionFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports: {{OpenHighRiskPorts}}. Restrict or remove the offending rules."
+        },
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "queryPeriod": "1h",
+        "triggerThreshold": 0,
+        "status": "Available"
       }
     }
   ]
