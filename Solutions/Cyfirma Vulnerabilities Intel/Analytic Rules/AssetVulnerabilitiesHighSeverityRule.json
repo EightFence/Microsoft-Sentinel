@@ -14,29 +14,64 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "\"This rule detects high severity asset-based vulnerabilities from CYFIRMA's vulnerability intelligence data. \nIt identifies vulnerabilities with a confidence score of 80 or higher, excluding those categorized as 'ATTACK_SURFACE_VULNERABILITY', and generates alerts for assets that may be at risk.\"\n",
+        "enabled": false,
+        "name": "CYFIRMA - High Severity Asset based Vulnerabilities Rule Alert",
         "triggerThreshold": 0,
         "customDetails": {
-          "ExploitabilityScore": "exploitability_score",
-          "ConfidenceScore": "confidence_score",
-          "CVSSScore": "cvss_score",
           "PrivilegesRequired": "privileges_required",
           "Technologies": "technologies",
-          "scope": "scope",
+          "CVSSScore": "cvss_score",
+          "AttackComplexity": "attack_complexity",
           "UserInteraction": "user_interaction",
-          "CVSSVector": "cvss_vector",
-          "ImpactScore": "impact_score",
-          "AttackVector": "attack_vector",
-          "TimeGenerated": "TimeGenerated",
-          "IntegrityImpact": "integrity_impact",
-          "CVSSVersion": "cvss_version",
-          "CVE": "name",
-          "Products": "products",
-          "Vendors": "vendors",
-          "ConfidentialImpact": "confidentiality_impact",
+          "scope": "scope",
           "Modified": "modified",
-          "AttackComplexity": "attack_complexity"
+          "CVE": "name",
+          "ConfidenceScore": "confidence_score",
+          "ConfidentialImpact": "confidentiality_impact",
+          "Vendors": "vendors",
+          "CVSSVersion": "cvss_version",
+          "AttackVector": "attack_vector",
+          "CVSSVector": "cvss_vector",
+          "TimeGenerated": "TimeGenerated",
+          "ExploitabilityScore": "exploitability_score",
+          "ImpactScore": "impact_score",
+          "IntegrityImpact": "integrity_impact",
+          "Products": "products"
         },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{description}} ",
+          "alertDisplayNameFormat": "CYFIRMA - High Severity Asset based Vulnerability Identified - {{name}} ",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "ProductName",
+              "value": "ProductName"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "ProviderName"
+            }
+          ]
+        },
+        "queryFrequency": "5m",
         "triggerOperator": "GreaterThan",
+        "severity": "High",
+        "queryPeriod": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "// High severity - Asset based Vulnerabilities\nlet timeFrame = 5m;\nCyfirmaVulnerabilities_CL\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    attack_complexity         = tostring(props.attack_complexity),\n    cvss_score                = toreal(props.cvss_score),\n    integrity_impact          = tostring(props.integrity_impact),\n    impact_score              = tostring(props.impact_score),\n    attack_vector             = tostring(props.attack_vector),\n    privileges_required       = tostring(props.privileges_required),\n    cvss_version              = tostring(props.cvss_version),\n    user_interaction          = tostring(props.user_interaction),\n    cvss_vector               = tostring(props.cvss_vector),\n    scope                     = tostring(props.scope),\n    confidentiality_impact    = tostring(props.confidentiality_impact),\n    exploitability_score      = toreal(props.exploitability_score),\n    products                  = tostring(props.products),\n    technologies              = tostring(props.technologies),\n    vendors                   = tostring(props.vendors),\n    confidence_score          = toint(confidence),\n    servers                   = tostring(props.servers),\n    vulnerability_type        = tostring(props.vulnerability_type),\n    vulnerability_category        = tostring(props.vulnerability_category),\n    NetworkIPs                = tostring(props.ips),\n    ProviderName              ='CYFIRMA',\n    ProductName               ='DeCYFIR/DeTCT'\n| summarize arg_max(\n                integrity_impact,\n                TimeGenerated, \n                id,\n                description,\n                confidence_score,\n                created,\n                modified,\n                attack_complexity,\n                cvss_score,\n                impact_score,\n                attack_vector,\n                privileges_required,\n                cvss_version,\n                user_interaction,\n                cvss_vector,\n                scope,\n                confidentiality_impact,\n                exploitability_score,\n                products,\n                technologies,\n                vendors,\n                ProviderName,\n                ProductName,\n                servers,\n                NetworkIPs,\n                vulnerability_type,\n                vulnerability_category\n            )\n    by name\n| where confidence_score >= 80 and vulnerability_category != 'ATTACK_SURFACE_VULNERABILITY' and TimeGenerated between (ago(timeFrame) .. now())\n| project \n    TimeGenerated,\n    name,\n    confidence_score,\n    integrity_impact,\n    attack_complexity,\n    cvss_score,\n    impact_score,\n    attack_vector,\n    UID = id,\n    description,\n    created,\n    modified,\n    privileges_required,\n    cvss_version,\n    user_interaction,\n    cvss_vector,\n    scope,\n    confidentiality_impact,\n    exploitability_score,\n    products,\n    technologies,\n    vendors,\n    ProviderName,\n    ProductName,\n    servers,\n    NetworkIPs,\n    vulnerability_type,\n    vulnerability_category\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "enabled": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities"
+          },
+          "createIncident": true
+        },
+        "suppressionDuration": "5m",
+        "suppressionEnabled": false,
         "tactics": [
           "Execution",
           "LateralMovement",
@@ -44,42 +79,7 @@
           "InitialAccess",
           "CredentialAccess",
           "DefenseEvasion"
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "description": "\"This rule detects high severity asset-based vulnerabilities from CYFIRMA's vulnerability intelligence data. \nIt identifies vulnerabilities with a confidence score of 80 or higher, excluding those categorized as 'ATTACK_SURFACE_VULNERABILITY', and generates alerts for assets that may be at risk.\"\n",
-        "queryFrequency": "5m",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{description}} ",
-          "alertDynamicProperties": [
-            {
-              "value": "ProductName",
-              "alertProperty": "ProductName"
-            },
-            {
-              "value": "ProviderName",
-              "alertProperty": "ProviderName"
-            }
-          ],
-          "alertDisplayNameFormat": "CYFIRMA - High Severity Asset based Vulnerability Identified - {{name}} "
-        },
-        "suppressionDuration": "5m",
-        "suppressionEnabled": false,
-        "name": "CYFIRMA - High Severity Asset based Vulnerabilities Rule Alert",
-        "enabled": false,
-        "severity": "High",
-        "queryPeriod": "5m",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "enabled": false,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H"
-          }
-        },
-        "query": "// High severity - Asset based Vulnerabilities\nlet timeFrame = 5m;\nCyfirmaVulnerabilities_CL\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    attack_complexity         = tostring(props.attack_complexity),\n    cvss_score                = toreal(props.cvss_score),\n    integrity_impact          = tostring(props.integrity_impact),\n    impact_score              = tostring(props.impact_score),\n    attack_vector             = tostring(props.attack_vector),\n    privileges_required       = tostring(props.privileges_required),\n    cvss_version              = tostring(props.cvss_version),\n    user_interaction          = tostring(props.user_interaction),\n    cvss_vector               = tostring(props.cvss_vector),\n    scope                     = tostring(props.scope),\n    confidentiality_impact    = tostring(props.confidentiality_impact),\n    exploitability_score      = toreal(props.exploitability_score),\n    products                  = tostring(props.products),\n    technologies              = tostring(props.technologies),\n    vendors                   = tostring(props.vendors),\n    confidence_score          = toint(confidence),\n    servers                   = tostring(props.servers),\n    vulnerability_type        = tostring(props.vulnerability_type),\n    vulnerability_category        = tostring(props.vulnerability_category),\n    NetworkIPs                = tostring(props.ips),\n    ProviderName              ='CYFIRMA',\n    ProductName               ='DeCYFIR/DeTCT'\n| summarize arg_max(\n                integrity_impact,\n                TimeGenerated, \n                id,\n                description,\n                confidence_score,\n                created,\n                modified,\n                attack_complexity,\n                cvss_score,\n                impact_score,\n                attack_vector,\n                privileges_required,\n                cvss_version,\n                user_interaction,\n                cvss_vector,\n                scope,\n                confidentiality_impact,\n                exploitability_score,\n                products,\n                technologies,\n                vendors,\n                ProviderName,\n                ProductName,\n                servers,\n                NetworkIPs,\n                vulnerability_type,\n                vulnerability_category\n            )\n    by name\n| where confidence_score >= 80 and vulnerability_category != 'ATTACK_SURFACE_VULNERABILITY' and TimeGenerated between (ago(timeFrame) .. now())\n| project \n    TimeGenerated,\n    name,\n    confidence_score,\n    integrity_impact,\n    attack_complexity,\n    cvss_score,\n    impact_score,\n    attack_vector,\n    UID = id,\n    description,\n    created,\n    modified,\n    privileges_required,\n    cvss_version,\n    user_interaction,\n    cvss_vector,\n    scope,\n    confidentiality_impact,\n    exploitability_score,\n    products,\n    technologies,\n    vendors,\n    ProviderName,\n    ProductName,\n    servers,\n    NetworkIPs,\n    vulnerability_type,\n    vulnerability_category\n"
+        ]
       }
     }
   ]
