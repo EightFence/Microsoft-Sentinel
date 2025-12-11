@@ -14,20 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.\nProjects with API Keys may expose credentials that enable unauthorized access if keys are leaked.\n",
-        "name": "GCP Security Command Center - Detect projects with API Keys present",
-        "triggerThreshold": 0,
+        "status": "Available",
         "customDetails": {
-          "SampleExternalUri": "ExternalUri",
-          "ProjectName": "ProjectName",
           "SampleDescription": "Description",
+          "ProjectName": "ProjectName",
+          "SampleExternalUri": "ExternalUri",
           "ProjectId": "ProjectId",
           "FindingsCount": "FindingsCount"
         },
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "Project {{ProjectName}} ({{ProjectId}}) has {{FindingsCount}} API key finding(s). Review API keys and consider rotating or removing keys and using IAM-based authentication.",
-          "alertDisplayNameFormat": "GCP project {{ProjectName}} has API key(s) present"
+          "alertDisplayNameFormat": "GCP project {{ProjectName}} has API key(s) present",
+          "alertDescriptionFormat": "Project {{ProjectName}} ({{ProjectId}}) has {{FindingsCount}} API key finding(s). Review API keys and consider rotating or removing keys and using IAM-based authentication."
         },
+        "queryPeriod": "1h",
+        "description": "Detects Google Cloud projects that have API Keys present using Security Command Center API_KEY_EXISTS findings.\nProjects with API Keys may expose credentials that enable unauthorized access if keys are leaked.\n",
+        "severity": "Medium",
+        "query": "GoogleCloudSCC\n | where tostring(Findings.state) == \"ACTIVE\"\n | extend FindingCategory = tostring(Findings.category)\n | where FindingCategory == \"API_KEY_EXISTS\"\n | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)\n | extend ResourceName = tostring(FindingsJson.resourceName)\n | extend ProjectId = extract(@\"projects/([^/]+)\", 1, ResourceName)\n | extend ProjectName = tostring(FindingsResourceJson.displayName)\n | extend Severity = tostring(FindingsJson.severity),\n          FindingName = tostring(FindingsJson.name),\n          ExternalUri = tostring(FindingsJson.externalUri),\n          Description = tostring(FindingsJson.description)\n // Produce one row per project with an API key finding\n | summarize TimeGenerated = max(TimeGenerated),\n             FindingsCount = count(),\n             ExternalUri = any(ExternalUri),\n             Description = any(Description)\n   by ProjectId, ProjectName, Severity, ResourceName\n | project TimeGenerated, ProjectId, ProjectName, ResourceName, FindingsCount, Severity, ExternalUri, Description\n",
+        "queryFrequency": "1h",
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "triggerThreshold": 0,
+        "name": "GCP Security Command Center - Detect projects with API Keys present",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,15 +51,7 @@
             "entityType": "CloudApplication"
           }
         ],
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryPeriod": "1h",
-        "status": "Available",
-        "query": "GoogleCloudSCC\n | where tostring(Findings.state) == \"ACTIVE\"\n | extend FindingCategory = tostring(Findings.category)\n | where FindingCategory == \"API_KEY_EXISTS\"\n | extend FindingsJson = parse_json(Findings), FindingsResourceJson = parse_json(FindingsResource)\n | extend ResourceName = tostring(FindingsJson.resourceName)\n | extend ProjectId = extract(@\"projects/([^/]+)\", 1, ResourceName)\n | extend ProjectName = tostring(FindingsResourceJson.displayName)\n | extend Severity = tostring(FindingsJson.severity),\n          FindingName = tostring(FindingsJson.name),\n          ExternalUri = tostring(FindingsJson.externalUri),\n          Description = tostring(FindingsJson.description)\n // Produce one row per project with an API key finding\n | summarize TimeGenerated = max(TimeGenerated),\n             FindingsCount = count(),\n             ExternalUri = any(ExternalUri),\n             Description = any(Description)\n   by ProjectId, ProjectName, Severity, ResourceName\n | project TimeGenerated, ProjectId, ProjectName, ResourceName, FindingsCount, Severity, ExternalUri, Description\n",
-        "tactics": [
-          "CredentialAccess"
-        ]
+        "triggerOperator": "gt"
       }
     }
   ]
