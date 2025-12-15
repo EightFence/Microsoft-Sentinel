@@ -14,10 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Sdelete deployed via GPO and run recursively (ASIM Version)",
+        "query": "_Im_ProcessEvent\n| where EventType =~ \"ProcessCreated\"\n| where Process endswith \"svchost.exe\"\n| where CommandLine has \"-k GPSvcGroup\" or CommandLine has \"-s gpsvc\"\n| extend timekey = bin(TimeGenerated, 1m)\n| project timekey, ActingProcessId, Dvc\n| join kind=inner (\n  _Im_ProcessEvent\n  | where EventType =~ \"ProcessCreated\"\n  | where Process =~ \"sdelete.exe\" or CommandLine has \"sdelete\"\n  | where ActingProcessName endswith \"svchost.exe\"\n  | where CommandLine has_all (\"-s\", \"-r\")\n  | extend timekey = bin(TimeGenerated, 1m)\n  ) \n  on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc\n| extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\\')[0])\n| extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n| project-away DomainIndex\n",
+        "description": "'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.\n  This query uses the Advanced Security Information Model. Parsers will need to be deployed before use: https://docs.microsoft.com/azure/sentinel/normalization'\n",
         "severity": "Medium",
         "triggerThreshold": 0,
-        "query": "_Im_ProcessEvent\n| where EventType =~ \"ProcessCreated\"\n| where Process endswith \"svchost.exe\"\n| where CommandLine has \"-k GPSvcGroup\" or CommandLine has \"-s gpsvc\"\n| extend timekey = bin(TimeGenerated, 1m)\n| project timekey, ActingProcessId, Dvc\n| join kind=inner (\n  _Im_ProcessEvent\n  | where EventType =~ \"ProcessCreated\"\n  | where Process =~ \"sdelete.exe\" or CommandLine has \"sdelete\"\n  | where ActingProcessName endswith \"svchost.exe\"\n  | where CommandLine has_all (\"-s\", \"-r\")\n  | extend timekey = bin(TimeGenerated, 1m)\n  ) \n  on $left.ActingProcessId == $right.ParentProcessId, timekey, Dvc\n| extend AccountName = tostring(split(ActorUsername, @'\\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\\')[0])\n| extend HostName = tostring(split(Dvc, \".\")[0]), DomainIndex = toint(indexof(Dvc, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)\n| project-away DomainIndex\n",
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "name": "Sdelete deployed via GPO and run recursively (ASIM Version)",
         "metadata": {
           "support": {
             "tier": "Community"
@@ -25,31 +29,29 @@
           "source": {
             "kind": "Community"
           },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
           "categories": {
             "domains": [
               "Security - Threat Protection"
             ]
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           }
         },
-        "queryFrequency": "1d",
-        "description": "'This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them.\n  This query uses the Advanced Security Information Model. Parsers will need to be deployed before use: https://docs.microsoft.com/azure/sentinel/normalization'\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "ActorUsername"
+                "columnName": "ActorUsername",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "NTDomain",
-                "columnName": "AccountNTDomain"
+                "columnName": "AccountNTDomain",
+                "identifier": "NTDomain"
               }
             ],
             "entityType": "Account"
@@ -57,16 +59,16 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Dvc"
+                "columnName": "Dvc",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
               }
             ],
             "entityType": "Host"
@@ -74,8 +76,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "DvcIpAddr"
+                "columnName": "DvcIpAddr",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -83,9 +85,7 @@
         ],
         "tactics": [
           "Impact"
-        ],
-        "queryPeriod": "1d",
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]

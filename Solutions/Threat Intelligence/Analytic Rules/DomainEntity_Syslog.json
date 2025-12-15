@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies a match in Syslog table from any Domain IOC from TI\n",
+        "query": "let dt_lookBack = 1h;  // Define the time range to look back for syslog data (1 hour)\nlet ioc_lookBack = 14d;  // Define the time range to look back for threat intelligence indicators (14 days)\n// Create a list of top-level domains (TLDs) from the threat feed for later validation\nlet list_tlds = ThreatIntelligenceIndicator\n  | where isnotempty(DomainName)\n  | where TimeGenerated > ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | extend parts = split(DomainName, '.')\n  | extend tld = parts[(array_length(parts)-1)]\n  | summarize count() by tostring(tld)\n  | summarize make_list(tld);\n// Fetch the latest active domain indicators from the threat intelligence data within the specified time range\nlet Domain_Indicators = ThreatIntelligenceIndicator\n  | where isnotempty(DomainName)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | extend TI_DomainEntity = DomainName;\n// Join the threat intelligence indicators with syslog data on matching domain entities\nDomain_Indicators\n  | join kind=innerunique (\n    Syslog\n    | where TimeGenerated > ago(dt_lookBack)\n    // Extract domain patterns from syslog messages\n    | extend domain = extract(\"(([a-z0-9]+(-[a-z0-9]+)*\\\\.)+[a-z]{2,})\",1, tolower(SyslogMessage))\n    | where isnotempty(domain)\n    | extend parts = split(domain, '.')\n    // Split out the top-level domain (TLD)\n    | extend tld = parts[(array_length(parts)-1)]\n    // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed\n    | where tld in~ (list_tlds)\n    | extend Syslog_TimeGenerated = TimeGenerated\n  ) on $left.TI_DomainEntity==$right.domain\n  | where Syslog_TimeGenerated < ExpirationDateTime\n  // Retrieve the latest syslog timestamp for each indicator and domain combination\n  | summarize Syslog_TimeGenerated = arg_max(Syslog_TimeGenerated, *) by IndicatorId, domain\n  // Select the desired columns for the final result set\n  | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, TI_DomainEntity\n  // Extract the hostname from the Computer field\n  | extend HostName = tostring(split(Computer, '.', 0)[0])\n  // Extract the DNS domain from the Computer field\n  | extend DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n  // Assign the Syslog_TimeGenerated value to the timestamp field\n  | extend timestamp = Syslog_TimeGenerated\n",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "DnsDomain"
+                "columnName": "DnsDomain",
+                "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "HostIP"
+                "columnName": "HostIP",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "severity": "Medium",
         "tactics": [
           "CommandAndControl"
         ],
-        "query": "let dt_lookBack = 1h;  // Define the time range to look back for syslog data (1 hour)\nlet ioc_lookBack = 14d;  // Define the time range to look back for threat intelligence indicators (14 days)\n// Create a list of top-level domains (TLDs) from the threat feed for later validation\nlet list_tlds = ThreatIntelligenceIndicator\n  | where isnotempty(DomainName)\n  | where TimeGenerated > ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | extend parts = split(DomainName, '.')\n  | extend tld = parts[(array_length(parts)-1)]\n  | summarize count() by tostring(tld)\n  | summarize make_list(tld);\n// Fetch the latest active domain indicators from the threat intelligence data within the specified time range\nlet Domain_Indicators = ThreatIntelligenceIndicator\n  | where isnotempty(DomainName)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | extend TI_DomainEntity = DomainName;\n// Join the threat intelligence indicators with syslog data on matching domain entities\nDomain_Indicators\n  | join kind=innerunique (\n    Syslog\n    | where TimeGenerated > ago(dt_lookBack)\n    // Extract domain patterns from syslog messages\n    | extend domain = extract(\"(([a-z0-9]+(-[a-z0-9]+)*\\\\.)+[a-z]{2,})\",1, tolower(SyslogMessage))\n    | where isnotempty(domain)\n    | extend parts = split(domain, '.')\n    // Split out the top-level domain (TLD)\n    | extend tld = parts[(array_length(parts)-1)]\n    // Validate parsed domain by checking if the TLD is in the list of TLDs in our threat feed\n    | where tld in~ (list_tlds)\n    | extend Syslog_TimeGenerated = TimeGenerated\n  ) on $left.TI_DomainEntity==$right.domain\n  | where Syslog_TimeGenerated < ExpirationDateTime\n  // Retrieve the latest syslog timestamp for each indicator and domain combination\n  | summarize Syslog_TimeGenerated = arg_max(Syslog_TimeGenerated, *) by IndicatorId, domain\n  // Select the desired columns for the final result set\n  | project Syslog_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, SyslogMessage, Computer, ProcessName, domain, HostIP, Url, Type, TI_DomainEntity\n  // Extract the hostname from the Computer field\n  | extend HostName = tostring(split(Computer, '.', 0)[0])\n  // Extract the DNS domain from the Computer field\n  | extend DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n  // Assign the Syslog_TimeGenerated value to the timestamp field\n  | extend timestamp = Syslog_TimeGenerated\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
         "queryFrequency": "1h",
         "name": "TI map Domain entity to Syslog",
-        "queryPeriod": "14d",
         "triggerOperator": "gt",
-        "triggerThreshold": 0
+        "description": "Identifies a match in Syslog table from any Domain IOC from TI\n"
       }
     }
   ]
