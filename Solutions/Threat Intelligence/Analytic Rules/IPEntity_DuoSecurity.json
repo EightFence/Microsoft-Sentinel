@@ -14,11 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| where TimeGenerated >= ago(ioc_lookBack)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| join (\n    DuoSecurityAuthentication_CL\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(access_device_ip_s)\n    // renaming time column so it is clear the log this came from\n    | extend Duo_TimeGenerated = isotimestamp_t\n)\non $left.TI_ipEntity == $right.access_device_ip_s\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, Duo_TimeGenerated,\nTI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s\n| extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])\n",
-        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "user_name_s",
@@ -32,27 +29,30 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "access_device_ip_s",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n| where TimeGenerated >= ago(ioc_lookBack)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| join (\n    DuoSecurityAuthentication_CL\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(access_device_ip_s)\n    // renaming time column so it is clear the log this came from\n    | extend Duo_TimeGenerated = isotimestamp_t\n)\non $left.TI_ipEntity == $right.access_device_ip_s\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, Duo_TimeGenerated,\nTI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s\n| extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])\n",
+        "severity": "Medium",
+        "triggerThreshold": 0,
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerThreshold": 0,
-        "queryPeriod": "14d",
         "queryFrequency": "1h",
+        "description": "'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DuoSecurity.'\n",
         "name": "TI Map IP Entity to Duo Security",
-        "triggerOperator": "gt",
-        "description": "'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DuoSecurity.'\n"
+        "queryPeriod": "14d"
       }
     }
   ]
