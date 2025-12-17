@@ -14,6 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "status": "Available",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -34,20 +37,17 @@
             "entityType": "URL"
           }
         ],
-        "triggerOperator": "gt",
-        "query": "let LearningPeriod = 1d;\nlet RunTime = 1h;\nlet StartLearningPeriod = LearningPeriod + RunTime;\nlet EndRunTime = RunTime - 1h;\nlet BinTime = 1h;\nlet NumOfStdsThreshold = 3;\nlet MinThreshold = 5.0;\nlet MinLearningBuckets = 5;\nlet TrafficLogs = (union isfuzzy=true\n(AzureDiagnostics\n| where OperationName == \"AzureFirewallApplicationRuleLog\" or OperationName == \"AzureFirewallNetworkRuleLog\" \n| parse msg_s with * \"from \" SourceIp \":\" SourcePort:int \" to \" Fqdn \":\" DestinationPort:int \". \" * \"Action: \" Action \".\" *\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWNetworkRule\n| extend Fqdn = DestinationIp\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWFlowTrace\n| extend Fqdn = DestinationIp\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWIdpsSignature\n| extend Fqdn = DestinationIp\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWApplicationRule\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)));\nlet LearningSrcIpDenyRate = (TrafficLogs\n| where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))\n| summarize count() by SourceIp, bin(TimeGenerated, BinTime), Fqdn\n| summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, Fqdn\n| where LearningTimeBuckets > MinLearningBuckets);\nlet AlertTimeSrcIpDenyRate = (TrafficLogs\n| where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))\n| summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp);\nAlertTimeSrcIpDenyRate\n| join kind=leftouter (LearningSrcIpDenyRate) on SourceIp\n| extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)\n| where AlertTimeSrcIpDenyRateCount > LearningThreshold\n| project-away SourceIp1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd\n",
-        "severity": "Medium",
+        "queryPeriod": "25h",
+        "description": "'Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access or C2, where attacker tries to exploit the same vulnerability on machines in the organization, but is being blocked by firewall rules.\n\nConfigurable Parameters:\n\n- Minimum of stds threshold - the number of stds to use in the threshold calculation. Default is set to 3.\n- Learning period time - learning period for threshold calculation in days. Default is set to 5.\n- Bin time - learning buckets time in hours. Default is set to 1 hour.\n- Minimum threshold - minimum threshold for alert. Default is set to 5.\n- Minimum bucket threshold - minimum learning buckets threshold for alert. Default is set to 5.'\n",
         "triggerThreshold": 1,
+        "name": "Abnormal Deny Rate for Source IP",
+        "severity": "Medium",
         "tactics": [
           "InitialAccess",
           "Exfiltration",
           "CommandAndControl"
         ],
-        "queryFrequency": "1h",
-        "description": "'Identifies abnormal deny rate for specific source IP to destination IP based on the normal average and standard deviation learned during a configured period. This can indicate potential exfiltration, initial access or C2, where attacker tries to exploit the same vulnerability on machines in the organization, but is being blocked by firewall rules.\n\nConfigurable Parameters:\n\n- Minimum of stds threshold - the number of stds to use in the threshold calculation. Default is set to 3.\n- Learning period time - learning period for threshold calculation in days. Default is set to 5.\n- Bin time - learning buckets time in hours. Default is set to 1 hour.\n- Minimum threshold - minimum threshold for alert. Default is set to 5.\n- Minimum bucket threshold - minimum learning buckets threshold for alert. Default is set to 5.'\n",
-        "name": "Abnormal Deny Rate for Source IP",
-        "queryPeriod": "25h",
-        "status": "Available"
+        "query": "let LearningPeriod = 1d;\nlet RunTime = 1h;\nlet StartLearningPeriod = LearningPeriod + RunTime;\nlet EndRunTime = RunTime - 1h;\nlet BinTime = 1h;\nlet NumOfStdsThreshold = 3;\nlet MinThreshold = 5.0;\nlet MinLearningBuckets = 5;\nlet TrafficLogs = (union isfuzzy=true\n(AzureDiagnostics\n| where OperationName == \"AzureFirewallApplicationRuleLog\" or OperationName == \"AzureFirewallNetworkRuleLog\" \n| parse msg_s with * \"from \" SourceIp \":\" SourcePort:int \" to \" Fqdn \":\" DestinationPort:int \". \" * \"Action: \" Action \".\" *\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWNetworkRule\n| extend Fqdn = DestinationIp\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWFlowTrace\n| extend Fqdn = DestinationIp\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWIdpsSignature\n| extend Fqdn = DestinationIp\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)),\n(AZFWApplicationRule\n| where Action == \"Deny\"\n| where isnotempty(Fqdn) and isnotempty(SourceIp)));\nlet LearningSrcIpDenyRate = (TrafficLogs\n| where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))\n| summarize count() by SourceIp, bin(TimeGenerated, BinTime), Fqdn\n| summarize LearningTimeSrcIpDenyRateAvg = avg(count_), LearningTimeSrcIpDenyRateStd = stdev(count_), LearningTimeBuckets = count() by SourceIp, Fqdn\n| where LearningTimeBuckets > MinLearningBuckets);\nlet AlertTimeSrcIpDenyRate = (TrafficLogs\n| where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))\n| summarize AlertTimeSrcIpDenyRateCount = count() by SourceIp);\nAlertTimeSrcIpDenyRate\n| join kind=leftouter (LearningSrcIpDenyRate) on SourceIp\n| extend LearningThreshold = max_of(LearningTimeSrcIpDenyRateAvg + NumOfStdsThreshold * LearningTimeSrcIpDenyRateStd, MinThreshold)\n| where AlertTimeSrcIpDenyRateCount > LearningThreshold\n| project-away SourceIp1, LearningTimeSrcIpDenyRateAvg, LearningTimeSrcIpDenyRateStd\n"
       }
     }
   ]
