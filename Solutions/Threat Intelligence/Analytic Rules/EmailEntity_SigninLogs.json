@@ -16,6 +16,11 @@
       "properties": {
         "triggerOperator": "gt",
         "queryFrequency": "1h",
+        "severity": "Medium",
+        "description": "'Identifies a match in SigninLogs table from any Email IOC from TI'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "name": "TI map Email entity to SigninLogs",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -53,15 +58,10 @@
             "entityType": "URL"
           }
         ],
-        "queryPeriod": "14d",
-        "description": "'Identifies a match in SigninLogs table from any Email IOC from TI'\n",
-        "triggerThreshold": 0,
-        "name": "TI map Email entity to SigninLogs",
-        "severity": "Medium",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet Signins = materialize(union isfuzzy=true\n( SigninLogs | where TimeGenerated >= ago(dt_lookBack)),\n( AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails))\n| where isnotempty(UserPrincipalName) and UserPrincipalName matches regex emailregex\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend SigninLogs_TimeGenerated = TimeGenerated);\nlet SigninUPNs = Signins | distinct UserPrincipalName | summarize make_list(UserPrincipalName);\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where EmailSenderAddress in (SigninUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated\n",
         "tactics": [
           "InitialAccess"
-        ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nlet Signins = materialize(union isfuzzy=true\n( SigninLogs | where TimeGenerated >= ago(dt_lookBack)),\n( AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)\n    | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails))\n| where isnotempty(UserPrincipalName) and UserPrincipalName matches regex emailregex\n| extend UserPrincipalName = tolower(UserPrincipalName)\n| extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| extend SigninLogs_TimeGenerated = TimeGenerated);\nlet SigninUPNs = Signins | distinct UserPrincipalName | summarize make_list(UserPrincipalName);\nThreatIntelligenceIndicator\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where EmailSenderAddress in (SigninUPNs)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true and ExpirationDateTime > now()\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n| join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName\n| where SigninLogs_TimeGenerated < ExpirationDateTime\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n| extend timestamp = SigninLogs_TimeGenerated\n"
+        ]
       }
     }
   ]

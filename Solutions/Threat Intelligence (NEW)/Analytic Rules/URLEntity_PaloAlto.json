@@ -16,6 +16,11 @@
       "properties": {
         "triggerOperator": "gt",
         "queryFrequency": "1h",
+        "severity": "Medium",
+        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data.'\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "name": "TI Map URL Entity to PaloAlto Data",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -45,15 +50,10 @@
             "entityType": "URL"
           }
         ],
-        "queryPeriod": "14d",
-        "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in PaloAlto Data.'\n",
-        "triggerThreshold": 0,
-        "name": "TI Map URL Entity to PaloAlto Data",
-        "severity": "Medium",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n//extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n// Picking up only IOC's that contain the entities we want\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n   | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  CommonSecurityLog\n  | extend IngestionTime = ingestion_time()\n  | where IngestionTime > ago(dt_lookBack)\n  // Select on Palo Alto logs\n  | where DeviceVendor =~ \"Palo Alto Networks\"\n  | where DeviceEventClassID =~ 'url'\n  //Uncomment the line below to only alert on allowed connections\n  //| where DeviceAction !~ \"block-url\"\n  //Select logs where URL data is populated\n  | extend PA_Url = column_ifexists(\"RequestURL\", \"None\")\n  | extend PA_Url = iif(isempty(PA_Url), extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)), trim('\"', PA_Url))\n  | extend PA_Url = iif(PA_Url !startswith \"http://\" and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), iif(PA_Url !startswith \"https://\" and ApplicationProtocol =~ \"ssl\", strcat('https://', PA_Url), PA_Url))\n  | where isnotempty(PA_Url)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.Url == $right.PA_Url\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, PA_Url\n| project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, DeviceAction, SourceIP, PA_Url, DeviceName\n",
         "tactics": [
           "CommandAndControl"
-        ],
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n//extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n// Picking up only IOC's that contain the entities we want\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n   | project-reorder *, Tags, TrafficLightProtocolLevel, Url, Type\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n  CommonSecurityLog\n  | extend IngestionTime = ingestion_time()\n  | where IngestionTime > ago(dt_lookBack)\n  // Select on Palo Alto logs\n  | where DeviceVendor =~ \"Palo Alto Networks\"\n  | where DeviceEventClassID =~ 'url'\n  //Uncomment the line below to only alert on allowed connections\n  //| where DeviceAction !~ \"block-url\"\n  //Select logs where URL data is populated\n  | extend PA_Url = column_ifexists(\"RequestURL\", \"None\")\n  | extend PA_Url = iif(isempty(PA_Url), extract(\"([^\\\"]+)\", 1, tolower(AdditionalExtensions)), trim('\"', PA_Url))\n  | extend PA_Url = iif(PA_Url !startswith \"http://\" and ApplicationProtocol !~ \"ssl\", strcat('http://', PA_Url), iif(PA_Url !startswith \"https://\" and ApplicationProtocol =~ \"ssl\", strcat('https://', PA_Url), PA_Url))\n  | where isnotempty(PA_Url)\n  | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.Url == $right.PA_Url\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, PA_Url\n| project timestamp = CommonSecurityLog_TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence, DeviceAction, SourceIP, PA_Url, DeviceName\n"
+        ]
       }
     }
   ]
