@@ -14,6 +14,11 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:CreatePipeline\" and Action has \"datapipeline:PutPipelineDefinition\" and Action has \"datapipeline:ActivatePipeline\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"datapipeline:Create*\" and Action contains \"datapipeline:Put*\" and Action contains \"datapipeline:Activate*\")) and Resource == \"*\" and isempty(Condition)\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n  | extend timestamp = TimeGenerated\n",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -42,17 +47,12 @@
             ]
           }
         ],
+        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on Datapipeline policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
         "severity": "Medium",
-        "triggerThreshold": 0,
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "status": "Available",
-        "description": "'Detected usage of AttachUserPolicy/AttachGroupPolicy/AttachRolePolicy on Datapipeline policy. Attackers could use these operations for privilege escalation. Verify these actions with the user.'\n",
-        "queryPeriod": "1d",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:CreatePipeline\" and Action has \"datapipeline:PutPipelineDefinition\" and Action has \"datapipeline:ActivatePipeline\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"datapipeline:Create*\" and Action contains \"datapipeline:Put*\" and Action contains \"datapipeline:Activate*\")) and Resource == \"*\" and isempty(Condition)\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n  | extend timestamp = TimeGenerated\n",
         "queryFrequency": "1d",
-        "triggerOperator": "gt",
         "name": "Privilege escalation via DataPipeline policy"
       }
     }

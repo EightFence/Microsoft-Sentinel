@@ -14,28 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "groupByCustomDetails": [
-              "SecurityImpact",
-              "ComplianceRisk",
-              "ActorType"
-            ],
-            "lookbackDuration": "P1D",
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "groupByAlertDetails": [
-              "AuditType",
-              "ActorGuid"
-            ]
-          }
-        },
         "suppressionEnabled": false,
+        "triggerThreshold": 0,
+        "query": "LookoutEvents\n| where EventType == \"AUDIT\"\n| where AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\", \"USER_MANAGEMENT\", \"CONFIGURATION_CHANGE\")\n| extend \n    ChangeImpact = case(\n        AuditType == \"POLICY_CHANGE\", \"High\",\n        AuditType == \"SECURITY_SETTING_CHANGE\", \"High\",\n        AuditType == \"USER_MANAGEMENT\", \"Medium\",\n        AuditType == \"CONFIGURATION_CHANGE\", \"Medium\",\n        \"Low\"\n    ),\n    RiskLevel = case(\n        ActorType == \"SYSTEM\" and AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\"), \"Automated Change\",\n        ActorType == \"ADMIN_USER\" and AuditType == \"POLICY_CHANGE\", \"Administrative Change\",\n        ActorType == \"USER\" and AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\"), \"Unauthorized Change\",\n        ActorType == \"UNKNOWN\", \"Suspicious Change\",\n        \"Standard Change\"\n    )\n| extend SecurityImplications = case(\n    AuditAttributeChanges has \"threat_response_level\" and AuditAttributeChanges has \"LOW\", \"Threat Response Weakened\",\n    AuditAttributeChanges has \"auto_quarantine_enabled\" and AuditAttributeChanges has \"false\", \"Auto-Quarantine Disabled\",\n    AuditAttributeChanges has \"compliance_enforcement\" and AuditAttributeChanges has \"false\", \"Compliance Enforcement Disabled\",\n    AuditAttributeChanges has \"device_wipe_enabled\" and AuditAttributeChanges has \"false\", \"Device Wipe Disabled\",\n    AuditAttributeChanges has \"admin\" or AuditAttributeChanges has \"privilege\", \"Privilege Changes\",\n    \"Configuration Update\"\n)\n| extend ComplianceRisk = case(\n    SecurityImplications in (\"Threat Response Weakened\", \"Auto-Quarantine Disabled\", \"Compliance Enforcement Disabled\"), \"Critical\",\n    SecurityImplications == \"Device Wipe Disabled\", \"High\",\n    SecurityImplications == \"Privilege Changes\", \"High\",\n    RiskLevel == \"Unauthorized Change\", \"High\",\n    RiskLevel == \"Suspicious Change\", \"Medium\",\n    \"Low\"\n)\n| extend ChangeDetails = case(\n    isnotempty(AuditAttributeChanges), strcat(\"Attribute changes: \", tostring(AuditAttributeChanges)),\n    isnotempty(TargetGuid), strcat(\"Target: \", TargetType, \" (\", TargetGuid, \")\"),\n    \"General audit event\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    AuditType,\n    ChangeImpact,\n    RiskLevel,\n    SecurityImplications,\n    ComplianceRisk,\n    ChangeDetails,\n    AuditAttributeChanges,\n    ActorType,\n    ActorGuid,\n    TargetType,\n    TargetGuid,\n    TargetEmailAddress,\n    ChangeType,\n    EnterpriseGuid\n",
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -60,40 +44,56 @@
             ]
           }
         ],
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "groupByCustomDetails": [
+              "SecurityImpact",
+              "ComplianceRisk",
+              "ActorType"
+            ],
+            "groupByAlertDetails": [
+              "AuditType",
+              "ActorGuid"
+            ],
+            "matchingMethod": "Selected",
+            "enabled": true,
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "customDetails": {
+          "SecurityImpact": "SecurityImplications",
+          "AuditType": "AuditType",
+          "ComplianceRisk": "ComplianceRisk",
+          "RiskLevel": "RiskLevel",
+          "ChangeType": "ChangeType",
+          "ChangeImpact": "ChangeImpact",
+          "TargetType": "TargetType",
+          "ActorType": "ActorType"
+        },
+        "description": "'Monitors critical audit events and policy changes from Lookout Mobile Risk API v2. Detects unauthorized configuration changes, policy modifications, security setting adjustments, and administrative actions that could impact mobile security posture. Provides comprehensive audit trail for compliance and security governance.'\n",
         "severity": "Medium",
-        "triggerThreshold": 0,
         "tactics": [
           "DefenseEvasion",
           "Persistence",
           "PrivilegeEscalation",
           "Impact"
         ],
-        "status": "Available",
-        "description": "'Monitors critical audit events and policy changes from Lookout Mobile Risk API v2. Detects unauthorized configuration changes, policy modifications, security setting adjustments, and administrative actions that could impact mobile security posture. Provides comprehensive audit trail for compliance and security governance.'\n",
-        "queryPeriod": "1h",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
         "suppressionDuration": "PT30M",
-        "query": "LookoutEvents\n| where EventType == \"AUDIT\"\n| where AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\", \"USER_MANAGEMENT\", \"CONFIGURATION_CHANGE\")\n| extend \n    ChangeImpact = case(\n        AuditType == \"POLICY_CHANGE\", \"High\",\n        AuditType == \"SECURITY_SETTING_CHANGE\", \"High\",\n        AuditType == \"USER_MANAGEMENT\", \"Medium\",\n        AuditType == \"CONFIGURATION_CHANGE\", \"Medium\",\n        \"Low\"\n    ),\n    RiskLevel = case(\n        ActorType == \"SYSTEM\" and AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\"), \"Automated Change\",\n        ActorType == \"ADMIN_USER\" and AuditType == \"POLICY_CHANGE\", \"Administrative Change\",\n        ActorType == \"USER\" and AuditType in (\"POLICY_CHANGE\", \"SECURITY_SETTING_CHANGE\"), \"Unauthorized Change\",\n        ActorType == \"UNKNOWN\", \"Suspicious Change\",\n        \"Standard Change\"\n    )\n| extend SecurityImplications = case(\n    AuditAttributeChanges has \"threat_response_level\" and AuditAttributeChanges has \"LOW\", \"Threat Response Weakened\",\n    AuditAttributeChanges has \"auto_quarantine_enabled\" and AuditAttributeChanges has \"false\", \"Auto-Quarantine Disabled\",\n    AuditAttributeChanges has \"compliance_enforcement\" and AuditAttributeChanges has \"false\", \"Compliance Enforcement Disabled\",\n    AuditAttributeChanges has \"device_wipe_enabled\" and AuditAttributeChanges has \"false\", \"Device Wipe Disabled\",\n    AuditAttributeChanges has \"admin\" or AuditAttributeChanges has \"privilege\", \"Privilege Changes\",\n    \"Configuration Update\"\n)\n| extend ComplianceRisk = case(\n    SecurityImplications in (\"Threat Response Weakened\", \"Auto-Quarantine Disabled\", \"Compliance Enforcement Disabled\"), \"Critical\",\n    SecurityImplications == \"Device Wipe Disabled\", \"High\",\n    SecurityImplications == \"Privilege Changes\", \"High\",\n    RiskLevel == \"Unauthorized Change\", \"High\",\n    RiskLevel == \"Suspicious Change\", \"Medium\",\n    \"Low\"\n)\n| extend ChangeDetails = case(\n    isnotempty(AuditAttributeChanges), strcat(\"Attribute changes: \", tostring(AuditAttributeChanges)),\n    isnotempty(TargetGuid), strcat(\"Target: \", TargetType, \" (\", TargetGuid, \")\"),\n    \"General audit event\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    AuditType,\n    ChangeImpact,\n    RiskLevel,\n    SecurityImplications,\n    ComplianceRisk,\n    ChangeDetails,\n    AuditAttributeChanges,\n    ActorType,\n    ActorGuid,\n    TargetType,\n    TargetGuid,\n    TargetEmailAddress,\n    ChangeType,\n    EnterpriseGuid\n",
+        "queryFrequency": "15m",
+        "name": "Lookout - Critical Audit and Policy Changes (v2)",
         "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Critical Audit Event: {{SecurityImplications}} by {{ActorType}}",
           "alertTacticsColumnName": "SecurityImplications",
           "alertDescriptionFormat": "{{AuditType}} by {{ActorType}} with {{ComplianceRisk}} risk",
-          "alertSeverityColumnName": "ComplianceRisk",
-          "alertDisplayNameFormat": "Critical Audit Event: {{SecurityImplications}} by {{ActorType}}"
+          "alertSeverityColumnName": "ComplianceRisk"
         },
-        "queryFrequency": "15m",
-        "triggerOperator": "gt",
-        "name": "Lookout - Critical Audit and Policy Changes (v2)",
-        "customDetails": {
-          "AuditType": "AuditType",
-          "ComplianceRisk": "ComplianceRisk",
-          "SecurityImpact": "SecurityImplications",
-          "ChangeType": "ChangeType",
-          "RiskLevel": "RiskLevel",
-          "ActorType": "ActorType",
-          "ChangeImpact": "ChangeImpact",
-          "TargetType": "TargetType"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         }
       }
     }
