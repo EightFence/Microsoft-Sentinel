@@ -14,31 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "name": "Lumen TI IPAddress in OfficeActivity",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "OA_ipEntity",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "description": "This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity.\n",
+        "suppressionDuration": "5h",
+        "suppressionEnabled": true,
         "triggerThreshold": 0,
-        "queryFrequency": "4h",
         "tactics": [
           "CommandAndControl"
         ],
-        "suppressionEnabled": true,
-        "suppressionDuration": "5h",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "displayName": "Lumen TI IPAddress in OfficeActivity",
+        "queryFrequency": "4h",
+        "name": "Lumen TI IPAddress in OfficeActivity",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "OA_ipEntity"
+              }
+            ]
+          }
+        ],
         "query": "let dt_lookBack = 1d;  // Data lookback for OfficeActivity\nlet ioc_lookBack = 14d; // TI lookback\nlet IP_Indicators = ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where IsActive == true and ValidUntil > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n  | where SourceSystem == 'Lumen'\n  | where ObservableKey == 'ipv4-addr:value'\n  | extend TI_ipEntity = ObservableValue\n  | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';\nIP_Indicators\n| join kind=innerunique (\n    OfficeActivity\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend OA_ipEntity = ClientIP\n    | extend OfficeActivity_TimeGenerated = TimeGenerated\n  ) on $left.TI_ipEntity == $right.OA_ipEntity\n| where OfficeActivity_TimeGenerated < ValidUntil\n| summarize arg_max(OfficeActivity_TimeGenerated, *), StartTime = min(OfficeActivity_TimeGenerated), EndTime = max(OfficeActivity_TimeGenerated) by Id, OA_ipEntity\n| project timestamp = EndTime, StartTime, EndTime, UserId, ClientIP, Operation, Id, Tags, ValidUntil, Confidence, TI_ipEntity, OA_ipEntity, Type\n",
-        "severity": "Medium"
+        "description": "This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in OfficeActivity.\n"
       }
     }
   ]

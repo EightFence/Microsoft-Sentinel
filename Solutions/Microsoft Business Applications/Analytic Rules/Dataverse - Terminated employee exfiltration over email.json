@@ -14,62 +14,62 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "description": "This query identifies Dataverse exfiltration via email by terminated employees.",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SenderIPv4",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
-              },
-              {
-                "columnName": "InstanceUrl",
-                "identifier": "InstanceName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          }
-        ],
-        "triggerThreshold": 0,
+        "status": "Available",
         "name": "Dataverse - Terminated employee exfiltration over email",
-        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "tactics": [
           "Exfiltration"
         ],
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "status": "Available",
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "queryFrequency": "1h",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Email attachment sent externally by terminated user following Dataverse exfiltration alerts",
-          "alertDescriptionFormat": "Departing or terminated user {{UserId}} was found to send email to external domains not on the allowed list: {{RecipientAddresses}}"
+          "alertDescriptionFormat": "Departing or terminated user {{UserId}} was found to send email to external domains not on the allowed list: {{RecipientAddresses}}",
+          "alertDisplayNameFormat": "Email attachment sent externally by terminated user following Dataverse exfiltration alerts"
         },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SenderIPv4"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
+              }
+            ]
+          }
+        ],
         "query": "// Note this detection relies upon the user's UPN matching their email address.\n// UEBA can provide more accurate data if enabled.\nlet query_frequency = 1h;\nlet allowed_destination_smtp_domains = dynamic([\n// Specify a list of recipient domains to exclude from alerting.\n// Example:\n// \"microsoft.com\", \"contoso.com\"\n    ]);\nlet exfiltration_alert_users = SecurityAlert\n    | where Tactics has 'Exfiltration' and Entities has_all ('account', '32780')\n    | mv-expand DataverseEntities = todynamic(Entities)\n    | where DataverseEntities.AppId == 32780\n    | extend InstanceUrl = tostring(DataverseEntities.InstanceName)\n    | mv-expand AccountEntities = todynamic(Entities)\n    | where AccountEntities.Type == 'account'\n    | extend\n        AccountName = tostring(AccountEntities.Name),\n        UPNSuffix = tostring(AccountEntities.UPNSuffix)\n    | summarize InstanceUrls = make_set(InstanceUrl, 100) by AccountName, UPNSuffix\n    | extend UserId = tolower(strcat(AccountName, \"@\", UPNSuffix));\nexfiltration_alert_users\n| join kind=inner (\n    MSBizAppsTerminatedEmployees\n    | project UserId = tolower(UserPrincipalName), NotificationDate\n    | where startofday(NotificationDate) <= startofday(now()))\n    // Uncomment the below KQL if UEBA is available to gain more accurate\n    // email address data:\n    // | join kind=leftouter (_ASIM_IdentityInfo) on $left.UserId == $right.Username\n    // | extend UserId = iif(UserId == UserMailAddress or isempty(UserMailAddress), UserId, UserMailAddress))\n    on UserId\n| join kind=inner (\n    EmailEvents\n    | where TimeGenerated >= ago (query_frequency)\n    | where EmailDirection == \"Outbound\" and AttachmentCount > 0\n    | extend RecipientDomain = tolower(split(RecipientEmailAddress, '@')[1])\n    | where RecipientDomain !in (allowed_destination_smtp_domains)\n    | summarize\n        RecipientAddresses = make_set(RecipientEmailAddress, 1000),\n        Subject = make_set(Subject, 1000)\n        by SenderAddress = tolower(SenderMailFromAddress), SenderIPv4)\n    on $left.UserId == $right.SenderAddress\n| mv-expand InstanceUrl = InstanceUrls to typeof(string)\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, \"@\")[0]),\n    UPNSuffix = tostring(split(UserId, \"@\")[1])\n| project\n    UserId,\n    InstanceUrl,\n    SenderIPv4,\n    RecipientAddresses,\n    Subject,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
-        "severity": "High"
+        "description": "This query identifies Dataverse exfiltration via email by terminated employees."
       }
     }
   ]
