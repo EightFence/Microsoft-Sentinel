@@ -14,24 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "name": "Dataverse - Anomalous application user activity",
-        "triggerThreshold": 0,
-        "tactics": [
-          "CredentialAccess",
-          "Execution",
-          "Persistence"
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
         "severity": "Medium",
         "queryFrequency": "5h",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Anomaly detected on {{UserId}} in {{InstanceUrl}}.  Details: {{Details}}",
-          "alertDisplayNameFormat": "Dataverse - Non-interactive account anomaly detected in {{InstanceUrl}} "
+        "customDetails": {
+          "InstranceUrl": "InstanceUrl"
         },
         "entityMappings": [
           {
@@ -57,11 +43,25 @@
             ]
           }
         ],
-        "customDetails": {
-          "InstranceUrl": "InstanceUrl"
-        },
         "query": "let query_lookback = 14d;\nlet query_frequency = 5h;\nlet anomaly_threshold = 2.5;\nlet seasonality = -1;\nlet trend = 'linefit';\nlet step_duration = 5h;\nlet app_user_regex = \"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\\\.com$\";\nlet guid_regex = \"([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})\";\nlet application_users = DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where UserId !endswith \"@onmicrosoft.com\" and UserId != \"Unknown\"\n    | summarize by UserId\n    | where split(UserId, \"@\")[1] matches regex app_user_regex;\nDataverseActivity\n| where TimeGenerated >= startofday(ago(query_lookback))\n| where UserId in (application_users)\n| where isnotempty(OriginalObjectId)\n| make-series TotalEvents = count() default=0 on TimeGenerated from startofday(ago(query_lookback)) to now() step step_duration by UserId, InstanceUrl, OriginalObjectId\n| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(TotalEvents, anomaly_threshold, seasonality, trend)\n| mv-expand\n    TotalEvents to typeof(double),\n    AnomalyTimeGenerated = TimeGenerated to typeof(datetime),\n    Anomalies to typeof(double),\n    Score to typeof(double),\n    Baseline to typeof(long)\n| where Anomalies > 0\n| extend Details = bag_pack(\n                       \"TotalEvents\",\n                       TotalEvents,\n                       \"Anomalies\",\n                       Anomalies,\n                       \"Baseline\",\n                       Baseline,\n                       \"Score\",\n                       Score,\n                       \"OriginalObjectId\",\n                       OriginalObjectId\n                   )\n| summarize Details = make_set(Details, 100) by UserId, InstanceUrl, AnomalyTimeGenerated\n| extend\n    CloudAppId = int(32780),\n    AadUserId = extract(guid_regex, 1, tostring(split(UserId, \"@\")[0]))\n| project\n    AnomalyTimeGenerated,\n    UserId,\n    AadUserId,\n    InstanceUrl,\n    Details,\n    CloudAppId\n",
-        "description": "Identifies anomalies in activity patterns of Dataverse application (non-interactive) users, based on activity falling outside the normal pattern of use."
+        "description": "Identifies anomalies in activity patterns of Dataverse application (non-interactive) users, based on activity falling outside the normal pattern of use.",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CredentialAccess",
+          "Execution",
+          "Persistence"
+        ],
+        "status": "Available",
+        "name": "Dataverse - Anomalous application user activity",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Anomaly detected on {{UserId}} in {{InstanceUrl}}.  Details: {{Details}}",
+          "alertDisplayNameFormat": "Dataverse - Non-interactive account anomaly detected in {{InstanceUrl}} "
+        },
+        "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "14d"
       }
     }
   ]
