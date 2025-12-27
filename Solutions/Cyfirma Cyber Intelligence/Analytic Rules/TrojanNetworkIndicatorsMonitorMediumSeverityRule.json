@@ -14,7 +14,79 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "suppressionEnabled": true,
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "High-Confidence Trojan Network Indicators - Monitor Recommended Rule - {{name}} ",
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "ProductName",
+              "value": "ProductName"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "ProviderName"
+            }
+          ],
+          "alertDescriptionFormat": "{{Description}} - {{name}} "
+        },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "triggerThreshold": 0,
+        "suppressionDuration": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerOperator": "GreaterThan",
         "queryPeriod": "5m",
+        "queryFrequency": "5m",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPv4"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPv6"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "Domain"
+              }
+            ],
+            "entityType": "DNS"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URL"
+              }
+            ],
+            "entityType": "URL"
+          }
+        ],
+        "query": "//Trojan Network Indicators - Monitor Recommended \nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where (ConfidenceScore < 80 and ConfidenceScore >= 50)\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Monitor' and Roles has 'Trojan'\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
+        "severity": "Medium",
+        "enabled": false,
         "tactics": [
           "Impact",
           "Persistence",
@@ -24,98 +96,26 @@
           "Execution",
           "InitialAccess"
         ],
-        "suppressionEnabled": true,
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPv4"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPv6"
-              }
-            ]
-          },
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "Domain"
-              }
-            ]
-          },
-          {
-            "entityType": "URL",
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "URL"
-              }
-            ]
-          }
-        ],
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "enabled": false,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H"
-          }
-        },
-        "queryFrequency": "5m",
+        "description": "\"This analytics rule detects network-based indicators flagged by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure. \nThese indicators may represent attacker-controlled endpoints used for persistence, data exfiltration, or command delivery to compromised systems.\"\n",
+        "name": "CYFIRMA - Medium severity Trojan Network Indicators - Monitor Recommended Rule",
         "customDetails": {
-          "Roles": "Roles",
-          "Created": "created",
-          "ThreatActors": "ThreatActors",
-          "Tags": "Tags",
-          "ConfidenceScore": "ConfidenceScore",
-          "ValidFrom": "valid_from",
-          "Sources": "Sources",
-          "Description": "Description",
-          "IndicatorID": "IndicatorID",
           "Modified": "modified",
-          "TimeGenerated": "TimeGenerated",
+          "Roles": "Roles",
+          "ThreatActors": "ThreatActors",
           "IPAbuse": "IPAbuse",
-          "Country": "Country",
+          "IndicatorID": "IndicatorID",
+          "TimeGenerated": "TimeGenerated",
           "RecommendedActions": "RecommendedActions",
           "SecurityVendors": "SecurityVendors",
-          "ThreatType": "ThreatType"
-        },
-        "suppressionDuration": "5m",
-        "description": "\"This analytics rule detects network-based indicators flagged by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure. \nThese indicators may represent attacker-controlled endpoints used for persistence, data exfiltration, or command delivery to compromised systems.\"\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerOperator": "GreaterThan",
-        "enabled": false,
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [
-            {
-              "value": "ProductName",
-              "alertProperty": "ProductName"
-            },
-            {
-              "value": "ProviderName",
-              "alertProperty": "ProviderName"
-            }
-          ],
-          "alertDisplayNameFormat": "High-Confidence Trojan Network Indicators - Monitor Recommended Rule - {{name}} ",
-          "alertDescriptionFormat": "{{Description}} - {{name}} "
-        },
-        "name": "CYFIRMA - Medium severity Trojan Network Indicators - Monitor Recommended Rule",
-        "query": "//Trojan Network Indicators - Monitor Recommended \nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where (ConfidenceScore < 80 and ConfidenceScore >= 50)\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Monitor' and Roles has 'Trojan'\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n"
+          "Created": "created",
+          "ConfidenceScore": "ConfidenceScore",
+          "Country": "Country",
+          "ThreatType": "ThreatType",
+          "Description": "Description",
+          "Sources": "Sources",
+          "ValidFrom": "valid_from",
+          "Tags": "Tags"
+        }
       }
     }
   ]
