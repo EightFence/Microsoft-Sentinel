@@ -14,16 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "15m",
         "suppressionEnabled": false,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Discovery",
+          "DefenseEvasion",
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "query": "LookoutEvents\n| where EventType == \"THREAT\"\n| where ThreatSeverity in (\"CRITICAL\", \"HIGH\")\n| where ThreatAction == \"DETECTED\"\n| where ThreatStatus in (\"OPEN\", \"ACTIVE\")\n| extend \n    ThreatRiskScore = case(\n        ThreatSeverity == \"CRITICAL\", 10,\n        ThreatSeverity == \"HIGH\", 8,\n        ThreatSeverity == \"MEDIUM\", 5,\n        ThreatSeverity == \"LOW\", 2,\n        1\n    ),\n    DeviceRiskLevel = case(\n        DeviceSecurityStatus == \"THREATS_HIGH\", \"High\",\n        DeviceSecurityStatus == \"THREATS_MEDIUM\", \"Medium\",\n        DeviceSecurityStatus == \"THREATS_LOW\", \"Low\",\n        \"Unknown\"\n    ),\n    ThreatCategory = case(\n        ThreatClassifications has \"MALWARE\", \"Malware\",\n        ThreatClassifications has \"PHISHING\", \"Phishing\", \n        ThreatClassifications has \"SPYWARE\", \"Spyware\",\n        ThreatClassifications has \"TROJAN\", \"Trojan\",\n        ThreatClassifications has \"ADWARE\", \"Adware\",\n        \"Other\"\n    )\n| extend ComplianceImpact = case(\n    DeviceComplianceStatus == \"Non-Compliant\" and ThreatRiskScore >= 8, \"Critical\",\n    DeviceComplianceStatus == \"Non-Compliant\" and ThreatRiskScore >= 5, \"High\", \n    DeviceComplianceStatus == \"Partial\" and ThreatRiskScore >= 8, \"High\",\n    DeviceComplianceStatus == \"Partial\" and ThreatRiskScore >= 5, \"Medium\",\n    \"Low\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    ThreatId,\n    ThreatType,\n    ThreatSeverity,\n    ThreatRiskScore,\n    ThreatCategory,\n    ThreatClassifications,\n    ThreatStatus,\n    ThreatDescription,\n    ThreatApplicationName,\n    ThreatPackageName,\n    ThreatPackageSha,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceSecurityStatus,\n    DeviceRiskLevel,\n    DeviceComplianceStatus,\n    ComplianceImpact,\n    ClientLookoutSDKVersion,\n    MDMConnectorId,\n    MDMExternalId,\n    TargetEmailAddress,\n    TargetPlatform,\n    ActorType,\n    ActorGuid\n",
+        "name": "Lookout - High Severity Mobile Threats Detected (v2)",
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "High Severity Mobile Threat: {{ThreatType}} on {{DevicePlatform}} Device",
           "alertTacticsColumnName": "ThreatCategory",
+          "alertDescriptionFormat": "{{ThreatSeverity}} {{ThreatCategory}} threat on {{DevicePlatform}}",
           "alertSeverityColumnName": "ThreatSeverity",
-          "alertDescriptionFormat": "{{ThreatSeverity}} {{ThreatCategory}} threat on {{DevicePlatform}}"
+          "alertDisplayNameFormat": "High Severity Mobile Threat: {{ThreatType}} on {{DevicePlatform}} Device"
         },
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected",
+            "enabled": true,
+            "lookbackDuration": "P1D",
             "groupByAlertDetails": [
               "ThreatType",
               "DeviceGuid"
@@ -32,93 +47,78 @@
               "Account",
               "Host"
             ],
-            "lookbackDuration": "P1D",
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected",
-            "enabled": true,
             "groupByCustomDetails": [
               "ThreatCategory",
               "DevicePlatform"
             ]
           }
         },
-        "triggerThreshold": 0,
-        "suppressionDuration": "PT1H",
+        "customDetails": {
+          "ThreatClasses": "ThreatClassifications",
+          "ThreatStatus": "ThreatStatus",
+          "MDMConnectorId": "MDMConnectorId",
+          "DeviceSecStatus": "DeviceSecurityStatus",
+          "ThreatSeverity": "ThreatSeverity",
+          "ThreatType": "ThreatType",
+          "DevicePlatform": "DevicePlatform",
+          "ThreatRiskScore": "ThreatRiskScore",
+          "DeviceRiskLevel": "DeviceRiskLevel",
+          "ThreatCategory": "ThreatCategory",
+          "ComplianceImpact": "ComplianceImpact"
+        },
+        "description": "'Detects high severity mobile threats from Lookout Mobile Risk API v2 with enhanced threat intelligence and device context. This rule leverages the comprehensive v2 field set to provide detailed threat classification, risk assessment, and device compliance status for improved security monitoring.'\n",
+        "queryFrequency": "5m",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "DeviceEmailAddress",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "TargetEmailAddress",
+                "identifier": "Name"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "DeviceGuid",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "DevicePlatform",
+                "identifier": "OSFamily"
+              },
+              {
+                "columnName": "DeviceOSVersion",
+                "identifier": "OSVersion"
+              }
+            ]
+          },
+          {
+            "entityType": "FileHash",
+            "fieldMappings": [
+              {
+                "columnName": "ThreatApplicationName",
+                "identifier": "Algorithm"
+              },
+              {
+                "columnName": "ThreatPackageSha",
+                "identifier": "Value"
+              }
+            ]
+          }
+        ],
+        "severity": "High",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "triggerOperator": "gt",
-        "customDetails": {
-          "ComplianceImpact": "ComplianceImpact",
-          "ThreatType": "ThreatType",
-          "ThreatStatus": "ThreatStatus",
-          "ThreatSeverity": "ThreatSeverity",
-          "ThreatCategory": "ThreatCategory",
-          "ThreatRiskScore": "ThreatRiskScore",
-          "MDMConnectorId": "MDMConnectorId",
-          "DeviceSecStatus": "DeviceSecurityStatus",
-          "DevicePlatform": "DevicePlatform",
-          "ThreatClasses": "ThreatClassifications",
-          "DeviceRiskLevel": "DeviceRiskLevel"
-        },
-        "queryPeriod": "15m",
-        "queryFrequency": "5m",
         "status": "Available",
-        "query": "LookoutEvents\n| where EventType == \"THREAT\"\n| where ThreatSeverity in (\"CRITICAL\", \"HIGH\")\n| where ThreatAction == \"DETECTED\"\n| where ThreatStatus in (\"OPEN\", \"ACTIVE\")\n| extend \n    ThreatRiskScore = case(\n        ThreatSeverity == \"CRITICAL\", 10,\n        ThreatSeverity == \"HIGH\", 8,\n        ThreatSeverity == \"MEDIUM\", 5,\n        ThreatSeverity == \"LOW\", 2,\n        1\n    ),\n    DeviceRiskLevel = case(\n        DeviceSecurityStatus == \"THREATS_HIGH\", \"High\",\n        DeviceSecurityStatus == \"THREATS_MEDIUM\", \"Medium\",\n        DeviceSecurityStatus == \"THREATS_LOW\", \"Low\",\n        \"Unknown\"\n    ),\n    ThreatCategory = case(\n        ThreatClassifications has \"MALWARE\", \"Malware\",\n        ThreatClassifications has \"PHISHING\", \"Phishing\", \n        ThreatClassifications has \"SPYWARE\", \"Spyware\",\n        ThreatClassifications has \"TROJAN\", \"Trojan\",\n        ThreatClassifications has \"ADWARE\", \"Adware\",\n        \"Other\"\n    )\n| extend ComplianceImpact = case(\n    DeviceComplianceStatus == \"Non-Compliant\" and ThreatRiskScore >= 8, \"Critical\",\n    DeviceComplianceStatus == \"Non-Compliant\" and ThreatRiskScore >= 5, \"High\", \n    DeviceComplianceStatus == \"Partial\" and ThreatRiskScore >= 8, \"High\",\n    DeviceComplianceStatus == \"Partial\" and ThreatRiskScore >= 5, \"Medium\",\n    \"Low\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    ThreatId,\n    ThreatType,\n    ThreatSeverity,\n    ThreatRiskScore,\n    ThreatCategory,\n    ThreatClassifications,\n    ThreatStatus,\n    ThreatDescription,\n    ThreatApplicationName,\n    ThreatPackageName,\n    ThreatPackageSha,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceSecurityStatus,\n    DeviceRiskLevel,\n    DeviceComplianceStatus,\n    ComplianceImpact,\n    ClientLookoutSDKVersion,\n    MDMConnectorId,\n    MDMExternalId,\n    TargetEmailAddress,\n    TargetPlatform,\n    ActorType,\n    ActorGuid\n",
-        "severity": "High",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "DeviceEmailAddress"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "TargetEmailAddress"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "DeviceGuid"
-              },
-              {
-                "identifier": "OSFamily",
-                "columnName": "DevicePlatform"
-              },
-              {
-                "identifier": "OSVersion",
-                "columnName": "DeviceOSVersion"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Algorithm",
-                "columnName": "ThreatApplicationName"
-              },
-              {
-                "identifier": "Value",
-                "columnName": "ThreatPackageSha"
-              }
-            ],
-            "entityType": "FileHash"
-          }
-        ],
-        "description": "'Detects high severity mobile threats from Lookout Mobile Risk API v2 with enhanced threat intelligence and device context. This rule leverages the comprehensive v2 field set to provide detailed threat classification, risk assessment, and device compliance status for improved security monitoring.'\n",
-        "tactics": [
-          "Discovery",
-          "DefenseEvasion",
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
-        "name": "Lookout - High Severity Mobile Threats Detected (v2)"
+        "suppressionDuration": "PT1H"
       }
     }
   ]
