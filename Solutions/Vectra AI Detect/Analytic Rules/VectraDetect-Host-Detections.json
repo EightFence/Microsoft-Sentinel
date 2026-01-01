@@ -14,8 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Vectra Host's Behaviors",
-        "triggerThreshold": 0,
+        "customDetails": {
+          "AttackType": "Activity",
+          "AttackCategory": "Category"
+        },
+        "alertDetailsOverride": {
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "AlertLink",
+              "value": "vectra_URL"
+            },
+            {
+              "alertProperty": "ProductName",
+              "value": "DeviceProduct"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "DeviceVendor"
+            },
+            {
+              "alertProperty": "ConfidenceScore",
+              "value": "certainty_score"
+            }
+          ],
+          "alertDescriptionFormat": "Entity is a host. Category is {{Category}}. Threat score is {{threat_score}} and certainty score is {{certainty_score}}.\n",
+          "alertSeverityColumnName": "Severity",
+          "alertDisplayNameFormat": "Vectra AI - {{Activity}} Detected"
+        },
         "tactics": [
           "CredentialAccess",
           "Discovery",
@@ -25,54 +50,29 @@
           "Exfiltration",
           "Impact"
         ],
+        "name": "Vectra Host's Behaviors",
+        "status": "Available",
+        "triggerOperator": "gt",
+        "queryFrequency": "5m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\"\n    and DeviceEventClassID != \"hsc\"\n    and DeviceEventClassID != \"audit\"\n    and DeviceEventClassID != \"health\"\n    and DeviceEventClassID != \"asc\"\n| extend Category = coalesce(\n    column_ifexists(\"DeviceEventCategory\", \"\"), \n    extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n    \"\"\n    )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\" and AdditionalExtensions !has \"account\"\n| extend source_entity = case(isnotempty(SourceHostName), SourceHostName,\n    \"UNKNWON\")\n| extend level = case(threat_score == 0 and certainty_score == 0, \"Info\",\n    threat_score < 50 and certainty_score < 50, \"Low\",\n    threat_score < 50 and certainty_score >= 50, \"Medium\", \n    threat_score >= 50 and certainty_score <= 50, \"High\", \n    threat_score >= 50 and certainty_score >= 50, \"Critical\",\n    \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| summarize arg_max(threat_score, *) by source_entity, Activity\n| sort by TimeGenerated\n",
+        "description": "'This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. This rule is focused on host's detections.'\n",
+        "queryPeriod": "5m",
+        "severity": "Informational",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "SourceHostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SourceHostName"
               }
             ],
             "entityType": "Host"
           }
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {
-          "AttackCategory": "Category",
-          "AttackType": "Activity"
-        },
-        "description": "'This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. This rule is focused on host's detections.'\n",
-        "triggerOperator": "gt",
-        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\"\n    and DeviceEventClassID != \"hsc\"\n    and DeviceEventClassID != \"audit\"\n    and DeviceEventClassID != \"health\"\n    and DeviceEventClassID != \"asc\"\n| extend Category = coalesce(\n    column_ifexists(\"DeviceEventCategory\", \"\"), \n    extract(\"cat=(.+?)(;|$)\", 1, AdditionalExtensions), \n    \"\"\n    )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename triaged = DeviceCustomString5\n| where triaged != \"True\" and AdditionalExtensions !has \"account\"\n| extend source_entity = case(isnotempty(SourceHostName), SourceHostName,\n    \"UNKNWON\")\n| extend level = case(threat_score == 0 and certainty_score == 0, \"Info\",\n    threat_score < 50 and certainty_score < 50, \"Low\",\n    threat_score < 50 and certainty_score >= 50, \"Medium\", \n    threat_score >= 50 and certainty_score <= 50, \"High\", \n    threat_score >= 50 and certainty_score >= 50, \"Critical\",\n    \"UNKNOWN\")\n| extend Severity = case(level == \"Info\", \"Informational\",level == \"Critical\", \"High\", level)\n| summarize arg_max(threat_score, *) by source_entity, Activity\n| sort by TimeGenerated\n",
-        "queryPeriod": "5m",
-        "queryFrequency": "5m",
-        "severity": "Informational",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Entity is a host. Category is {{Category}}. Threat score is {{threat_score}} and certainty score is {{certainty_score}}.\n",
-          "alertDynamicProperties": [
-            {
-              "value": "vectra_URL",
-              "alertProperty": "AlertLink"
-            },
-            {
-              "value": "DeviceProduct",
-              "alertProperty": "ProductName"
-            },
-            {
-              "value": "DeviceVendor",
-              "alertProperty": "ProviderName"
-            },
-            {
-              "value": "certainty_score",
-              "alertProperty": "ConfidenceScore"
-            }
-          ],
-          "alertSeverityColumnName": "Severity",
-          "alertDisplayNameFormat": "Vectra AI - {{Activity}} Detected"
-        }
+        ]
       }
     }
   ]

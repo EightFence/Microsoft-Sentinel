@@ -14,25 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Network ACL with all the open ports to a specified CIDR",
-        "triggerThreshold": 0,
         "tactics": [
           "DefenseEvasion"
         ],
+        "name": "Network ACL with all the open ports to a specified CIDR",
+        "status": "Available",
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "query": "AWSCloudTrail\n| where EventName in ('CreateNetworkAclEntry', 'ReplaceNetworkAclEntry') and isempty(ErrorMessage) and isempty(ErrorCode)\n| extend ruleAction = tostring(parse_json(RequestParameters)['ruleAction']),\n         egress=parse_json(RequestParameters)['egress'],\n         total_ports=(toint(parse_json(parse_json(RequestParameters)['portRange'])['to']) - toint(parse_json(parse_json(RequestParameters)['portRange'])['from'])),\n         aclProtocol=parse_json(RequestParameters)['aclProtocol']\n| where isnotempty(total_ports)\n| where ruleAction == 'allow' and egress == false and (aclProtocol == '-1' or (total_ports > 1024))\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend timestamp = TimeGenerated\n",
+        "description": "'Detected network ACL with all the ports open to a specified CIDR. This could lead to potential lateral movements or initial access attacks. Make sure to mitigate this risk.'\n",
+        "queryPeriod": "1d",
+        "severity": "High",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
             ],
             "entityType": "Account"
@@ -40,20 +47,13 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ],
             "entityType": "IP"
           }
-        ],
-        "description": "'Detected network ACL with all the ports open to a specified CIDR. This could lead to potential lateral movements or initial access attacks. Make sure to mitigate this risk.'\n",
-        "triggerOperator": "gt",
-        "query": "AWSCloudTrail\n| where EventName in ('CreateNetworkAclEntry', 'ReplaceNetworkAclEntry') and isempty(ErrorMessage) and isempty(ErrorCode)\n| extend ruleAction = tostring(parse_json(RequestParameters)['ruleAction']),\n         egress=parse_json(RequestParameters)['egress'],\n         total_ports=(toint(parse_json(parse_json(RequestParameters)['portRange'])['to']) - toint(parse_json(parse_json(RequestParameters)['portRange'])['from'])),\n         aclProtocol=parse_json(RequestParameters)['aclProtocol']\n| where isnotempty(total_ports)\n| where ruleAction == 'allow' and egress == false and (aclProtocol == '-1' or (total_ports > 1024))\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend timestamp = TimeGenerated\n",
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "severity": "High",
-        "status": "Available"
+        ]
       }
     }
   ]
