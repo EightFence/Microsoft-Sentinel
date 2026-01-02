@@ -14,32 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "'Detected S3 bucket publicly exposed via policy, this could lead for sensitive information leakage to the public. Verify the S3 object configurations.'\n",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "queryPeriod": "1h",
+        "query": "AWSCloudTrail\n| where EventName == \"PutBucketPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).bucketPolicy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n| extend timestamp = TimeGenerated\n",
+        "severity": "Medium",
         "tactics": [
           "Exfiltration"
         ],
-        "name": "S3 bucket exposed via policy",
-        "status": "Available",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "query": "AWSCloudTrail\n| where EventName == \"PutBucketPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).bucketPolicy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n| extend timestamp = TimeGenerated\n",
-        "description": "'Detected S3 bucket publicly exposed via policy, this could lead for sensitive information leakage to the public. Verify the S3 object configurations.'\n",
-        "queryPeriod": "1h",
-        "severity": "Medium",
         "triggerThreshold": 0,
+        "name": "S3 bucket exposed via policy",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ],
             "entityType": "Account"
@@ -47,13 +46,14 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
-        ]
+        ],
+        "triggerOperator": "gt"
       }
     }
   ]
