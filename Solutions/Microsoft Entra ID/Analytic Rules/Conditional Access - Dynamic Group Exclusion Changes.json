@@ -14,9 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "suppressionEnabled": false,
         "severity": "High",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "suppressionDuration": "5h",
+        "queryFrequency": "5m",
+        "name": "Conditional Access - Dynamic Group Exclusion Changes",
+        "query": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)\nlet monitoredGroups = dynamic([\"Group1\", \"Group2\"]);  // <-- Customize this list\nAuditLogs\n| where OperationName == \"Update group\"\n| where AdditionalDetails[0].value == \"DynamicMembership\"\n| extend DynamicGroupName = tostring(TargetResources[0].displayName)\n| where DynamicGroupName in (monitoredGroups)\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| extend oldRule = tostring(TargetResources[0].modifiedProperties[0].oldValue)\n| extend newRule = tostring(TargetResources[0].modifiedProperties[0].newValue)\n| where oldRule != newRule\n| project\n    TimeGenerated,\n    OperationName,\n    DynamicGroupName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    oldRule,\n    newRule\n| order by TimeGenerated desc",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "accountName",
@@ -26,37 +35,28 @@
                 "columnName": "upnSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           }
         ],
-        "description": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)",
-        "name": "Conditional Access - Dynamic Group Exclusion Changes",
-        "triggerOperator": "gt",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "enabled": false,
+            "reopenClosedIncident": false,
+            "groupByCustomDetails": [],
+            "lookbackDuration": "PT5H",
+            "groupByAlertDetails": [],
             "matchingMethod": "AllEntities",
             "groupByEntities": [],
-            "groupByAlertDetails": [],
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false,
-            "groupByCustomDetails": []
-          },
-          "createIncident": true
+            "enabled": false
+          }
         },
-        "queryPeriod": "5m",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "queryFrequency": "5m",
-        "suppressionEnabled": false,
-        "query": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)\nlet monitoredGroups = dynamic([\"Group1\", \"Group2\"]);  // <-- Customize this list\nAuditLogs\n| where OperationName == \"Update group\"\n| where AdditionalDetails[0].value == \"DynamicMembership\"\n| extend DynamicGroupName = tostring(TargetResources[0].displayName)\n| where DynamicGroupName in (monitoredGroups)\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| extend oldRule = tostring(TargetResources[0].modifiedProperties[0].oldValue)\n| extend newRule = tostring(TargetResources[0].modifiedProperties[0].newValue)\n| where oldRule != newRule\n| project\n    TimeGenerated,\n    OperationName,\n    DynamicGroupName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    oldRule,\n    newRule\n| order by TimeGenerated desc",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "suppressionDuration": "5h",
-        "triggerThreshold": 0
+        "description": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)",
+        "queryPeriod": "5m"
       }
     }
   ]

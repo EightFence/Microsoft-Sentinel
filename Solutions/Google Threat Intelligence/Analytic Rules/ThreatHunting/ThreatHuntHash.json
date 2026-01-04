@@ -14,13 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities"
+          }
+        },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Google Threat Intelligence Match",
           "alertDescriptionFormat": "Correlation found from the {{Type}} table."
         },
         "severity": "Medium",
+        "tactics": [
+          "Execution"
+        ],
+        "queryFrequency": "30m",
+        "name": "Google Threat Intelligence - Threat Hunting Hash",
+        "query": "let ioc_lookBack = 1d;\n_Im_FileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey contains 'file:hashes'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n| extend lowerHash=tolower(ObservableValue)\n) on lowerHash\n| project Hash=ObservableValue, HashType=extract(\"file:hashes.('[^']*')\", 1, ObservableKey), Description=Data.description, Type, TimeGenerated\n",
         "entityMappings": [
           {
+            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "Hash",
@@ -30,32 +46,16 @@
                 "columnName": "HashType",
                 "identifier": "Algorithm"
               }
-            ],
-            "entityType": "FileHash"
+            ]
           }
         ],
-        "description": "'Google Threat Intelligence hash correlation.'\n",
-        "name": "Google Threat Intelligence - Threat Hunting Hash",
         "triggerOperator": "gt",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "1h",
-            "enabled": true,
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
+        "triggerThreshold": 0,
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "queryFrequency": "30m",
-        "query": "let ioc_lookBack = 1d;\n_Im_FileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey contains 'file:hashes'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n| extend lowerHash=tolower(ObservableValue)\n) on lowerHash\n| project Hash=ObservableValue, HashType=extract(\"file:hashes.('[^']*')\", 1, ObservableKey), Description=Data.description, Type, TimeGenerated\n",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Execution"
-        ]
+        "description": "'Google Threat Intelligence hash correlation.'\n",
+        "queryPeriod": "1d"
       }
     }
   ]
