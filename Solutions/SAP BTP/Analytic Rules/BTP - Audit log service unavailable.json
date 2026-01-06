@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8a3b5c7d-9e1f-4a2b-8c6d-3e5f7a9b1c2d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8a3b5c7d-9e1f-4a2b-8c6d-3e5f7a9b1c2d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "status": "Available",
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "CloudApp"
+              }
+            ]
+          }
+        ],
+        "description": "Identifies SAP BTP subaccounts that have not reported audit logs for an unusual period.\nThis could indicate that the audit log service has been disabled or tampered with,\npotentially by an attacker attempting to hide malicious activity. It may also indicate\nservice key expiry or SAP BTP service availability problems.\n",
+        "severity": "High",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "7d",
+        "customDetails": {
+          "Tenant": "Tenant",
+          "SubaccountName": "SubaccountName",
+          "TimeSinceLastLog": "TimeSinceLastLog",
+          "LastLogTime": "LastLogTime"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "The SAP BTP subaccount '{{SubaccountName}}' has not reported any audit logs since {{LastLogTime}}.\n\nTime without logs: {{TimeSinceLastLog}} minutes\n\nThis could indicate:\n- Audit log service has been disabled (potential compromise to hide malicious activity)\n- Data connector authentication or connectivity issues\n- SAP BTP service availability problems\n\nRecommended actions:\n1. Verify the audit log service status in SAP BTP cockpit\n2. Check the data connector health in Microsoft Sentinel\n3. Review any recent administrative changes to the subaccount\n4. Investigate for potential unauthorized access or configuration changes\n",
+          "alertDisplayNameFormat": "SAP BTP: No audit logs received from {{SubaccountName}} for {{TimeSinceLastLog}} minutes"
+        },
+        "query": "// Configure the detection threshold (in minutes) - adjust based on your environment\nlet detection_threshold_in_minutes = 60;\n// Lookback period to identify known subaccounts\nlet lookback = 7d;\n// Get all known subaccounts and their last log time\nlet last_activity = SAPBTPAuditLog_CL\n    | where TimeGenerated > ago(lookback)\n    | summarize LastLogTime = max(TimeGenerated) by SubaccountName, Tenant;\n// Identify subaccounts with no recent activity exceeding the threshold\nlast_activity\n| where datetime_diff('minute', now(), LastLogTime) > detection_threshold_in_minutes\n| extend TimeSinceLastLog = datetime_diff('minute', now(), LastLogTime)\n| project \n    SubaccountName,\n    Tenant,\n    LastLogTime,\n    TimeSinceLastLog,\n    CloudApp = \"SAP BTP\"\n",
+        "name": "BTP - Audit log service unavailable",
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}
