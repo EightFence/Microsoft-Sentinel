@@ -14,22 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
+        "name": "GreyNoise TI Map IP Entity to DnsEvents",
         "tactics": [
           "CommandAndControl"
         ],
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "This query maps any IP indicators of compromise (IOCs) from GreyNoise Threat Intelligence (TI), by searching for matches in DnsEvents.\n",
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for DNS events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | where SourceSystem == 'GreyNoise'\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\";\n// Perform a join between IP indicators and DNS events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      DnsEvents\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where SubType =~ \"LookupQuery\" and isnotempty(IPAddresses)\n      | mv-expand SingleIP = split(IPAddresses, \", \") to typeof(string)\n      | extend DNS_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.SingleIP\n  // Filter out DNS events that occurred after the expiration of the corresponding indicator\n  | where DNS_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and SingleIP, and keep the DNS event with the latest timestamp\n  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by IndicatorId, SingleIP\n  // Select the desired output fields\n  | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n  | extend timestamp = DNS_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "DnsDomain"
+                "columnName": "DnsDomain",
+                "identifier": "DnsDomain"
               }
             ]
           },
@@ -37,8 +41,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ClientIP"
+                "columnName": "ClientIP",
+                "identifier": "Address"
               }
             ]
           },
@@ -46,18 +50,14 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ]
           }
         ],
-        "description": "This query maps any IP indicators of compromise (IOCs) from GreyNoise Threat Intelligence (TI), by searching for matches in DnsEvents.\n",
         "severity": "Medium",
-        "queryPeriod": "14d",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for DNS events\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n  | where Active == true and ExpirationDateTime > now()\n  | where SourceSystem == 'GreyNoise'\n  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n  | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n  | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n  | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\";\n// Perform a join between IP indicators and DNS events\nIP_Indicators\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      DnsEvents\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where SubType =~ \"LookupQuery\" and isnotempty(IPAddresses)\n      | mv-expand SingleIP = split(IPAddresses, \", \") to typeof(string)\n      | extend DNS_TimeGenerated = TimeGenerated\n  )\n  on $left.TI_ipEntity == $right.SingleIP\n  // Filter out DNS events that occurred after the expiration of the corresponding indicator\n  | where DNS_TimeGenerated < ExpirationDateTime\n  // Group the results by IndicatorId and SingleIP, and keep the DNS event with the latest timestamp\n  | summarize DNS_TimeGenerated = arg_max(DNS_TimeGenerated, *) by IndicatorId, SingleIP\n  // Select the desired output fields\n  | project DNS_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, DomainName, ExpirationDateTime, ConfidenceScore,\n    TI_ipEntity, Computer, EventId, SubType, ClientIP, Name, IPAddresses, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n  | extend timestamp = DNS_TimeGenerated, HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))\n",
-        "name": "GreyNoise TI Map IP Entity to DnsEvents",
-        "triggerOperator": "gt"
+        "queryFrequency": "1h"
       }
     }
   ]

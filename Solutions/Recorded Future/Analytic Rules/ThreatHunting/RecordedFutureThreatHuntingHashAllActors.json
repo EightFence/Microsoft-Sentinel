@@ -14,59 +14,59 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "entityType": "FileHash",
-            "fieldMappings": [
-              {
-                "identifier": "Value",
-                "columnName": "Hash"
-              },
-              {
-                "identifier": "Algorithm",
-                "columnName": "HashType"
-              }
-            ]
-          }
-        ],
-        "queryFrequency": "15m",
-        "triggerThreshold": 0,
+        "name": "RecordedFuture Threat Hunting Hash All Actors",
         "tactics": [
           "InitialAccess",
           "Execution",
           "Persistence"
         ],
-        "query": "let ioc_lookBack = 1d;\n// The source table (imFileEvent) is a ASIM parser table, but can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns\nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelIndicators\n// Only look for IOCs\n| where ObservableKey contains'file:hashes'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend lowerHash=tolower(ObservableValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n// Hash and HashType is defaulted to data from Recorded Future, it can be changed to data from the infrastructure table.\n| project Hash=ObservableValue, HashType=extract(\"file:hashes.('[^']*')\", 1, ObservableKey), Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n",
-        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
-        "severity": "Medium",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "enabled": true,
-            "lookbackDuration": "1h",
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "queryPeriod": "1d",
-        "customDetails": {
-          "ActorInformation": "RecordedFuturePortalLink"
-        },
         "alertDetailsOverride": {
           "alertDescriptionFormat": "**{{Description}}**\\n\\nCorrelation found on {{Hash}} from the {{Type}} table.\\n",
           "alertDynamicProperties": [
             {
-              "value": "RecordedFuturePortalLink",
-              "alertProperty": "AlertLink"
+              "alertProperty": "AlertLink",
+              "value": "RecordedFuturePortalLink"
             }
           ],
           "alertDisplayNameFormat": "{{Description}}"
         },
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "description": "'Recorded Future Threat Hunting hash correlation for all actors.'\n",
+        "query": "let ioc_lookBack = 1d;\n// The source table (imFileEvent) is a ASIM parser table, but can be replaced by any infrastructure table containing Hash data.\n// The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns\nimFileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelIndicators\n// Only look for IOCs\n| where ObservableKey contains'file:hashes'\n| where isnotempty(ObservableValue)\n// Only look at Recorded Future Threat Hunt Indicators.\n| where Data.description startswith \"Recorded Future - Threat Hunt\"\n// Only work with the latest indicators\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| extend lowerHash=tolower(ObservableValue)\n) on lowerHash\n// select column from the source table to match with Recorded Future ThreatIntelIndicator $left.Hash\n| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)))['recordedfutureportallink']\n// Hash and HashType is defaulted to data from Recorded Future, it can be changed to data from the infrastructure table.\n| project Hash=ObservableValue, HashType=extract(\"file:hashes.('[^']*')\", 1, ObservableKey), Description=Data.description, Type, TimeGenerated, RecordedFuturePortalLink\n",
+        "customDetails": {
+          "ActorInformation": "RecordedFuturePortalLink"
+        },
+        "entityMappings": [
+          {
+            "entityType": "FileHash",
+            "fieldMappings": [
+              {
+                "columnName": "Hash",
+                "identifier": "Value"
+              },
+              {
+                "columnName": "HashType",
+                "identifier": "Algorithm"
+              }
+            ]
+          }
+        ],
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "name": "RecordedFuture Threat Hunting Hash All Actors",
-        "triggerOperator": "gt"
+        "triggerThreshold": 0,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          }
+        },
+        "severity": "Medium",
+        "queryFrequency": "15m"
       }
     }
   ]

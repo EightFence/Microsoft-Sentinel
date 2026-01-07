@@ -14,25 +14,40 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
+        "name": "AWS Security Hub - Detect EC2 Security groups allowing unrestricted high-risk ports",
         "tactics": [
           "InitialAccess",
           "LateralMovement",
           "Discovery"
         ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted high-risk ports",
+          "alertDescriptionFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports: {{OpenHighRiskPorts}}. Restrict or remove the offending rules."
+        },
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "description": "This query detects EC2 Security Groups that allow unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports using AWS Security Hub control EC2.19 findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.\n",
+        "query": "let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);\nAWSSecurityHubFindings\n| where RecordState == \"ACTIVE\" and ComplianceStatus == \"FAILED\"\n| where tostring(AwsSecurityFindingGeneratorId) == \"security-control/EC2.19\"\n      or tostring(ComplianceSecurityControlId) == \"EC2.19\"\n| mv-expand Resource = Resources\n| where tostring(Resource.Type) == \"AwsEc2SecurityGroup\"\n| extend SGDetails = Resource.Details.AwsEc2SecurityGroup\n| extend IpPermissions = SGDetails.IpPermissions\n| mv-expand Perm = IpPermissions\n| where toint(Perm.FromPort) in (HighRiskPorts)\n| mv-expand Range = Perm.IpRanges\n| where tostring(Range.CidrIp) in (\"0.0.0.0/0\", \"::/0\")\n| summarize TimeGenerated = max(TimeGenerated), OpenHighRiskPorts = make_set(tostring(Perm.FromPort))\n    by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,\n       AwsSecurityFindingId, ComplianceSecurityControlId, SecurityGroupId = tostring(SGDetails.GroupId), SecurityGroupARN = tostring(Resource.Id)\n| extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, \", \")\n",
+        "customDetails": {
+          "FindingId": "AwsSecurityFindingId",
+          "OpenHighRiskPorts": "OpenHighRiskPorts",
+          "Region": "AwsRegion",
+          "ComplianceControlId": "ComplianceSecurityControlId",
+          "SecurityGroupId": "SecurityGroupId"
+        },
         "status": "Available",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AwsAccountId"
+                "columnName": "AwsAccountId",
+                "identifier": "Name"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "AwsAccountId"
+                "columnName": "AwsAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -40,29 +55,14 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "SecurityGroupARN"
+                "columnName": "SecurityGroupARN",
+                "identifier": "Name"
               }
             ]
           }
         ],
-        "description": "This query detects EC2 Security Groups that allow unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports using AWS Security Hub control EC2.19 findings.\nPublicly exposed management, database, and service ports (e.g., RDP 3389, SSH 22, SQL 1433/3306) significantly increase the risk of brute-force attacks, exploitation, and lateral movement.\n",
         "severity": "High",
-        "queryPeriod": "1h",
-        "customDetails": {
-          "ComplianceControlId": "ComplianceSecurityControlId",
-          "Region": "AwsRegion",
-          "SecurityGroupId": "SecurityGroupId",
-          "FindingId": "AwsSecurityFindingId",
-          "OpenHighRiskPorts": "OpenHighRiskPorts"
-        },
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted (0.0.0.0/0 or ::/0) ingress to high-risk ports: {{OpenHighRiskPorts}}. Restrict or remove the offending rules.",
-          "alertDisplayNameFormat": "EC2 Security group {{SecurityGroupId}} allows unrestricted high-risk ports"
-        },
-        "query": "let HighRiskPorts = dynamic([3389,20,23,110,143,3306,8080,1433,9200,9300,25,445,135,21,1434,4333,5432,5500,5601,22,3000,5000,8088,8888]);\nAWSSecurityHubFindings\n| where RecordState == \"ACTIVE\" and ComplianceStatus == \"FAILED\"\n| where tostring(AwsSecurityFindingGeneratorId) == \"security-control/EC2.19\"\n      or tostring(ComplianceSecurityControlId) == \"EC2.19\"\n| mv-expand Resource = Resources\n| where tostring(Resource.Type) == \"AwsEc2SecurityGroup\"\n| extend SGDetails = Resource.Details.AwsEc2SecurityGroup\n| extend IpPermissions = SGDetails.IpPermissions\n| mv-expand Perm = IpPermissions\n| where toint(Perm.FromPort) in (HighRiskPorts)\n| mv-expand Range = Perm.IpRanges\n| where tostring(Range.CidrIp) in (\"0.0.0.0/0\", \"::/0\")\n| summarize TimeGenerated = max(TimeGenerated), OpenHighRiskPorts = make_set(tostring(Perm.FromPort))\n    by AwsAccountId, AwsRegion, AwsSecurityFindingTitle, AwsSecurityFindingDescription,\n       AwsSecurityFindingId, ComplianceSecurityControlId, SecurityGroupId = tostring(SGDetails.GroupId), SecurityGroupARN = tostring(Resource.Id)\n| extend OpenHighRiskPorts = strcat_array(OpenHighRiskPorts, \", \")\n",
-        "name": "AWS Security Hub - Detect EC2 Security groups allowing unrestricted high-risk ports",
-        "triggerOperator": "gt"
+        "queryFrequency": "1h"
       }
     }
   ]

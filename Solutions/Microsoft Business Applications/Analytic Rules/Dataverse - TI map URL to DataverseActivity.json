@@ -14,25 +14,36 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
+        "name": "Dataverse - TI map URL to DataverseActivity",
         "tactics": [
           "InitialAccess",
           "Execution",
           "Persistence"
         ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - TI match on URL in {{InstanceUrl}}",
+          "alertDescriptionFormat": "Malicous IP {{Url}} was found in {{InstanceUrl}}. Associated user is {{UserId}}"
+        },
+        "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "description": "Identifies a match in DataverseActivity from any URL IOC from Microsoft Sentinel Threat Intelligence.",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(Url)\n| join kind=innerunique (\n    DataverseActivity\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where Message in (\"Create\", \"Update\")\n    | where isnotempty(Fields) and Fields has \"http\"\n    | extend\n        ExtractedUrls = extract_all(\"(http[s]?://(?:[a-zA-Z\\\\.-]|[0-9])+)\", tostring(Fields)),\n        DataverseActivity_TimeGenerated = TimeGenerated\n    | mv-expand Url = ExtractedUrls\n    | project\n        DataverseActivity_TimeGenerated,\n        tostring(Url),\n        UserId,\n        ClientIp,\n        InstanceUrl,\n        EntityName\n    )\n    on Url\n| where DataverseActivity_TimeGenerated < ExpirationDateTime\n| summarize DataverseActivity_TimeGenerated  = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, Url\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    DataverseActivity_TimeGenerated,\n    Description,\n    ActivityGroupNames,\n    IndicatorId,\n    ThreatType,\n    ExpirationDateTime,\n    ConfidenceScore,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix,\n    Url\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "status": "Available",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -40,8 +51,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ClientIp"
+                "columnName": "ClientIp",
+                "identifier": "Address"
               }
             ]
           },
@@ -49,8 +60,8 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
             ]
           },
@@ -58,29 +69,18 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "CloudAppId"
+                "columnName": "CloudAppId",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "InstanceUrl"
+                "columnName": "InstanceUrl",
+                "identifier": "InstanceName"
               }
             ]
           }
         ],
-        "description": "Identifies a match in DataverseActivity from any URL IOC from Microsoft Sentinel Threat Intelligence.",
         "severity": "Medium",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryPeriod": "14d",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Malicous IP {{Url}} was found in {{InstanceUrl}}. Associated user is {{UserId}}",
-          "alertDisplayNameFormat": "Dataverse - TI match on URL in {{InstanceUrl}}"
-        },
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n| where isnotempty(Url)\n| join kind=innerunique (\n    DataverseActivity\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where Message in (\"Create\", \"Update\")\n    | where isnotempty(Fields) and Fields has \"http\"\n    | extend\n        ExtractedUrls = extract_all(\"(http[s]?://(?:[a-zA-Z\\\\.-]|[0-9])+)\", tostring(Fields)),\n        DataverseActivity_TimeGenerated = TimeGenerated\n    | mv-expand Url = ExtractedUrls\n    | project\n        DataverseActivity_TimeGenerated,\n        tostring(Url),\n        UserId,\n        ClientIp,\n        InstanceUrl,\n        EntityName\n    )\n    on Url\n| where DataverseActivity_TimeGenerated < ExpirationDateTime\n| summarize DataverseActivity_TimeGenerated  = arg_max(DataverseActivity_TimeGenerated, *) by IndicatorId, Url\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    DataverseActivity_TimeGenerated,\n    Description,\n    ActivityGroupNames,\n    IndicatorId,\n    ThreatType,\n    ExpirationDateTime,\n    ConfidenceScore,\n    UserId,\n    ClientIp,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix,\n    Url\n",
-        "name": "Dataverse - TI map URL to DataverseActivity",
-        "triggerOperator": "gt"
+        "queryFrequency": "1h"
       }
     }
   ]
