@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "A potentially malicious web request was executed against a web server",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "description": "'Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the ratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric).\nA high ratio value for a given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number of blocked requests and a few unobstructed logs that may be malicious but have passed undetected through the WAF. The successCode variable defines what the detection thinks is a successful status code and should be altered to fit the environment.'\n",
-        "query": "let queryperiod = 1d;\nlet mode = dynamic(['Blocked', 'Detected']);\nlet successCode = dynamic(['200', '101','204', '400','504','304','401','500']);\nlet sessionBin = 30m;\nAGWFirewallLogs\n| where TimeGenerated > ago(queryperiod)\n| where Action  in (mode)\n| sort by Hostname asc, ClientIp asc, TimeGenerated asc\n| extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((ClientIp != prev(ClientIp)) or (Hostname != prev(Hostname))))\n| summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by Hostname, ClientIp, SessionBlockedStarted\n| extend TimeKey = range(bin(SessionBlockedStarted, sessionBin), bin(SessionBlockedEnded, sessionBin), sessionBin)\n| mv-expand TimeKey to typeof(datetime)\n| join kind = inner(\n    AGWAccessLogs\n    | where TimeGenerated > ago(queryperiod)\n    | where  (isempty(HttpStatus) or HttpStatus in (successCode))\n    | extend TimeKey = bin(TimeGenerated, sessionBin)\n    | extend Hostname = coalesce(Host,OriginalHost)\n    | extend ClientIp = tostring(ClientIp)\n) on TimeKey, Hostname, ClientIp\n| where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)\n| extend\n    OriginalRequestUriWithArgs = column_ifexists(\"OriginalRequestUriWithArgs\", \"\"),\n    ServerStatus = column_ifexists(\"ServerStatus\", \"\")\n| summarize\n    SuccessfulAccessCount = count(),\n    UserAgents = make_set(UserAgent, 250),\n    RequestURIs = make_set(RequestUri, 250),\n    OriginalRequestURIs = make_set(OriginalRequestUriWithArgs, 250),\n    SuccessCodes = make_set(HttpStatus, 250),\n    SuccessCodes_BackendServer = make_set(ServerStatus, 250),\n    take_any(SessionBlockedEnded, SessionBlockedCount)\n    by Hostname, ClientIp, SessionBlockedStarted \n| where SessionBlockedCount > SuccessfulAccessCount\n| extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)\n| sort by BlockvsSuccessRatio desc, SessionBlockedStarted asc\n| project-reorder SessionBlockedStarted, SessionBlockedEnded, Hostname, ClientIp, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents\n",
-        "status": "Available",
         "triggerThreshold": 0,
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ClientIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIp"
               }
             ]
           }
         ],
-        "severity": "Medium",
-        "queryFrequency": "1d"
+        "tactics": [
+          "InitialAccess"
+        ],
+        "queryFrequency": "1d",
+        "status": "Available",
+        "description": "'Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the ratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric).\nA high ratio value for a given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number of blocked requests and a few unobstructed logs that may be malicious but have passed undetected through the WAF. The successCode variable defines what the detection thinks is a successful status code and should be altered to fit the environment.'\n",
+        "query": "let queryperiod = 1d;\nlet mode = dynamic(['Blocked', 'Detected']);\nlet successCode = dynamic(['200', '101','204', '400','504','304','401','500']);\nlet sessionBin = 30m;\nAGWFirewallLogs\n| where TimeGenerated > ago(queryperiod)\n| where Action  in (mode)\n| sort by Hostname asc, ClientIp asc, TimeGenerated asc\n| extend SessionBlockedStarted = row_window_session(TimeGenerated, queryperiod, 10m, ((ClientIp != prev(ClientIp)) or (Hostname != prev(Hostname))))\n| summarize SessionBlockedEnded = max(TimeGenerated), SessionBlockedCount = count() by Hostname, ClientIp, SessionBlockedStarted\n| extend TimeKey = range(bin(SessionBlockedStarted, sessionBin), bin(SessionBlockedEnded, sessionBin), sessionBin)\n| mv-expand TimeKey to typeof(datetime)\n| join kind = inner(\n    AGWAccessLogs\n    | where TimeGenerated > ago(queryperiod)\n    | where  (isempty(HttpStatus) or HttpStatus in (successCode))\n    | extend TimeKey = bin(TimeGenerated, sessionBin)\n    | extend Hostname = coalesce(Host,OriginalHost)\n    | extend ClientIp = tostring(ClientIp)\n) on TimeKey, Hostname, ClientIp\n| where TimeGenerated between (SessionBlockedStarted..SessionBlockedEnded)\n| extend\n    OriginalRequestUriWithArgs = column_ifexists(\"OriginalRequestUriWithArgs\", \"\"),\n    ServerStatus = column_ifexists(\"ServerStatus\", \"\")\n| summarize\n    SuccessfulAccessCount = count(),\n    UserAgents = make_set(UserAgent, 250),\n    RequestURIs = make_set(RequestUri, 250),\n    OriginalRequestURIs = make_set(OriginalRequestUriWithArgs, 250),\n    SuccessCodes = make_set(HttpStatus, 250),\n    SuccessCodes_BackendServer = make_set(ServerStatus, 250),\n    take_any(SessionBlockedEnded, SessionBlockedCount)\n    by Hostname, ClientIp, SessionBlockedStarted \n| where SessionBlockedCount > SuccessfulAccessCount\n| extend BlockvsSuccessRatio = SessionBlockedCount/toreal(SuccessfulAccessCount)\n| sort by BlockvsSuccessRatio desc, SessionBlockedStarted asc\n| project-reorder SessionBlockedStarted, SessionBlockedEnded, Hostname, ClientIp, SessionBlockedCount, SuccessfulAccessCount, BlockvsSuccessRatio, SuccessCodes, RequestURIs, OriginalRequestURIs, UserAgents\n",
+        "queryPeriod": "1d",
+        "name": "A potentially malicious web request was executed against a web server"
       }
     }
   ]
