@@ -14,15 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "F&O - Reverted bank account number modifications",
+        "triggerOperator": "gt",
         "query": "let detection_window = 24h;\nlet query_frequency = 15m;\nlet bank_changes = FinanceOperationsActivity_CL\n    | where LogType == \"Update\" and TableName == \"BankAccountTable\"\n    | extend AccountId = tostring(parse_json(tostring(FormattedData.AccountID)).NewData)\n    | extend AccountNum = parse_json(tostring(FormattedData.AccountNum))\n    | extend\n        CurrentAccountNum = tostring(AccountNum.NewData),\n        OldAccountNum = tostring(AccountNum.OldData)\n    | where CurrentAccountNum != OldAccountNum;\nbank_changes\n| join kind=inner (bank_changes\n    | where TimeGenerated >= ago(query_frequency)\n    | project-rename UpdatedTime = LogCreatedDateTime, UpdatedAccount = CurrentAccountNum)\n    on $left.OldAccountNum == $right.UpdatedAccount\n| where UpdatedTime between (LogCreatedDateTime .. (LogCreatedDateTime + detection_window))\n| extend FinOpsAppId = 32780\n| project\n    TimeGenerated,\n    LogCreatedDateTime,\n    LogType,\n    TableName,\n    Username,\n    AccountId,\n    CurrentAccountNum,\n    OldAccountNum,\n    FinOpsAppId\n",
-        "queryPeriod": "1d",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "F&O - Suspicious bank account number changes",
+          "alertDescriptionFormat": "A suspicous bank account change was made in F&O, the bank account number was updated and then changed back to the orginal number a short time later. {{AccountId}} was changed by {{Username}}"
+        },
+        "tactics": [
+          "Impact"
+        ],
+        "triggerThreshold": 0,
+        "severity": "Low",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Username"
+                "columnName": "Username",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -30,29 +41,18 @@
           {
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "FinOpsAppId"
+                "columnName": "FinOpsAppId",
+                "identifier": "AppId"
               }
             ],
             "entityType": "CloudApplication"
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "severity": "Low",
-        "queryFrequency": "15m",
-        "tactics": [
-          "Impact"
-        ],
+        "name": "F&O - Reverted bank account number modifications",
+        "queryPeriod": "1d",
         "status": "Available",
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "A suspicous bank account change was made in F&O, the bank account number was updated and then changed back to the orginal number a short time later. {{AccountId}} was changed by {{Username}}",
-          "alertDisplayNameFormat": "F&O - Suspicious bank account number changes"
-        },
-        "triggerThreshold": 0,
-        "description": "Identifies changes to bank account numbers in Finance & Operations, whereby a bank account number is modified but then subsequently reverted a short time later."
+        "description": "Identifies changes to bank account numbers in Finance & Operations, whereby a bank account number is modified but then subsequently reverted a short time later.",
+        "queryFrequency": "15m"
       }
     }
   ]

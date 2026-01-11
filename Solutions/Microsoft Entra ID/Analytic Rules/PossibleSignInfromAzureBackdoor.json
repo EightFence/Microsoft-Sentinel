@@ -14,20 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Possible SignIn from Azure Backdoor",
+        "triggerOperator": "gt",
         "query": "// Microsoft Entra ID  Backdoors: Identity Federation\n//Ref: https://www.inversecos.com/2021/11/how-to-detect-azure-active-directory.html\nAuditLogs\n| where OperationName == \"Add unverified domain\"\n| where Result == \"success\"\n| extend InitiatedBy = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n| extend DomainName = tostring(TargetResources[0].displayName)\n| summarize DomainAddedTime = min(TimeGenerated), ModifiedProperties = make_set(parse_json(TargetResources[0].modifiedProperties),1048576) by InitiatedBy, DomainName\n| join kind=inner (\nSigninLogs\n| where ResultType == \"0\"\n| extend UserDomain = tostring(parse_json(split(UserPrincipalName,\"@\",1)[0]))\n| summarize SignInTime = min(TimeGenerated)  by UserPrincipalName, IPAddress, tostring(LocationDetails),AppDisplayName,ResourceDisplayName,UserDomain\n) on $left.DomainName == $right.UserDomain\n// Getting UserName and Domain\n| extend Name = split(UserPrincipalName,\"@\",0), Domain = split(UserPrincipalName,\"@\",1)\n| mv-expand Name,Domain\n",
-        "queryPeriod": "1h",
+        "tactics": [
+          "Persistence"
+        ],
         "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "NTDomain",
-                "columnName": "UserDomain"
+                "columnName": "UserDomain",
+                "identifier": "NTDomain"
               },
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -35,28 +38,25 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "tactics": [
-          "Persistence"
-        ],
-        "triggerOperator": "gt",
+        "queryPeriod": "1h",
+        "name": "Possible SignIn from Azure Backdoor",
         "description": "'Identifies when a user adds an unverified domain as an authentication method, followed by a sign-in from a user the newly added domain. Threat actors may add custom domains to create a backdoor to your tenant. It's important to monitor whenever custom domains are added to the tenant.'\n",
+        "queryFrequency": "1h",
         "customDetails": {
-          "InitiatedBy": "InitiatedBy",
-          "ResourceDisplayName": "ResourceDisplayName",
-          "AppDisplayName": "AppDisplayName",
-          "ModifiedProperties": "ModifiedProperties",
           "SignInTime": "SignInTime",
+          "ModifiedProperties": "ModifiedProperties",
+          "AppDisplayName": "AppDisplayName",
+          "DomainAdded": "DomainName",
+          "ResourceDisplayName": "ResourceDisplayName",
           "DomainAddedTime": "DomainAddedTime",
-          "DomainAdded": "DomainName"
+          "InitiatedBy": "InitiatedBy"
         }
       }
     }

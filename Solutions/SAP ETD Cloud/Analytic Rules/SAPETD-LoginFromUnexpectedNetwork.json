@@ -14,19 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "SAP ETD - Login from unexpected network",
+        "triggerOperator": "gt",
         "query": "let AuditTimeAgo = 60m;\nlet regex_sid = @\"^([A-Z0-9]{3})/\"; \nlet regex_client = @\"/(\\d{3})$\";\nlet SAPNetworks = _GetWatchlist('SAP - Networks');\nSAPETDAlerts_CL\n| where TimeGenerated > ago(AuditTimeAgo)\n| where PatternName in (\"Logon from external with SAP standard users\",\"Access via unallowed IP Address\")\n| mv-expand NormalizedTriggeringEvents\n| extend sapOriginalEvent = tostring(NormalizedTriggeringEvents)\n| extend Id_ = NormalizedTriggeringEvents.Id\n| extend extracted_user_ip = tostring(NormalizedTriggeringEvents.NetworkIPAddressInitiator)\n| where isnotempty(extracted_user_ip)\n| extend extracted_sap_user = NormalizedTriggeringEvents.UserAccountTargeted\n| extend extracted_sid = extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor))\n| extend extracted_client = extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor))\n| extend extracted_instance_name = NormalizedTriggeringEvents.NetworkHostnameActor\n| extend extracted_instance_host = NormalizedTriggeringEvents.NetworkHostnameInitiator\n| evaluate ipv4_lookup(SAPNetworks, extracted_user_ip, Network, return_unmatched = true)\n| where isempty(Network)\n| project TimeGenerated, extracted_user_ip, extracted_sap_user, extracted_sid, extracted_client, extracted_instance_name, extracted_instance_host, AlertId, PatternName, PatternDescription, Status, NormalizedTriggeringEvents\n| extend GeoLocation= iff(ipv4_is_private(extracted_user_ip), dynamic({\"IsPrivate\": true}), geo_info_from_ip_address(extracted_user_ip))\n",
-        "queryPeriod": "30m",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP ETD - {{PatternName}} ",
+          "alertDescriptionFormat": "{{PatternDescription}}\n"
+        },
+        "tactics": [
+          "Discovery"
+        ],
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "AppId",
-                "columnName": "extracted_sid"
+                "columnName": "extracted_sid",
+                "identifier": "AppId"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "extracted_instance_name"
+                "columnName": "extracted_instance_name",
+                "identifier": "InstanceName"
               }
             ],
             "entityType": "CloudApplication"
@@ -34,8 +45,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "extracted_instance_host"
+                "columnName": "extracted_instance_host",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Host"
@@ -43,32 +54,21 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "extracted_user_ip"
+                "columnName": "extracted_user_ip",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "severity": "Medium",
-        "queryFrequency": "5m",
-        "tactics": [
-          "Discovery"
-        ],
+        "name": "SAP ETD - Login from unexpected network",
+        "queryPeriod": "30m",
         "status": "Available",
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{PatternDescription}}\n",
-          "alertDisplayNameFormat": "SAP ETD - {{PatternName}} "
-        },
-        "triggerThreshold": 0,
         "description": "Identifies logons from an unexpected network.\nSource Action: Logon to the backend system from an IP address which is not assigned to one of the networks.\nnetworks can be maintained in the \"SAP - Networks\" watchlist of the Microsoft Sentinel Solution for SAP package.\n\n*Data Sources: SAP Enterprise Thread Detection Solution -  Alerts*\n",
+        "queryFrequency": "5m",
         "customDetails": {
-          "ETD_AlertNumber": "AlertId",
-          "SAP_User": "extracted_sap_user"
+          "SAP_User": "extracted_sap_user",
+          "ETD_AlertNumber": "AlertId"
         }
       }
     }
