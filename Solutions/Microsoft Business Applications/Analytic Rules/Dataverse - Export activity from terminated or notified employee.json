@@ -14,11 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "This query identifies Dataverse export activity triggered by terminated, or employees about to leave the organization. This analytics rule uses the TerminatedEmployees watchlist template.",
-        "triggerThreshold": 0,
-        "name": "Dataverse - Export activity from terminated or notified employee",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -28,19 +26,19 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "ClientIp",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "CloudAppId",
@@ -50,26 +48,28 @@
                 "columnName": "InstanceUrl",
                 "identifier": "InstanceName"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "query": "// Set a time period before employee terminatation date to search for export events\nlet termination_watch_period = 7d;\nlet query_frequency = 1h;\nlet exportEvents = dynamic(['ExportToExcel', 'ExportPdfDocument', 'ExportWordDocument', 'ExecutePowerBISql']);\nMSBizAppsTerminatedEmployees\n| where (UserState =~ \"Terminated\") or (UserState =~ \"Notified\" and TerminationDate <= startofday(now()) + termination_watch_period)\n| join kind=inner (DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message in (exportEvents))\n    on $left.UserPrincipalName == $right.UserId\n| summarize\n    FirstEvent = min(TimeGenerated),\n    LastEvent = max(TimeGenerated),\n    Event = make_set(Message, 4)\n    by UserId, InstanceUrl, ClientIp, UserState\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    LastEvent,\n    UserId,\n    ClientIp,\n    UserState,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "name": "Dataverse - Export activity from terminated or notified employee",
+        "description": "This query identifies Dataverse export activity triggered by terminated, or employees about to leave the organization. This analytics rule uses the TerminatedEmployees watchlist template.",
         "tactics": [
           "Exfiltration"
         ],
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Export events where employee state found matching {{UserState}} found in {{InstanceUrl}}.",
-          "alertDisplayNameFormat": "Dataverse - Export events detected from a terminated employee in {{InstanceUrl}} "
-        },
+        "query": "// Set a time period before employee terminatation date to search for export events\nlet termination_watch_period = 7d;\nlet query_frequency = 1h;\nlet exportEvents = dynamic(['ExportToExcel', 'ExportPdfDocument', 'ExportWordDocument', 'ExecutePowerBISql']);\nMSBizAppsTerminatedEmployees\n| where (UserState =~ \"Terminated\") or (UserState =~ \"Notified\" and TerminationDate <= startofday(now()) + termination_watch_period)\n| join kind=inner (DataverseActivity\n    | where TimeGenerated >= ago(query_frequency)\n    | where Message in (exportEvents))\n    on $left.UserPrincipalName == $right.UserId\n| summarize\n    FirstEvent = min(TimeGenerated),\n    LastEvent = max(TimeGenerated),\n    Event = make_set(Message, 4)\n    by UserId, InstanceUrl, ClientIp, UserState\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    LastEvent,\n    UserId,\n    ClientIp,\n    UserState,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
         "queryFrequency": "1h",
-        "severity": "Medium",
-        "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Dataverse - Export events detected from a terminated employee in {{InstanceUrl}} ",
+          "alertDescriptionFormat": "Export events where employee state found matching {{UserState}} found in {{InstanceUrl}}."
+        },
+        "status": "Available"
       }
     }
   ]
