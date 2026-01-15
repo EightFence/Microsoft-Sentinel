@@ -14,13 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "description": "This query searches for devices with unexpectedly large number of activity match.",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SourceHostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SourceHostName"
               }
             ]
           },
@@ -28,55 +33,50 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIPs",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIPs"
               }
             ]
           }
         ],
+        "tactics": [],
         "severity": "Medium",
-        "triggerThreshold": 0,
-        "customDetails": {
-          "Matches_ASP_URLs": "ASPMatchURLs",
-          "Matches_Dest_IPs": "DestinationIPs",
-          "Matches_Max_Severity": "MaxSeverity",
-          "Device": "SourceHostName",
-          "Matches_Count": "ModelMatchCount",
-          "Matched_Models": "Models"
+        "alertDetailsOverride": {
+          "alertSeverityColumnName": "SeverityName",
+          "alertDisplayNameFormat": "Awake Security - High Model Match Counts On Device {{SourceHostName}}",
+          "alertTacticsColumnName": null,
+          "alertDescriptionFormat": "The following Awake model(s):\n\n{{Models}}\n\nmatched {{ModelMatchCount}} activities, an unexpectedly large number. The destination IPs associated with these matches were:\n\n{{DestinationIPs}}"
         },
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "status": "Available",
+        "queryPeriod": "1h",
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Arista Networks\" and DeviceProduct == \"Awake Security\"\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), Models=make_set(Activity), ASPMatchURLs=make_set(DeviceCustomString2), SourceIPs=make_set(SourceIP),\n  DestinationIPs=make_set(DestinationIP), ModelMatchCount=sum(EventCount), MaxSeverity=max(toint(LogSeverity)) by SourceHostName\n| where ModelMatchCount > 1000 and MaxSeverity > 2\n| extend SeverityName=iff(MaxSeverity == 0, \"Informational\", iff(MaxSeverity < 5, \"Low\", iff(MaxSeverity < 8, \"Medium\", \"High\")))\n",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
-            "groupByCustomDetails": [
-              "Device"
-            ],
-            "enabled": true,
             "lookbackDuration": "3d",
             "groupByEntities": [
               "Host"
             ],
-            "reopenClosedIncident": true,
             "matchingMethod": "Selected",
-            "groupByAlertDetails": []
+            "reopenClosedIncident": true,
+            "enabled": true,
+            "groupByAlertDetails": [],
+            "groupByCustomDetails": [
+              "Device"
+            ]
           }
         },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "customDetails": {
+          "Matched_Models": "Models",
+          "Matches_Dest_IPs": "DestinationIPs",
+          "Device": "SourceHostName",
+          "Matches_Max_Severity": "MaxSeverity",
+          "Matches_Count": "ModelMatchCount",
+          "Matches_ASP_URLs": "ASPMatchURLs"
         },
-        "triggerOperator": "gt",
-        "name": "Awake Security - High Match Counts By Device",
-        "description": "This query searches for devices with unexpectedly large number of activity match.",
-        "queryPeriod": "1h",
-        "tactics": [],
-        "query": "CommonSecurityLog\n| where DeviceVendor == \"Arista Networks\" and DeviceProduct == \"Awake Security\"\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), Models=make_set(Activity), ASPMatchURLs=make_set(DeviceCustomString2), SourceIPs=make_set(SourceIP),\n  DestinationIPs=make_set(DestinationIP), ModelMatchCount=sum(EventCount), MaxSeverity=max(toint(LogSeverity)) by SourceHostName\n| where ModelMatchCount > 1000 and MaxSeverity > 2\n| extend SeverityName=iff(MaxSeverity == 0, \"Informational\", iff(MaxSeverity < 5, \"Low\", iff(MaxSeverity < 8, \"Medium\", \"High\")))\n",
-        "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The following Awake model(s):\n\n{{Models}}\n\nmatched {{ModelMatchCount}} activities, an unexpectedly large number. The destination IPs associated with these matches were:\n\n{{DestinationIPs}}",
-          "alertDisplayNameFormat": "Awake Security - High Model Match Counts On Device {{SourceHostName}}",
-          "alertSeverityColumnName": "SeverityName",
-          "alertTacticsColumnName": null
-        },
-        "status": "Available"
+        "name": "Awake Security - High Match Counts By Device"
       }
     }
   ]
