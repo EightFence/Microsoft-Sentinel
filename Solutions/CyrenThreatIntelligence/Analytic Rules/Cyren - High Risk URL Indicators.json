@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6e8f9c4b-2a3b-5c6d-0e1f-d2e3f4a5b6c7')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6e8f9c4b-2a3b-5c6d-0e1f-d2e3f4a5b6c7')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Detects high-risk URL indicators (risk score >= 80) from Cyren malware URL threat intelligence feeds in the last 24 hours.\nThese URLs are associated with malware distribution, phishing campaigns, or other malicious content hosting.'\n",
+        "tactics": [
+          "InitialAccess",
+          "Execution"
+        ],
+        "triggerThreshold": 0,
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerOperator": "gt",
+        "query": "Cyren_Indicators_CL\n| where TimeGenerated > ago(1d)\n| where isnotempty(url_s)\n| extend Risk = toint(risk_d)\n| where Risk >= 80\n| summarize \n    DetectionCount = count(), \n    MaxRisk = max(Risk), \n    Categories = make_set(category_s) \n  by URL = url_s, Domain = domain_s, Source = source_s\n| where DetectionCount >= 1\n| extend \n    MaliciousURL = URL,\n    ThreatCategories = strcat_array(Categories, \", \")\n",
+        "status": "Available",
+        "name": "Cyren High-Risk URL Indicators",
+        "entityMappings": [
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "MaliciousURL",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "suppressionDuration": "1h",
+        "severity": "High",
+        "customDetails": {
+          "DetectionCount": "DetectionCount",
+          "Source": "Source",
+          "Domain": "Domain",
+          "Categories": "ThreatCategories",
+          "RiskScore": "MaxRisk"
+        },
+        "queryPeriod": "1d",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "enabled": true,
+            "groupByEntities": [
+              "URL"
+            ],
+            "reopenClosedIncident": false,
+            "lookbackDuration": "1d"
+          }
+        },
+        "queryFrequency": "1h",
+        "suppressionEnabled": false
+      }
+    }
+  ]
+}
