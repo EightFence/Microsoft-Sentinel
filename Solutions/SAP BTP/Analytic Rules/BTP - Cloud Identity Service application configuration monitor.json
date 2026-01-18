@@ -14,42 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies CRUD operations on Application (SSO Domain/Service Provider) configurations\nwithin SAP Cloud Identity Service. This includes both SAML 2.0 and OpenID Connect applications.\nUnauthorized application creation could indicate an attacker establishing persistent access\nthrough a rogue federated application.\n",
-        "tactics": [
-          "CredentialAccess",
-          "PrivilegeEscalation"
-        ],
-        "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
+        "customDetails": {
+          "ServiceProviderName": "ServiceProviderName",
+          "Action": "Action",
+          "FederationType": "FederationType",
+          "SourceIP": "ipAddress"
         },
-        "triggerOperator": "gt",
+        "severity": "Medium",
         "query": "SAPBTPAuditLog_CL\n| extend data_s = tostring(Message.data)\n| extend \n    action = extract(@\"action=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    state = extract(@\"state=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    objectType = extract(@\"objectType=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    serviceProviderName = extract(@\"serviceProviderName=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    ipAddress = extract(@\"ipAddress=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    // Extract payload JSON for federation type\n    payloadJson = extract(@\"\\{\"\"payload\"\":\\{([^}]+)\\}\\}\", 1, data_s)\n| extend federationType = extract(@\"\"\"type\"\":\"\"([^\"\"]+)\"\"\", 1, payloadJson)\n| where objectType == \"ssoDomain\"\n| where state == \"successful\"\n| where action in (\"create\", \"update\", \"delete\")\n| extend MessageText = case(\n    action == \"create\", strcat(\"Application '\", serviceProviderName, \"' (\", federationType, \") was created\"),\n    action == \"update\", strcat(\"Application '\", serviceProviderName, \"' (\", federationType, \") was updated\"),\n    action == \"delete\", strcat(\"Application '\", serviceProviderName, \"' was deleted\"),\n    \"Unclassified operation on application\"\n)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ServiceProviderName = serviceProviderName,\n    FederationType = federationType,\n    Action = action,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Identity Service\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "status": "Available",
-        "name": "BTP - Cloud Identity Service application configuration monitor",
-        "queryFrequency": "15m",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "SAP Cloud Identity Service: {{MessageText}}",
           "alertDescriptionFormat": "{{MessageText}} by {{UserName}}. Identity provider name: {{ServiceProviderName}}\n    \nThis could indicate:\n- Legitimate administrative change to federated applications\n- Unauthorized application registration for persistent access\n- Rogue SAML/OIDC application added by attacker\n"
         },
-        "severity": "Medium",
-        "customDetails": {
-          "FederationType": "FederationType",
-          "Action": "Action",
-          "SourceIP": "ipAddress",
-          "ServiceProviderName": "ServiceProviderName"
+        "triggerOperator": "gt",
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
         },
+        "triggerThreshold": 0,
+        "name": "BTP - Cloud Identity Service application configuration monitor",
+        "queryPeriod": "15m",
+        "description": "Identifies CRUD operations on Application (SSO Domain/Service Provider) configurations\nwithin SAP Cloud Identity Service. This includes both SAML 2.0 and OpenID Connect applications.\nUnauthorized application creation could indicate an attacker establishing persistent access\nthrough a rogue federated application.\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -57,8 +53,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ipAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ipAddress"
               }
             ]
           },
@@ -66,13 +62,17 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "CloudApp",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "CloudApp"
               }
             ]
           }
         ],
-        "queryPeriod": "15m"
+        "queryFrequency": "15m",
+        "tactics": [
+          "CredentialAccess",
+          "PrivilegeEscalation"
+        ]
       }
     }
   ]

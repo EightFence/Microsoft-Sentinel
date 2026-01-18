@@ -14,41 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies deployment and undeployment of JDBC data source configurations in SAP Cloud Integration.\nJDBC data sources contain database connection credentials and configuration that enable\nintegration flows to access backend databases.\n\nUnauthorized JDBC data source manipulation could indicate:\n- Attacker adding rogue database connections for data exfiltration\n- Credential theft by accessing stored database passwords\n- Modification of connection strings to redirect traffic to attacker-controlled systems\n",
-        "tactics": [
-          "CredentialAccess",
-          "LateralMovement"
-        ],
-        "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
+        "customDetails": {
+          "Action": "Action",
+          "DataSourceName": "DataSourceName",
+          "SourceIP": "ipAddress"
         },
-        "triggerOperator": "gt",
+        "severity": "High",
         "query": "SAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId)\n| where objectType == \"Data Source\"\n| where action in (\"PasswordStore\", \"PasswordDelete\")\n| extend normalizedAction = case(\n    action == \"PasswordStore\", \"deployed\",\n    action == \"PasswordDelete\", \"undeployed\",\n    action\n)\n| extend MessageText = strcat(\"JDBC data source '\", objectId, \"' was \", normalizedAction)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    DataSourceName = objectId,\n    Action = action,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "status": "Available",
-        "name": "BTP - Cloud Integration JDBC data source changes",
-        "queryFrequency": "15m",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}",
           "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nJDBC data sources contain database connection credentials. Changes to these configurations\nshould be carefully reviewed.\n\nThis could indicate:\n- Legitimate database configuration management\n- Unauthorized database connection configuration\n- Attacker establishing lateral movement paths to backend systems\n"
         },
-        "severity": "High",
-        "customDetails": {
-          "Action": "Action",
-          "SourceIP": "ipAddress",
-          "DataSourceName": "DataSourceName"
+        "triggerOperator": "gt",
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
         },
+        "triggerThreshold": 0,
+        "name": "BTP - Cloud Integration JDBC data source changes",
+        "queryPeriod": "15m",
+        "description": "Identifies deployment and undeployment of JDBC data source configurations in SAP Cloud Integration.\nJDBC data sources contain database connection credentials and configuration that enable\nintegration flows to access backend databases.\n\nUnauthorized JDBC data source manipulation could indicate:\n- Attacker adding rogue database connections for data exfiltration\n- Credential theft by accessing stored database passwords\n- Modification of connection strings to redirect traffic to attacker-controlled systems\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           },
@@ -56,8 +52,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ipAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ipAddress"
               }
             ]
           },
@@ -65,13 +61,17 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "CloudApp",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "CloudApp"
               }
             ]
           }
         ],
-        "queryPeriod": "15m"
+        "queryFrequency": "15m",
+        "tactics": [
+          "CredentialAccess",
+          "LateralMovement"
+        ]
       }
     }
   ]
