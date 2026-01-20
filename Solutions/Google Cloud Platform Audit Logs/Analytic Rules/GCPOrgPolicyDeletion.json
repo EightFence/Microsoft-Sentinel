@@ -1,0 +1,85 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/205e1c9f-faee-43f1-b3b8-1952ffbbeea4')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/205e1c9f-faee-43f1-b3b8-1952ffbbeea4')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "query": "GCPAuditLogs\n| where ServiceName == \"orgpolicy.googleapis.com\"\n| where MethodName has_any (\"OrgPolicy.DeletePolicy\", \"OrgPolicy.UpdatePolicy\")\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend \n    PolicyName = split(GCPResourceName, \"/\")[-1],\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ResourceName = GCPResourceName,\n          PolicyName,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
+        "queryPeriod": "1h",
+        "description": "'Detects when a Google Cloud Platform organization policy is deleted or updated. \nOrganization policies provide centralized control over your organization's cloud resources and help ensure security and compliance.\nDeletion or modification of org policies may indicate an attempt to bypass security controls or weaken the security posture of GCP projects.\nAdversaries may delete or update organization policies to disable security constraints before performing malicious activities.'\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Orgnization policy {{PolicyName}} was deleted. This action may weaken security controls and compliance posture.\n\nResource: {{ResourceName}}\nSource IP: {{CallerIpAddress}}\n\nInvestigate whether this deletion was authorized and assess the impact on security controls.",
+          "alertDisplayNameFormat": "GCP Organization Policy {{PolicyName}} Deleted by {{PrincipalEmail}}"
+        },
+        "queryFrequency": "1h",
+        "name": "GCP Audit Logs - Detect Organization Policy Deletion or Updation",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "PrincipalEmail",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "columnName": "ProjectId",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "ResourceName",
+                "identifier": "InstanceName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "customDetails": {
+          "PolicyName": "PolicyName",
+          "ProjectId": "ProjectId",
+          "ResourceName": "ResourceName",
+          "UserAgent": "UserAgent",
+          "Permission": "Permission",
+          "MethodName": "MethodName"
+        },
+        "status": "Available"
+      }
+    }
+  ]
+}
