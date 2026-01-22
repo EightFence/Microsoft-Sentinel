@@ -16,34 +16,40 @@
       "properties": {
         "queryPeriod": "15m",
         "query": "// Update these thresholds if noisy in your environment\nlet SnapshotDeletionThreshold = 10;\nlet TimeWindow = 1m;\nGCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n| where MethodName has \"compute.snapshots.delete\"\n| where GCPResourceType == \"gce_snapshot\" and Severity == \"NOTICE\"\n| extend \n    AuthzInfoJson = parse_json(AuthorizationInfo),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    ResponseJson = parse_json(Response)\n| extend PermissionType = tostring(AuthzInfoJson[0].permissionType)\n| where PermissionType == \"ADMIN_WRITE\"\n| extend \n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    SnapshotName = extract(@\"snapshots/([^/]+)\", 1, GCPResourceName),\n    OperationType = tostring(ResponseJson.operationType),\n    OperationId = tostring(ResponseJson.id)\n| summarize \n    SnapshotCount = count(),\n    SnapshotList = make_set(SnapshotName, 100),\n    FirstDeletion = min(TimeGenerated),\n    LastDeletion = max(TimeGenerated),\n    OperationIds = make_set(OperationId, 100),\n    CallerIPs = make_set(CallerIpAddress, 10)\n    by PrincipalEmail, ProjectId, UserAgent\n| where SnapshotCount >= SnapshotDeletionThreshold\n| extend DeletionTimeSpan = LastDeletion - FirstDeletion\n| where DeletionTimeSpan <= TimeWindow\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project \n    TimeGenerated = FirstDeletion,\n    PrincipalEmail,\n    ProjectId,\n    SnapshotCount,\n    SnapshotList,\n    FirstDeletion,\n    LastDeletion,\n    DeletionTimeSpan,\n    CallerIPs,\n    UserAgent,\n    OperationIds,\n    AccountName,\n    AccountUPNSuffix\n",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Impact",
-          "DefenseEvasion"
-        ],
         "severity": "High",
-        "name": "GCP Audit Logs - Detect Bulk VM Snapshot Deletion",
-        "status": "Available",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "User {{PrincipalEmail}} deleted {{SnapshotCount}} VM snapshots in project {{ProjectId}} within a short time period. \nThis may indicate ransomware, data destruction, or defense evasion activity. Verify authorization, check remaining snapshots, review IP addresses, and investigate for compromise.",
-          "alertDisplayNameFormat": "Bulk VM Snapshot Deletion: {{SnapshotCount}} snapshots deleted by {{PrincipalEmail}} in {{ProjectId}}"
+          "alertDisplayNameFormat": "Bulk VM Snapshot Deletion: {{SnapshotCount}} snapshots deleted by {{PrincipalEmail}} in {{ProjectId}}",
+          "alertDescriptionFormat": "User {{PrincipalEmail}} deleted {{SnapshotCount}} VM snapshots in project {{ProjectId}} within a short time period. \nThis may indicate ransomware, data destruction, or defense evasion activity. Verify authorization, check remaining snapshots, review IP addresses, and investigate for compromise."
         },
+        "customDetails": {
+          "SnapshotList": "SnapshotList",
+          "SnapshotCount": "SnapshotCount",
+          "UserAgent": "UserAgent",
+          "LastDeletion": "LastDeletion",
+          "ProjectId": "ProjectId",
+          "DeletionTimeSpan": "DeletionTimeSpan",
+          "CallerIPs": "CallerIPs",
+          "FirstDeletion": "FirstDeletion"
+        },
+        "description": "'Detects bulk deletion of Google Cloud VM snapshots within a short time period, which may indicate data destruction or defense evasion activities.\nVM snapshots are critical for backup and disaster recovery. Bulk deletion of snapshots can prevent recovery from incidents and may indicate\nmalicious activity such as ransomware, data destruction, or an attempt to cover tracks after a security breach.\nAdversaries may delete snapshots to maximize damage, prevent forensic investigation, or hinder recovery efforts.\nThis rule triggers when multiple snapshots are deleted by the same user within a 1-minute window.'\n",
+        "queryFrequency": "15m",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "PrincipalEmail"
+                "columnName": "PrincipalEmail",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -51,24 +57,18 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ProjectId"
+                "columnName": "ProjectId",
+                "identifier": "Name"
               }
             ]
           }
         ],
-        "description": "'Detects bulk deletion of Google Cloud VM snapshots within a short time period, which may indicate data destruction or defense evasion activities.\nVM snapshots are critical for backup and disaster recovery. Bulk deletion of snapshots can prevent recovery from incidents and may indicate\nmalicious activity such as ransomware, data destruction, or an attempt to cover tracks after a security breach.\nAdversaries may delete snapshots to maximize damage, prevent forensic investigation, or hinder recovery efforts.\nThis rule triggers when multiple snapshots are deleted by the same user within a 1-minute window.'\n",
-        "customDetails": {
-          "FirstDeletion": "FirstDeletion",
-          "CallerIPs": "CallerIPs",
-          "SnapshotList": "SnapshotList",
-          "SnapshotCount": "SnapshotCount",
-          "LastDeletion": "LastDeletion",
-          "ProjectId": "ProjectId",
-          "UserAgent": "UserAgent",
-          "DeletionTimeSpan": "DeletionTimeSpan"
-        },
-        "queryFrequency": "15m"
+        "tactics": [
+          "Impact",
+          "DefenseEvasion"
+        ],
+        "status": "Available",
+        "name": "GCP Audit Logs - Detect Bulk VM Snapshot Deletion"
       }
     }
   ]

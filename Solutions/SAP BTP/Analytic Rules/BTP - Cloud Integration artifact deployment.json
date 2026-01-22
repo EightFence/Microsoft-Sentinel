@@ -15,31 +15,17 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "queryPeriod": "15m",
-        "query": "let deploymentActions = dynamic([\"Deploy_of_Artifact_Initiated\", \"Deploy_of_Artifact_Completed\", \"Undeploy_of_artifact_triggered\"]);\nSAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId)\n| where action in (deploymentActions)\n| extend normalizedAction = case(\n    action == \"Deploy_of_Artifact_Initiated\", \"deployment initiated\",\n    action == \"Deploy_of_Artifact_Completed\", \"deployed\",\n    action == \"Undeploy_of_artifact_triggered\", \"undeployed\",\n    action\n),\nactionCategory = case(\n    action startswith \"Deploy\", \"Deploy\",\n    action startswith \"Undeploy\", \"Undeploy\",\n    \"Unknown\"\n)\n| extend MessageText = strcat(objectType, \" '\", objectId, \"' was \", normalizedAction)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ArtifactType = objectType,\n    ArtifactId = objectId,\n    Action = action,\n    ActionCategory = actionCategory,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "triggerThreshold": 0,
-        "tactics": [
-          "Execution",
-          "Persistence"
-        ],
-        "severity": "High",
-        "name": "BTP - Cloud Integration artifact deployment",
-        "status": "Available",
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nThis could indicate:\n- Legitimate integration artifact deployment or maintenance\n- Unauthorized deployment of malicious integration code\n- Attacker undeploying security-relevant integrations\n",
-          "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}"
-        },
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -47,8 +33,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "ipAddress"
+                "columnName": "ipAddress",
+                "identifier": "Address"
               }
             ]
           },
@@ -56,24 +42,38 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "CloudApp"
+                "columnName": "CloudApp",
+                "identifier": "Name"
               }
             ]
           }
         ],
-        "description": "Identifies deployment and undeployment of integration artifacts in SAP Cloud Integration.\nIntegration flows are executable code that can process, transform, and route data between\nsystems.\n\nUnauthorized artifact deployment could indicate:\n- Attacker deploying malicious integration flows for data exfiltration\n- Deployment of rogue code for persistent access\n- Undeployment of critical integrations causing denial of service\n",
+        "query": "let deploymentActions = dynamic([\"Deploy_of_Artifact_Initiated\", \"Deploy_of_Artifact_Completed\", \"Undeploy_of_artifact_triggered\"]);\nSAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId)\n| where action in (deploymentActions)\n| extend normalizedAction = case(\n    action == \"Deploy_of_Artifact_Initiated\", \"deployment initiated\",\n    action == \"Deploy_of_Artifact_Completed\", \"deployed\",\n    action == \"Undeploy_of_artifact_triggered\", \"undeployed\",\n    action\n),\nactionCategory = case(\n    action startswith \"Deploy\", \"Deploy\",\n    action startswith \"Undeploy\", \"Undeploy\",\n    \"Unknown\"\n)\n| extend MessageText = strcat(objectType, \" '\", objectId, \"' was \", normalizedAction)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ArtifactType = objectType,\n    ArtifactId = objectId,\n    Action = action,\n    ActionCategory = actionCategory,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "severity": "High",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}",
+          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nThis could indicate:\n- Legitimate integration artifact deployment or maintenance\n- Unauthorized deployment of malicious integration code\n- Attacker undeploying security-relevant integrations\n"
+        },
         "customDetails": {
           "Action": "Action",
-          "SourceIP": "ipAddress",
           "ArtifactId": "ArtifactId",
+          "SourceIP": "ipAddress",
           "ArtifactType": "ArtifactType",
           "ActionCategory": "ActionCategory"
         },
+        "description": "Identifies deployment and undeployment of integration artifacts in SAP Cloud Integration.\nIntegration flows are executable code that can process, transform, and route data between\nsystems.\n\nUnauthorized artifact deployment could indicate:\n- Attacker deploying malicious integration flows for data exfiltration\n- Deployment of rogue code for persistent access\n- Undeployment of critical integrations causing denial of service\n",
         "queryFrequency": "15m",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
-        }
+        },
+        "tactics": [
+          "Execution",
+          "Persistence"
+        ],
+        "status": "Available",
+        "name": "BTP - Cloud Integration artifact deployment"
       }
     }
   ]
