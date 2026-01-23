@@ -14,7 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "15m",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -48,32 +49,31 @@
             ]
           }
         ],
-        "query": "let accessPolicyTypes = dynamic([\"Access Policy\", \"Artifact Reference\"]);\nlet monitoredActions = dynamic([\"Create\", \"Change\", \"Delete\"]);\nSAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId),\n         policyMessage = tostring(parsedData.attributes.message)\n| where objectType in (accessPolicyTypes)\n| where action in (monitoredActions)\n| extend normalizedAction = case(\n    action == \"Create\", \"created\",\n    action == \"Change\", \"modified\",\n    action == \"Delete\", \"deleted\",\n    action\n)\n| extend MessageText = case(\n    objectType == \"Access Policy\", strcat(\"Access policy '\", objectId, \"' was \", normalizedAction),\n    objectType == \"Artifact Reference\", strcat(\"Artifact reference '\", objectId, \"' was \", normalizedAction),\n    strcat(objectType, \" '\", objectId, \"' was \", normalizedAction)\n)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ObjectType = objectType,\n    ObjectId = objectId,\n    Action = action,\n    PolicyMessage = policyMessage,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "severity": "High",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}",
-          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nThis could indicate:\n- Legitimate access policy administration\n- Unauthorized privilege escalation attempt\n- Attacker modifying security controls to access sensitive integrations\n"
-        },
-        "customDetails": {
-          "SourceIP": "ipAddress",
-          "ObjectType": "ObjectType",
-          "PolicyMessage": "PolicyMessage",
-          "Action": "Action",
-          "ObjectId": "ObjectId"
-        },
-        "description": "Identifies changes to access policies in SAP Cloud Integration. Access policies control\nauthorization for integration artifacts, defining which users and roles can access specific\nintegration flows and related content.\n\nUnauthorized access policy manipulation could indicate:\n- Attacker granting themselves access to sensitive integration artifacts\n- Removal of security controls to enable further malicious activity\n- Defense evasion by modifying artifact references to hide unauthorized access\n",
-        "queryFrequency": "15m",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
+        "query": "let accessPolicyTypes = dynamic([\"Access Policy\", \"Artifact Reference\"]);\nlet monitoredActions = dynamic([\"Create\", \"Change\", \"Delete\"]);\nSAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId),\n         policyMessage = tostring(parsedData.attributes.message)\n| where objectType in (accessPolicyTypes)\n| where action in (monitoredActions)\n| extend normalizedAction = case(\n    action == \"Create\", \"created\",\n    action == \"Change\", \"modified\",\n    action == \"Delete\", \"deleted\",\n    action\n)\n| extend MessageText = case(\n    objectType == \"Access Policy\", strcat(\"Access policy '\", objectId, \"' was \", normalizedAction),\n    objectType == \"Artifact Reference\", strcat(\"Artifact reference '\", objectId, \"' was \", normalizedAction),\n    strcat(objectType, \" '\", objectId, \"' was \", normalizedAction)\n)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ObjectType = objectType,\n    ObjectId = objectId,\n    Action = action,\n    PolicyMessage = policyMessage,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
         "tactics": [
           "DefenseEvasion",
           "PrivilegeEscalation"
         ],
-        "status": "Available",
-        "name": "BTP - Cloud Integration access policy tampering"
+        "queryFrequency": "15m",
+        "name": "BTP - Cloud Integration access policy tampering",
+        "description": "Identifies changes to access policies in SAP Cloud Integration. Access policies control\nauthorization for integration artifacts, defining which users and roles can access specific\nintegration flows and related content.\n\nUnauthorized access policy manipulation could indicate:\n- Attacker granting themselves access to sensitive integration artifacts\n- Removal of security controls to enable further malicious activity\n- Defense evasion by modifying artifact references to hide unauthorized access\n",
+        "customDetails": {
+          "ObjectId": "ObjectId",
+          "ObjectType": "ObjectType",
+          "PolicyMessage": "PolicyMessage",
+          "Action": "Action",
+          "SourceIP": "ipAddress"
+        },
+        "severity": "High",
+        "queryPeriod": "15m",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nThis could indicate:\n- Legitimate access policy administration\n- Unauthorized privilege escalation attempt\n- Attacker modifying security controls to access sensitive integrations\n",
+          "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}"
+        },
+        "status": "Available"
       }
     }
   ]
