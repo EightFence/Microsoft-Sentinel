@@ -14,15 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "queryFrequency": "5m",
+        "customDetails": {
+          "EventCount": "EventCount",
+          "EventStartTime": "EventStartTime",
+          "EventEndTime": "EventEndTime",
+          "DstIpAddr": "DstIpAddr"
+        },
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "Execution"
+        ],
+        "queryPeriod": "5m",
         "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SrcIpAddr",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
               }
             ]
           },
@@ -30,8 +45,8 @@
             "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "Url",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "Url"
               }
             ]
           },
@@ -39,8 +54,8 @@
             "entityType": "File",
             "fieldMappings": [
               {
-                "columnName": "requestedFileName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "requestedFileName"
               }
             ]
           },
@@ -48,8 +63,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SrcHostname",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SrcHostname"
               }
             ]
           },
@@ -57,41 +72,26 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
             ]
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "query": "let lookback = 5m;\nlet RiskyFileExtensions = materialize(externaldata(Extensions: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw(\"Web_RiskyFileExtensions\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Extensions = tostring(WatchlistItem[\"Extensions\"])\n    | project Extensions\n    | where isnotempty(Extensions));\nlet CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;\nlet knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions\n    | where isnotempty(Extensions)\n    | summarize make_set(Extensions, 1000));\nlet Whitelisted_Domains = materialize(externaldata(WhiteListedDomains: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/WhiteListedDomainsForWebSessionUseCases.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomWhiteListedDomains = (_ASIM_GetWatchlistRaw(\"Web_WhiteListedDomains\") // Create new Watchlist and add your white listed domains(Optional)\n    | extend\n        WhiteListedDomains = tostring(WatchlistItem[\"WhiteListedDomains\"])\n    | project WhiteListedDomains\n    | where isnotempty(WhiteListedDomains));\nlet CombinedWhitelisted_Domains = union Whitelisted_Domains, CustomWhiteListedDomains;\nlet knownWhitelisted_Domains=toscalar(CombinedWhitelisted_Domains\n    | where isnotempty(WhiteListedDomains)\n    | summarize make_set(WhiteListedDomains, 1000));\n_Im_WebSession (starttime=ago(lookback), url_has_any=knownRiskyFileExtensions, eventresult='Success')\n| project\n    Url,\n    SrcIpAddr,\n    TimeGenerated,\n    SrcUsername,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber\n| extend requestedFileName=tostring(split(tostring(parse_url(Url)[\"Path\"]), '/')[-1])\n| extend requestedFileExt=extract(@'(\\.\\w+)$', 1, requestedFileName, typeof(string))\n| where requestedFileExt in~ (knownRiskyFileExtensions)\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by\n    SrcUsername,\n    SrcIpAddr,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber,\n    Url,\n    requestedFileName\n| extend FQDN = split(parse_url(Url)[\"Host\"], '.')\n| extend Domain = iif(array_length(FQDN) > 1, strcat(FQDN[-2], '.', FQDN[-1]), FQDN)\n| where Domain !in~ (knownWhitelisted_Domains)\n| project-away FQDN\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n",
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "Execution"
-        ],
-        "queryFrequency": "5m",
         "name": "Detect web requests to potentially harmful files (ASIM Web Session)",
         "description": "'This rule detects web requests made to URLs containing file types such as .ps1, .bat, .vbs,.scr etc. which have the potential to be harmful if downloaded. This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM.'\n",
-        "customDetails": {
-          "EventStartTime": "EventStartTime",
-          "EventEndTime": "EventEndTime",
-          "EventCount": "EventCount",
-          "DstIpAddr": "DstIpAddr"
+        "query": "let lookback = 5m;\nlet RiskyFileExtensions = materialize(externaldata(Extensions: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw(\"Web_RiskyFileExtensions\") // Create new Watchlist and add your custom indicators(Optional)\n    | extend\n        Extensions = tostring(WatchlistItem[\"Extensions\"])\n    | project Extensions\n    | where isnotempty(Extensions));\nlet CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;\nlet knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions\n    | where isnotempty(Extensions)\n    | summarize make_set(Extensions, 1000));\nlet Whitelisted_Domains = materialize(externaldata(WhiteListedDomains: string)\n    [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/WhiteListedDomainsForWebSessionUseCases.csv\"]\n    with(format=\"csv\", ignoreFirstRecord=True));\nlet CustomWhiteListedDomains = (_ASIM_GetWatchlistRaw(\"Web_WhiteListedDomains\") // Create new Watchlist and add your white listed domains(Optional)\n    | extend\n        WhiteListedDomains = tostring(WatchlistItem[\"WhiteListedDomains\"])\n    | project WhiteListedDomains\n    | where isnotempty(WhiteListedDomains));\nlet CombinedWhitelisted_Domains = union Whitelisted_Domains, CustomWhiteListedDomains;\nlet knownWhitelisted_Domains=toscalar(CombinedWhitelisted_Domains\n    | where isnotempty(WhiteListedDomains)\n    | summarize make_set(WhiteListedDomains, 1000));\n_Im_WebSession (starttime=ago(lookback), url_has_any=knownRiskyFileExtensions, eventresult='Success')\n| project\n    Url,\n    SrcIpAddr,\n    TimeGenerated,\n    SrcUsername,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber\n| extend requestedFileName=tostring(split(tostring(parse_url(Url)[\"Path\"]), '/')[-1])\n| extend requestedFileExt=extract(@'(\\.\\w+)$', 1, requestedFileName, typeof(string))\n| where requestedFileExt in~ (knownRiskyFileExtensions)\n| summarize\n    EventCount=count(),\n    EventStartTime=min(TimeGenerated),\n    EventEndTime=max(TimeGenerated)\n    by\n    SrcUsername,\n    SrcIpAddr,\n    SrcHostname,\n    DstIpAddr,\n    DstPortNumber,\n    Url,\n    requestedFileName\n| extend FQDN = split(parse_url(Url)[\"Host\"], '.')\n| extend Domain = iif(array_length(FQDN) > 1, strcat(FQDN[-2], '.', FQDN[-1]), FQDN)\n| where Domain !in~ (knownWhitelisted_Domains)\n| project-away FQDN\n| extend Name = iif(SrcUsername contains \"@\", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains \"@\",tostring(split(SrcUsername,'@',1)[0]),\"\")\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' accessed a potentially harmful URL",
+          "alertDescriptionFormat": "User accessed URL - '{{Url}}' that contains a file - '{{requestedFileName}}' with risky extension. Downloading this file could pose a potential risk"
         },
         "severity": "Medium",
-        "queryPeriod": "5m",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "User accessed URL - '{{Url}}' that contains a file - '{{requestedFileName}}' with risky extension. Downloading this file could pose a potential risk",
-          "alertDisplayNameFormat": "User '{{SrcUsername}}' with IP address '{{SrcIpAddr}}' accessed a potentially harmful URL"
-        },
-        "status": "Available"
+        "status": "Available",
+        "triggerThreshold": 0
       }
     }
   ]
