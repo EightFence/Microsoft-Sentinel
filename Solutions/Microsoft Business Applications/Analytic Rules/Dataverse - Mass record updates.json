@@ -14,24 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "customDetails": {
-          "Details": "Details"
-        },
-        "tactics": [
-          "Impact"
-        ],
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "name": "Dataverse - Mass record updates",
+        "triggerThreshold": 0,
         "description": "This query detects mass record update changes in Dataverse and Dynamics 365, exceeding a pre-defined threshold.",
-        "query": "// Set threshold for number of updated records\nlet detection_threshold = 10000;\nlet query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message == \"Update\"\n| summarize EventCount = count() by InstanceUrl, UserId, ClientIp, Message\n| where EventCount > detection_threshold\n| join kind=inner(\n    DataverseActivity\n    | where TimeGenerated >= ago(query_frequency))\n    on InstanceUrl, UserId, ClientIp, Message\n| mv-expand Fields\n| summarize\n    UpdatedFields = make_set(Fields.Name, 100),\n    FirstEvent = min(TimeGenerated)\n    by UserId, ClientIp, InstanceUrl, EventCount, EntityName\n| extend Details = bag_pack(\"Entity\", EntityName, \"Count\", EventCount, \"FieldsUpdated\", UpdatedFields)\n| summarize\n    TotalEvents = sum(EventCount),\n    FirstEvent = min(FirstEvent),\n    Details = make_list(Details, 100)\n    by UserId, ClientIp, InstanceUrl\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    TotalEvents,\n    Details,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -41,19 +32,19 @@
                 "identifier": "UPNSuffix",
                 "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIp"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "identifier": "AppId",
@@ -63,16 +54,25 @@
                 "identifier": "InstanceName",
                 "columnName": "InstanceUrl"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
         ],
+        "customDetails": {
+          "Details": "Details"
+        },
+        "query": "// Set threshold for number of updated records\nlet detection_threshold = 10000;\nlet query_frequency = 1h;\nDataverseActivity\n| where TimeGenerated >= ago(query_frequency)\n| where Message == \"Update\"\n| summarize EventCount = count() by InstanceUrl, UserId, ClientIp, Message\n| where EventCount > detection_threshold\n| join kind=inner(\n    DataverseActivity\n    | where TimeGenerated >= ago(query_frequency))\n    on InstanceUrl, UserId, ClientIp, Message\n| mv-expand Fields\n| summarize\n    UpdatedFields = make_set(Fields.Name, 100),\n    FirstEvent = min(TimeGenerated)\n    by UserId, ClientIp, InstanceUrl, EventCount, EntityName\n| extend Details = bag_pack(\"Entity\", EntityName, \"Count\", EventCount, \"FieldsUpdated\", UpdatedFields)\n| summarize\n    TotalEvents = sum(EventCount),\n    FirstEvent = min(FirstEvent),\n    Details = make_list(Details, 100)\n    by UserId, ClientIp, InstanceUrl\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    FirstEvent,\n    UserId,\n    ClientIp,\n    TotalEvents,\n    Details,\n    InstanceUrl,\n    CloudAppId,\n    AccountName,\n    UPNSuffix\n",
+        "tactics": [
+          "Impact"
+        ],
+        "status": "Available",
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Dataverse - Mass record changes detected in {{{InstanceUrl}} ",
           "alertDescriptionFormat": "A total of {{TotalEvents}} records were updated by {{UserId}} , breaching the mass update threshold in {{InstanceUrl}} ."
         },
-        "severity": "Medium",
-        "status": "Available",
-        "triggerThreshold": 0
+        "name": "Dataverse - Mass record updates"
       }
     }
   ]

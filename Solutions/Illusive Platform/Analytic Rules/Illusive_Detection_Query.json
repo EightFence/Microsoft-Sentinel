@@ -14,12 +14,48 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "5m",
-        "customDetails": {
-          "HasForensics": "HasForensics",
-          "IllusiveIncidentId": "IncidentId",
-          "Account": "SourceUserName"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
+        "triggerThreshold": 0,
+        "description": "'Create a Microsoft Sentinel incident upon a new Illusive alert (incident) and associate all related Illusive events to the relevant Microsoft Sentinel alert. This is done by filtering and processing Illusive Syslog messages.'\n",
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIP"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "SourceHostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "OMSAgentID",
+                "columnName": "Computer"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "customDetails": {
+          "IllusiveIncidentId": "IncidentId",
+          "Account": "SourceUserName",
+          "HasForensics": "HasForensics"
+        },
+        "query": "CommonSecurityLog\n| where DeviceProduct == \"illusive\"\n| extend DeviceCustomNumber2 = coalesce(column_ifexists(\"FieldDeviceCustomNumber2\", long(null)),DeviceCustomNumber2)\n| summarize arg_max(TimeGenerated, *) by DeviceCustomNumber2, AdditionalExtensions, TimeGenerated\n| extend Category = extract(@'cat=([^;]+)(\\;|$)', 1, AdditionalExtensions), HasForensics = extract(@'cs7=([^;]+)(\\;|$)', 1, AdditionalExtensions)\n| extend Category = coalesce(column_ifexists(\"DeviceEventCategory\",\"\"),Category)\t\n| where Category == \"illusive:alerts\"\n| extend IncidentId = DeviceCustomNumber2, IncidentURL = DeviceCustomString5\n| project TimeGenerated, SourceIP, SourceHostName,Computer , DeviceEventClassID ,HasForensics ,SourceUserName, Activity, DeviceAddress,  DestinationHostName, DestinationUserName, IncidentId, IncidentURL\n",
         "tactics": [
           "Persistence",
           "PrivilegeEscalation",
@@ -27,50 +63,14 @@
           "CredentialAccess",
           "LateralMovement"
         ],
+        "status": "Available",
+        "queryFrequency": "5m",
         "queryPeriod": "5m",
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIP"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "SourceHostName"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "OMSAgentID",
-                "columnName": "Computer"
-              }
-            ]
-          }
-        ],
-        "name": "Illusive Incidents Analytic Rule",
-        "description": "'Create a Microsoft Sentinel incident upon a new Illusive alert (incident) and associate all related Illusive events to the relevant Microsoft Sentinel alert. This is done by filtering and processing Illusive Syslog messages.'\n",
-        "query": "CommonSecurityLog\n| where DeviceProduct == \"illusive\"\n| extend DeviceCustomNumber2 = coalesce(column_ifexists(\"FieldDeviceCustomNumber2\", long(null)),DeviceCustomNumber2)\n| summarize arg_max(TimeGenerated, *) by DeviceCustomNumber2, AdditionalExtensions, TimeGenerated\n| extend Category = extract(@'cat=([^;]+)(\\;|$)', 1, AdditionalExtensions), HasForensics = extract(@'cs7=([^;]+)(\\;|$)', 1, AdditionalExtensions)\n| extend Category = coalesce(column_ifexists(\"DeviceEventCategory\",\"\"),Category)\t\n| where Category == \"illusive:alerts\"\n| extend IncidentId = DeviceCustomNumber2, IncidentURL = DeviceCustomString5\n| project TimeGenerated, SourceIP, SourceHostName,Computer , DeviceEventClassID ,HasForensics ,SourceUserName, Activity, DeviceAddress,  DestinationHostName, DestinationUserName, IncidentId, IncidentURL\n",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Illusive Incident: {{IncidentId}}\n",
           "alertDescriptionFormat": "Illusive Incident {{IncidentId}} generated at {{TimeGenerated}}\n"
         },
-        "severity": "Medium",
-        "status": "Available",
-        "triggerThreshold": 0
+        "name": "Illusive Incidents Analytic Rule"
       }
     }
   ]
