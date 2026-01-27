@@ -14,24 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "name": "BTP - Cloud Integration package import or transport",
-        "queryFrequency": "15m",
-        "description": "Identifies import and transport operations for integration packages and artifacts in\nSAP Cloud Integration. Packages contain integration flows, mappings, scripts, and other\nartifacts that can be imported from external sources or transported between tenants.\n\nUnauthorized package operations could indicate:\n- Supply chain attack through malicious package import\n- Lateral movement between environments via artifact transport\n- Introduction of backdoors or rogue integration logic\n",
-        "customDetails": {
-          "ObjectId": "ObjectId",
-          "ObjectType": "ObjectType",
-          "Action": "Action",
-          "OperationStatus": "OperationStatus",
-          "SourceIP": "ipAddress",
-          "OperationType": "OperationType"
+        "query": "let packageActions = dynamic([\"Package_Import_Started\", \"Package_Import_Completed\", \"Package_Transport_Started\", \"Package_Transport_Completed\", \"Artifact_Transport_Started\", \"Artifact_Transport_Completed\"]);\nSAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId)\n| where action in (packageActions)\n| extend operationType = case(\n    action contains \"Import\", \"Import\",\n    action contains \"Transport\", \"Transport\",\n    \"Unknown\"\n),\noperationStatus = case(\n    action endswith \"Started\", \"Started\",\n    action endswith \"Completed\", \"Completed\",\n    \"Unknown\"\n)\n| extend MessageText = strcat(objectType, \" '\", objectId, \"' \", tolower(operationType), \" \", tolower(operationStatus))\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ObjectType = objectType,\n    ObjectId = objectId,\n    Action = action,\n    OperationType = operationType,\n    OperationStatus = operationStatus,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nThis could indicate:\n- Legitimate package management and deployment\n- Import of malicious integration content from untrusted sources\n- Unauthorized transport of artifacts between environments\n",
+          "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}"
         },
+        "severity": "Medium",
+        "name": "BTP - Cloud Integration package import or transport",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
+        "tactics": [
+          "InitialAccess",
+          "Persistence"
+        ],
+        "description": "Identifies import and transport operations for integration packages and artifacts in\nSAP Cloud Integration. Packages contain integration flows, mappings, scripts, and other\nartifacts that can be imported from external sources or transported between tenants.\n\nUnauthorized package operations could indicate:\n- Supply chain attack through malicious package import\n- Lateral movement between environments via artifact transport\n- Introduction of backdoors or rogue integration logic\n",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "OperationType": "OperationType",
+          "ObjectId": "ObjectId",
+          "ObjectType": "ObjectType",
+          "OperationStatus": "OperationStatus",
+          "Action": "Action",
+          "SourceIP": "ipAddress"
+        },
+        "queryFrequency": "15m",
+        "status": "Available",
         "triggerOperator": "gt",
-        "queryPeriod": "15m",
-        "query": "let packageActions = dynamic([\"Package_Import_Started\", \"Package_Import_Completed\", \"Package_Transport_Started\", \"Package_Transport_Completed\", \"Artifact_Transport_Started\", \"Artifact_Transport_Completed\"]);\nSAPBTPAuditLog_CL\n| where Category == \"audit.security-events\"\n| extend data_s = tostring(Message.data),\n         ipAddress = tostring(Message.ip)\n| extend parsedData = parse_json(data_s)\n| extend action = tostring(parsedData.action),\n         objectType = tostring(parsedData.objectType),\n         objectId = tostring(parsedData.objectId)\n| where action in (packageActions)\n| extend operationType = case(\n    action contains \"Import\", \"Import\",\n    action contains \"Transport\", \"Transport\",\n    \"Unknown\"\n),\noperationStatus = case(\n    action endswith \"Started\", \"Started\",\n    action endswith \"Completed\", \"Completed\",\n    \"Unknown\"\n)\n| extend MessageText = strcat(objectType, \" '\", objectId, \"' \", tolower(operationType), \" \", tolower(operationStatus))\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ObjectType = objectType,\n    ObjectId = objectId,\n    Action = action,\n    OperationType = operationType,\n    OperationStatus = operationStatus,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Integration\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -65,16 +74,7 @@
             ]
           }
         ],
-        "severity": "Medium",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SAP Cloud Integration: {{MessageText}}",
-          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} from IP {{ipAddress}}.\n\nThis could indicate:\n- Legitimate package management and deployment\n- Import of malicious integration content from untrusted sources\n- Unauthorized transport of artifacts between environments\n"
-        },
-        "tactics": [
-          "InitialAccess",
-          "Persistence"
-        ]
+        "queryPeriod": "15m"
       }
     }
   ]
