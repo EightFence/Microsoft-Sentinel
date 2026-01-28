@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-e5f6-7890-abcd-ef1234567890')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-e5f6-7890-abcd-ef1234567890')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "suppressionDuration": "5h",
+        "triggerThreshold": 0,
+        "queryPeriod": "7d",
+        "triggerOperator": "GreaterThan",
+        "name": "TacitRed - Repeat Compromise Detection",
+        "description": "Detects users who have been compromised multiple times within a 7-day window.\nThis may indicate a persistent threat or inadequate remediation.\n\nRef: https://data443.com/tacitred-attack-surface-intelligence/",
+        "queryFrequency": "1h",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess",
+          "Persistence"
+        ],
+        "query": "let lookback = 7d;\nTacitRed_Findings_CL\n| where TimeGenerated >= ago(lookback)\n| summarize\n    CompromiseCount = count(),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    Sources = make_set(source_s),\n    AvgConfidence = avg(confidence_d)\n  by email_s, domain_s\n| where CompromiseCount > 1\n| extend\n    Email = tostring(email_s),\n    Domain = tostring(domain_s)\n| project\n    Email,\n    Domain,\n    CompromiseCount,\n    FirstSeen,\n    LastSeen,\n    Sources,\n    AvgConfidence",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "Selected",
+            "lookbackDuration": "5h",
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Email"
+              }
+            ]
+          },
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "Domain"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -14,16 +14,73 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Detects when a Temporary Access Pass (TAP) is created for a Privileged Account.\n  A Temporary Access Pass is a time-limited passcode issued by an admin that satisfies strong authentication requirements and can be used to onboard other authentication methods, including Passwordless ones such as Microsoft Authenticator or even Windows Hello.\n  A threat actor could use a TAP to register a new authentication method to maintain persistance to an account.\n  Review any TAP creations to ensure they were used legitimately.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
-        "query": "let admin_users = (IdentityInfo\n  | summarize arg_max(TimeGenerated, *) by AccountUPN\n  | where AssignedRoles contains \"admin\"\n  | summarize by tolower(AccountUPN));\n  AuditLogs\n  | where OperationName =~ \"Admin registered security info\"\n  | where ResultReason =~ \"Admin registered temporary access pass method for user\"\n  | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n  | where tolower(TargetUserPrincipalName) in (admin_users)\n  | extend TargetAadUserId = tostring(TargetResources[0].id)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\")[1])\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "TargetUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "TargetAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "TargetAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingAccountUPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "TargetAadUserId"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "InitiatingAadUserId"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "InitiatingIPAddress"
+              }
+            ]
+          }
+        ],
         "triggerThreshold": 0,
-        "queryPeriod": "1d",
         "metadata": {
           "author": {
             "name": "Microsoft Security Research"
-          },
-          "source": {
-            "kind": "Community"
           },
           "categories": {
             "domains": [
@@ -33,78 +90,21 @@
           },
           "support": {
             "tier": "Community"
+          },
+          "source": {
+            "kind": "Community"
           }
         },
-        "name": "Addition of a Temporary Access Pass to a Privileged Account",
         "tactics": [
           "Persistence"
         ],
+        "triggerOperator": "gt",
         "severity": "High",
         "queryFrequency": "1d",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "TargetUserPrincipalName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "TargetAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "TargetAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingUserPrincipalName",
-                "identifier": "FullName"
-              },
-              {
-                "columnName": "InitiatingAccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "InitiatingAccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "TargetAadUserId",
-                "identifier": "AadUserId"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingAadUserId",
-                "identifier": "AadUserId"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "InitiatingIPAddress",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
-        "triggerOperator": "gt"
+        "description": "'Detects when a Temporary Access Pass (TAP) is created for a Privileged Account.\n  A Temporary Access Pass is a time-limited passcode issued by an admin that satisfies strong authentication requirements and can be used to onboard other authentication methods, including Passwordless ones such as Microsoft Authenticator or even Windows Hello.\n  A threat actor could use a TAP to register a new authentication method to maintain persistance to an account.\n  Review any TAP creations to ensure they were used legitimately.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'\n",
+        "query": "let admin_users = (IdentityInfo\n  | summarize arg_max(TimeGenerated, *) by AccountUPN\n  | where AssignedRoles contains \"admin\"\n  | summarize by tolower(AccountUPN));\n  AuditLogs\n  | where OperationName =~ \"Admin registered security info\"\n  | where ResultReason =~ \"Admin registered temporary access pass method for user\"\n  | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)\n  | where tolower(TargetUserPrincipalName) in (admin_users)\n  | extend TargetAadUserId = tostring(TargetResources[0].id)\n  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n  | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)\n  | extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\")[1])\n  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
+        "name": "Addition of a Temporary Access Pass to a Privileged Account",
+        "queryPeriod": "1d"
       }
     }
   ]
