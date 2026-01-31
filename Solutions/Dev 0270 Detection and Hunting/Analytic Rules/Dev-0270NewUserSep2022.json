@@ -15,16 +15,11 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'The following query tries to detect creation of a new user using a known DEV-0270 username/password schema'\n",
-        "severity": "High",
-        "status": "Available",
-        "tactics": [
-          "Persistence"
-        ],
-        "triggerOperator": "gt",
         "queryFrequency": "6h",
-        "name": "DEV-0270 New User Creation",
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Account",
@@ -38,10 +33,10 @@
                 "columnName": "AccountNTDomain",
                 "identifier": "NTDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "Computer",
@@ -55,13 +50,18 @@
                 "columnName": "HostNameDomain",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ],
-        "queryPeriod": "6h",
+        "name": "DEV-0270 New User Creation",
+        "tactics": [
+          "Persistence"
+        ],
+        "query": "(union isfuzzy=true\n(SecurityEvent\n| where EventID == 4688\n| where CommandLine has_all ('net user', '/add') \n| parse CommandLine with * \"user \" username \" \"*\n| extend password = extract(@\"\\buser\\s+[^\\s]+\\s+([^\\s]+)\", 1, CommandLine) \n| where username in('DefaultAccount') or password in('P@ssw0rd1234', '_AS_@1394') \n| project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type\n),\n(DeviceProcessEvents \n| where InitiatingProcessCommandLine has_all('net user', '/add') \n| parse InitiatingProcessCommandLine with * \"user \" username \" \"* \n| extend password = extract(@\"\\buser\\s+[^\\s]+\\s+([^\\s]+)\", 1, InitiatingProcessCommandLine) \n| where username in('DefaultAccount') or password in('P@ssw0rd1234', '_AS_@1394') \n| extend Account = strcat(InitiatingProcessAccountDomain, @'\\', InitiatingProcessAccountName), Computer = DeviceName\n)\n)\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])\n",
         "triggerThreshold": 0,
-        "query": "(union isfuzzy=true\n(SecurityEvent\n| where EventID == 4688\n| where CommandLine has_all ('net user', '/add') \n| parse CommandLine with * \"user \" username \" \"*\n| extend password = extract(@\"\\buser\\s+[^\\s]+\\s+([^\\s]+)\", 1, CommandLine) \n| where username in('DefaultAccount') or password in('P@ssw0rd1234', '_AS_@1394') \n| project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type\n),\n(DeviceProcessEvents \n| where InitiatingProcessCommandLine has_all('net user', '/add') \n| parse InitiatingProcessCommandLine with * \"user \" username \" \"* \n| extend password = extract(@\"\\buser\\s+[^\\s]+\\s+([^\\s]+)\", 1, InitiatingProcessCommandLine) \n| where username in('DefaultAccount') or password in('P@ssw0rd1234', '_AS_@1394') \n| extend Account = strcat(InitiatingProcessAccountDomain, @'\\', InitiatingProcessAccountName), Computer = DeviceName\n)\n)\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend AccountName = tostring(split(Account, @'\\')[1]), AccountNTDomain = tostring(split(Account, @'\\')[0])\n"
+        "queryPeriod": "6h",
+        "severity": "High",
+        "triggerOperator": "gt"
       }
     }
   ]

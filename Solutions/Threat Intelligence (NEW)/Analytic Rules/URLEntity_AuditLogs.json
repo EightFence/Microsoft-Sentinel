@@ -15,15 +15,11 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in AuditLogs.'\n",
-        "severity": "Medium",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "triggerOperator": "gt",
         "queryFrequency": "1h",
-        "name": "TI Map URL Entity to AuditLogs",
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "userPrincipalName",
@@ -37,10 +33,10 @@
                 "columnName": "AccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "TargetResourceDisplayName",
@@ -54,22 +50,26 @@
                 "columnName": "HostNameDomain",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "queryPeriod": "14d",
+        "name": "TI Map URL Entity to AuditLogs",
+        "tactics": [
+          "CommandAndControl"
+        ],
         "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet AuditEvents = materialize(AuditLogs\n  | where TimeGenerated >= ago(dt_lookBack)\n  // Extract the URL that is contained within the JSON data\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,tostring(TargetResources))\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName));\nlet AuditUrls = AuditEvents | distinct Url = tolower(Url) | summarize make_list(Url);\nThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType == \"url\"\n     | extend Url = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where tolower(Url) in (AuditUrls)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (AuditEvents) on Url\n| where TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by Id, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence,\nOperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url\n| extend AccountName = tostring(split(userPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(userPrincipalName, \"@\")[1])\n| extend HostName = tostring(split(TargetResourceDisplayName, \".\")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(TargetResourceDisplayName, DomainIndex + 1), TargetResourceDisplayName)\n"
+        "queryPeriod": "14d",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet AuditEvents = materialize(AuditLogs\n  | where TimeGenerated >= ago(dt_lookBack)\n  // Extract the URL that is contained within the JSON data\n  | extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1,tostring(TargetResources))\n  | extend userPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)\n  | extend TargetResourceDisplayName = tostring(TargetResources[0].displayName));\nlet AuditUrls = AuditEvents | distinct Url = tolower(Url) | summarize make_list(Url);\nThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType == \"url\"\n     | extend Url = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where tolower(Url) in (AuditUrls)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\"\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (AuditEvents) on Url\n| where TimeGenerated < ValidUntil\n| summarize TimeGenerated = arg_max(TimeGenerated, *) by Id, Url\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project TimeGenerated, Description, ActivityGroupNames, Id, Type, ValidUntil, Confidence,\nOperationName, Identity, userPrincipalName, TargetResourceDisplayName, Url\n| extend AccountName = tostring(split(userPrincipalName, \"@\")[0]), AccountUPNSuffix = tostring(split(userPrincipalName, \"@\")[1])\n| extend HostName = tostring(split(TargetResourceDisplayName, \".\")[0]), DomainIndex = toint(indexof(TargetResourceDisplayName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(TargetResourceDisplayName, DomainIndex + 1), TargetResourceDisplayName)\n",
+        "triggerOperator": "gt"
       }
     }
   ]

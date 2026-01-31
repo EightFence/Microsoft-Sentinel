@@ -14,25 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "15m",
         "description": "Identifies CRUD operations on Application (SSO Domain/Service Provider) configurations\nwithin SAP Cloud Identity Service. This includes both SAML 2.0 and OpenID Connect applications.\nUnauthorized application creation could indicate an attacker establishing persistent access\nthrough a rogue federated application.\n",
-        "severity": "Medium",
-        "status": "Available",
-        "tactics": [
-          "CredentialAccess",
-          "PrivilegeEscalation"
-        ],
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "name": "BTP - Cloud Identity Service application configuration monitor",
+        "queryFrequency": "15m",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{MessageText}} by {{UserName}}. Identity provider name: {{ServiceProviderName}}\n    \nThis could indicate:\n- Legitimate administrative change to federated applications\n- Unauthorized application registration for persistent access\n- Rogue SAML/OIDC application added by attacker\n",
-          "alertDisplayNameFormat": "SAP Cloud Identity Service: {{MessageText}}"
+          "alertDisplayNameFormat": "SAP Cloud Identity Service: {{MessageText}}",
+          "alertDescriptionFormat": "{{MessageText}} by {{UserName}}. Identity provider name: {{ServiceProviderName}}\n    \nThis could indicate:\n- Legitimate administrative change to federated applications\n- Unauthorized application registration for persistent access\n- Rogue SAML/OIDC application added by attacker\n"
         },
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -42,37 +33,46 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "ipAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "CloudApp",
                 "identifier": "Name"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
+        "name": "BTP - Cloud Identity Service application configuration monitor",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "tactics": [
+          "CredentialAccess",
+          "PrivilegeEscalation"
+        ],
+        "query": "SAPBTPAuditLog_CL\n| extend data_s = tostring(Message.data)\n| extend \n    action = extract(@\"action=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    state = extract(@\"state=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    objectType = extract(@\"objectType=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    serviceProviderName = extract(@\"serviceProviderName=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    ipAddress = extract(@\"ipAddress=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    // Extract payload JSON for federation type\n    payloadJson = extract(@\"\\{\"\"payload\"\":\\{([^}]+)\\}\\}\", 1, data_s)\n| extend federationType = extract(@\"\"\"type\"\":\"\"([^\"\"]+)\"\"\", 1, payloadJson)\n| where objectType == \"ssoDomain\"\n| where state == \"successful\"\n| where action in (\"create\", \"update\", \"delete\")\n| extend MessageText = case(\n    action == \"create\", strcat(\"Application '\", serviceProviderName, \"' (\", federationType, \") was created\"),\n    action == \"update\", strcat(\"Application '\", serviceProviderName, \"' (\", federationType, \") was updated\"),\n    action == \"delete\", strcat(\"Application '\", serviceProviderName, \"' was deleted\"),\n    \"Unclassified operation on application\"\n)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ServiceProviderName = serviceProviderName,\n    FederationType = federationType,\n    Action = action,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Identity Service\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "triggerThreshold": 0,
         "customDetails": {
-          "SourceIP": "ipAddress",
-          "ServiceProviderName": "ServiceProviderName",
           "FederationType": "FederationType",
-          "Action": "Action"
+          "SourceIP": "ipAddress",
+          "Action": "Action",
+          "ServiceProviderName": "ServiceProviderName"
         },
         "queryPeriod": "15m",
-        "triggerThreshold": 0,
-        "query": "SAPBTPAuditLog_CL\n| extend data_s = tostring(Message.data)\n| extend \n    action = extract(@\"action=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    state = extract(@\"state=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    objectType = extract(@\"objectType=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    serviceProviderName = extract(@\"serviceProviderName=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    ipAddress = extract(@\"ipAddress=\"\"([^\"\"]+)\"\"\", 1, data_s),\n    // Extract payload JSON for federation type\n    payloadJson = extract(@\"\\{\"\"payload\"\":\\{([^}]+)\\}\\}\", 1, data_s)\n| extend federationType = extract(@\"\"\"type\"\":\"\"([^\"\"]+)\"\"\", 1, payloadJson)\n| where objectType == \"ssoDomain\"\n| where state == \"successful\"\n| where action in (\"create\", \"update\", \"delete\")\n| extend MessageText = case(\n    action == \"create\", strcat(\"Application '\", serviceProviderName, \"' (\", federationType, \") was created\"),\n    action == \"update\", strcat(\"Application '\", serviceProviderName, \"' (\", federationType, \") was updated\"),\n    action == \"delete\", strcat(\"Application '\", serviceProviderName, \"' was deleted\"),\n    \"Unclassified operation on application\"\n)\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    ServiceProviderName = serviceProviderName,\n    FederationType = federationType,\n    Action = action,\n    Tenant,\n    ipAddress,\n    CloudApp = \"SAP Cloud Identity Service\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n"
+        "severity": "Medium",
+        "triggerOperator": "gt"
       }
     }
   ]
