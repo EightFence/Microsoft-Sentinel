@@ -14,15 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "triggerThreshold": 0,
+        "description": "'This query looks for malicious URL clicks in phishing email recognized by MDO in correlation with CommonSecurityLogs(CSL) & NetworkSession events. \nIf your workspace doesnt have one of the many data sources required for ASIM it may give informational error which can be safely ignored.'\n",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
         "queryFrequency": "1d",
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl"
-        ],
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "InitiatingProcessAccountUpn",
@@ -36,10 +34,10 @@
                 "columnName": "InitiatingProcessAccountDomain",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "RecipientEmailAddress",
@@ -53,10 +51,10 @@
                 "columnName": "RecipientEmailUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "DeviceName",
@@ -70,34 +68,36 @@
                 "columnName": "HostNameDomain",
                 "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "DestinationIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "status": "Available",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "query": "//SuspiciousUrlClicked\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"Url\"\n| project AlertId, RemoteUrl\n| join kind=inner (\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"MailMessage\"\n| project AlertId, NetworkMessageId\n)\non AlertId\n| distinct RemoteUrl, NetworkMessageId\n| join EmailEvents on NetworkMessageId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID\n| join kind = inner  \n(DeviceEvents\n| where ActionType =~ \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl)\n| project  UrlClickedByUserSid = RemoteUrl,\nInitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName,\nInitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n)\non $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\n| distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,\n AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName,\n InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n|  join kind=inner\n(\n//Suspicious url clicked found in common security logs\nCommonSecurityLog\n| project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication\n) on $left.RemoteUrl== $right.RequestURL\n|  join kind=inner\n(\n//Find the relevant network sessions\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| where not(ipv4_is_private(DstIpAddr))\n| project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes\n) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected \n| summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain,\nDeviceName, InitiatingProcessFileName, DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n| extend RecipientEmailName = tostring(split(RecipientEmailAddress,'@',0)[0]), RecipientEmailUPNSuffix = tostring(split(RecipientEmailAddress,'@',1)[0])\n",
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
         "name": "Possible Phishing with CSL and Network Sessions",
-        "description": "'This query looks for malicious URL clicks in phishing email recognized by MDO in correlation with CommonSecurityLogs(CSL) & NetworkSession events. \nIf your workspace doesnt have one of the many data sources required for ASIM it may give informational error which can be safely ignored.'\n"
+        "status": "Available",
+        "query": "//SuspiciousUrlClicked\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"Url\"\n| project AlertId, RemoteUrl\n| join kind=inner (\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"MailMessage\"\n| project AlertId, NetworkMessageId\n)\non AlertId\n| distinct RemoteUrl, NetworkMessageId\n| join EmailEvents on NetworkMessageId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID\n| join kind = inner  \n(DeviceEvents\n| where ActionType =~ \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl)\n| project  UrlClickedByUserSid = RemoteUrl,\nInitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName,\nInitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n)\non $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\n| distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,\n AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName,\n InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain\n|  join kind=inner\n(\n//Suspicious url clicked found in common security logs\nCommonSecurityLog\n| project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication\n) on $left.RemoteUrl== $right.RequestURL\n|  join kind=inner\n(\n//Find the relevant network sessions\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| where not(ipv4_is_private(DstIpAddr))\n| project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes\n) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected \n| summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountUpn, InitiatingProcessAccountName, InitiatingProcessAccountDomain,\nDeviceName, InitiatingProcessFileName, DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n| extend RecipientEmailName = tostring(split(RecipientEmailAddress,'@',0)[0]), RecipientEmailUPNSuffix = tostring(split(RecipientEmailAddress,'@',1)[0])\n",
+        "severity": "Medium"
       }
     }
   ]
