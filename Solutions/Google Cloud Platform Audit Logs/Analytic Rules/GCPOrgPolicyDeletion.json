@@ -14,21 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "GCP Organization Policy {{PolicyName}} Deleted by {{PrincipalEmail}}",
+          "alertDescriptionFormat": "Orgnization policy {{PolicyName}} was deleted. This action may weaken security controls and compliance posture.\n\nResource: {{ResourceName}}\nSource IP: {{CallerIpAddress}}\n\nInvestigate whether this deletion was authorized and assess the impact on security controls."
+        },
+        "status": "Available",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerOperator": "gt",
+        "description": "'Detects when a Google Cloud Platform organization policy is deleted or updated. \nOrganization policies provide centralized control over your organization's cloud resources and help ensure security and compliance.\nDeletion or modification of org policies may indicate an attempt to bypass security controls or weaken the security posture of GCP projects.\nAdversaries may delete or update organization policies to disable security constraints before performing malicious activities.'\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "PrincipalEmail"
+                "columnName": "PrincipalEmail",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -36,8 +46,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
             ]
           },
@@ -45,40 +55,30 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ProjectId"
+                "columnName": "ProjectId",
+                "identifier": "Name"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "ResourceName"
+                "columnName": "ResourceName",
+                "identifier": "InstanceName"
               }
             ]
           }
         ],
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "description": "'Detects when a Google Cloud Platform organization policy is deleted or updated. \nOrganization policies provide centralized control over your organization's cloud resources and help ensure security and compliance.\nDeletion or modification of org policies may indicate an attempt to bypass security controls or weaken the security posture of GCP projects.\nAdversaries may delete or update organization policies to disable security constraints before performing malicious activities.'\n",
-        "queryPeriod": "1h",
-        "severity": "High",
-        "name": "GCP Audit Logs - Detect Organization Policy Deletion or Updation",
-        "triggerOperator": "gt",
-        "query": "GCPAuditLogs\n| where ServiceName == \"orgpolicy.googleapis.com\"\n| where MethodName has_any (\"OrgPolicy.DeletePolicy\", \"OrgPolicy.UpdatePolicy\")\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend \n    PolicyName = split(GCPResourceName, \"/\")[-1],\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ResourceName = GCPResourceName,\n          PolicyName,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
         "customDetails": {
-          "Permission": "Permission",
-          "ProjectId": "ProjectId",
           "ResourceName": "ResourceName",
+          "ProjectId": "ProjectId",
           "MethodName": "MethodName",
-          "UserAgent": "UserAgent",
-          "PolicyName": "PolicyName"
-        },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "GCP Organization Policy {{PolicyName}} Deleted by {{PrincipalEmail}}",
-          "alertDescriptionFormat": "Orgnization policy {{PolicyName}} was deleted. This action may weaken security controls and compliance posture.\n\nResource: {{ResourceName}}\nSource IP: {{CallerIpAddress}}\n\nInvestigate whether this deletion was authorized and assess the impact on security controls."
+          "Permission": "Permission",
+          "PolicyName": "PolicyName",
+          "UserAgent": "UserAgent"
         },
         "queryFrequency": "1h",
+        "severity": "High",
+        "query": "GCPAuditLogs\n| where ServiceName == \"orgpolicy.googleapis.com\"\n| where MethodName has_any (\"OrgPolicy.DeletePolicy\", \"OrgPolicy.UpdatePolicy\")\n| extend \n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend \n    PolicyName = split(GCPResourceName, \"/\")[-1],\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ResourceName = GCPResourceName,\n          PolicyName,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
         "triggerThreshold": 0,
-        "status": "Available"
+        "queryPeriod": "1h",
+        "name": "GCP Audit Logs - Detect Organization Policy Deletion or Updation"
       }
     }
   ]

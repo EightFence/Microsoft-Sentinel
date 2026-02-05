@@ -14,21 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "DNSSEC Disabled on DNS Zone {{ManagedZoneName}} ({{DnsName}}) by {{PrincipalEmail}}",
+          "alertDescriptionFormat": "User {{PrincipalEmail}} disabled DNSSEC on DNS managed zone {{ManagedZoneName}} ({{DnsName}}).    \nThis action removes cryptographic validation of DNS responses and may indicate an attempt to facilitate DNS-based attacks.\nInvestigate immediately to determine if this change was authorized and assess potential security impact.\nReview DNS query logs for suspicious activity and consider re-enabling DNSSEC if unauthorized."
+        },
+        "status": "Available",
+        "tactics": [
+          "DefenseEvasion",
+          "CommandAndControl",
+          "ResourceDevelopment"
+        ],
+        "triggerOperator": "gt",
+        "description": "'Detects when DNSSEC (DNS Security Extensions) is disabled on a Google Cloud DNS managed zone.\nDNSSEC provides cryptographic authentication of DNS data, preventing DNS spoofing and cache poisoning attacks.\nAdversaries may disable DNSSEC to enable DNS-based command and control, phishing campaigns, or\nto redirect traffic to malicious infrastructure without cryptographic validation.\nThis rule monitors DNS zone patch operations where DNSSEC state changes from ON to OFF.'\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "PrincipalEmail"
+                "columnName": "PrincipalEmail",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ]
           },
@@ -36,8 +48,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
             ]
           },
@@ -45,12 +57,12 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ProjectId"
+                "columnName": "ProjectId",
+                "identifier": "Name"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "ResourceName"
+                "columnName": "ResourceName",
+                "identifier": "InstanceName"
               }
             ]
           },
@@ -58,38 +70,26 @@
             "entityType": "DNS",
             "fieldMappings": [
               {
-                "identifier": "DomainName",
-                "columnName": "DnsName"
+                "columnName": "DnsName",
+                "identifier": "DomainName"
               }
             ]
           }
         ],
-        "tactics": [
-          "DefenseEvasion",
-          "CommandAndControl",
-          "ResourceDevelopment"
-        ],
-        "description": "'Detects when DNSSEC (DNS Security Extensions) is disabled on a Google Cloud DNS managed zone.\nDNSSEC provides cryptographic authentication of DNS data, preventing DNS spoofing and cache poisoning attacks.\nAdversaries may disable DNSSEC to enable DNS-based command and control, phishing campaigns, or\nto redirect traffic to malicious infrastructure without cryptographic validation.\nThis rule monitors DNS zone patch operations where DNSSEC state changes from ON to OFF.'\n",
-        "queryPeriod": "1h",
-        "severity": "High",
-        "name": "GCP Audit Logs - DNSSEC Disabled on Managed DNS Zone",
-        "triggerOperator": "gt",
-        "query": "GCPAuditLogs\n| where ServiceName == \"dns.googleapis.com\"\n| where MethodName in (\"dns.managedZones.update\", \"dns.managedZones.patch\")\n| where GCPResourceType == \"dns_managed_zone\" and Severity == \"NOTICE\"\n| extend \n    ResponseJson = parse_json(Response),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n| extend ZoneContext = ResponseJson.operation.zoneContext\n| where isnotempty(ZoneContext)\n| extend \n    OldDnsSecState = tostring(ZoneContext.oldValue.dnssecConfig.state),\n    NewDnsSecState = tostring(ZoneContext.newValue.dnssecConfig.state)\n| where OldDnsSecState == \"ON\" and NewDnsSecState == \"OFF\"\n| extend \n    ManagedZoneName = extract(@\"managedZones/([^/]+)\", 1, GCPResourceName),\n    DnsName = tostring(ResponseJson.managedZone.dnsName),\n    ZoneId = tostring(ResponseJson.managedZone.id),\n    ZoneDescription = tostring(ResponseJson.managedZone.description),\n    Visibility = tostring(ResponseJson.managedZone.visibility),\n    OperationId = tostring(ResponseJson.operation.id),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    AuthEmail = tostring(AuthInfoJson.principalEmail)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ManagedZoneName,\n          DnsName,\n          ResourceName = GCPResourceName,\n          Visibility,\n          ZoneId,\n          ZoneDescription,\n          OperationId,\n          CallerIpAddress,\n          MethodName,\n          ServiceName,\n          Severity,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
         "customDetails": {
-          "Visibility": "Visibility",
-          "DnsName": "DnsName",
+          "ResourceName": "ResourceName",
           "ManagedZoneName": "ManagedZoneName",
           "ProjectId": "ProjectId",
-          "ResourceName": "ResourceName",
-          "ZoneId": "ZoneId"
-        },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "DNSSEC Disabled on DNS Zone {{ManagedZoneName}} ({{DnsName}}) by {{PrincipalEmail}}",
-          "alertDescriptionFormat": "User {{PrincipalEmail}} disabled DNSSEC on DNS managed zone {{ManagedZoneName}} ({{DnsName}}).    \nThis action removes cryptographic validation of DNS responses and may indicate an attempt to facilitate DNS-based attacks.\nInvestigate immediately to determine if this change was authorized and assess potential security impact.\nReview DNS query logs for suspicious activity and consider re-enabling DNSSEC if unauthorized."
+          "Visibility": "Visibility",
+          "ZoneId": "ZoneId",
+          "DnsName": "DnsName"
         },
         "queryFrequency": "1h",
+        "severity": "High",
+        "query": "GCPAuditLogs\n| where ServiceName == \"dns.googleapis.com\"\n| where MethodName in (\"dns.managedZones.update\", \"dns.managedZones.patch\")\n| where GCPResourceType == \"dns_managed_zone\" and Severity == \"NOTICE\"\n| extend \n    ResponseJson = parse_json(Response),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n| extend ZoneContext = ResponseJson.operation.zoneContext\n| where isnotempty(ZoneContext)\n| extend \n    OldDnsSecState = tostring(ZoneContext.oldValue.dnssecConfig.state),\n    NewDnsSecState = tostring(ZoneContext.newValue.dnssecConfig.state)\n| where OldDnsSecState == \"ON\" and NewDnsSecState == \"OFF\"\n| extend \n    ManagedZoneName = extract(@\"managedZones/([^/]+)\", 1, GCPResourceName),\n    DnsName = tostring(ResponseJson.managedZone.dnsName),\n    ZoneId = tostring(ResponseJson.managedZone.id),\n    ZoneDescription = tostring(ResponseJson.managedZone.description),\n    Visibility = tostring(ResponseJson.managedZone.visibility),\n    OperationId = tostring(ResponseJson.operation.id),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    AuthEmail = tostring(AuthInfoJson.principalEmail)\n| extend \n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ManagedZoneName,\n          DnsName,\n          ResourceName = GCPResourceName,\n          Visibility,\n          ZoneId,\n          ZoneDescription,\n          OperationId,\n          CallerIpAddress,\n          MethodName,\n          ServiceName,\n          Severity,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
         "triggerThreshold": 0,
-        "status": "Available"
+        "queryPeriod": "1h",
+        "name": "GCP Audit Logs - DNSSEC Disabled on Managed DNS Zone"
       }
     }
   ]
