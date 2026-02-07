@@ -14,74 +14,74 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
         "name": "GCP Audit Logs - Storage Bucket Made Public",
-        "severity": "High",
-        "triggerThreshold": 0,
-        "description": "'Detects when a Google Cloud Storage bucket is made publicly accessible by granting permissions to allUsers or allAuthenticatedUsers.\nMaking buckets public can expose sensitive data to unauthorized access and may indicate a misconfiguration or malicious activity.\nAdversaries may make buckets public to exfiltrate data or as part of a data exposure attack.\nThis rule monitors setIamPermissions operations that add public access roles to storage buckets.'\n",
-        "customDetails": {
-          "PublicAccessType": "PublicAccessType",
-          "ResourceName": "ResourceName",
-          "BucketName": "BucketName",
-          "ProjectId": "ProjectId",
-          "RoleGranted": "Role",
-          "UserAgent": "UserAgent",
-          "Permission": "Permission"
-        },
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "PrincipalEmail"
+                "columnName": "PrincipalEmail",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CallerIpAddress"
+                "columnName": "CallerIpAddress",
+                "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "ProjectId"
+                "columnName": "ProjectId",
+                "identifier": "Name"
               },
               {
-                "identifier": "InstanceName",
-                "columnName": "ResourceName"
+                "columnName": "ResourceName",
+                "identifier": "InstanceName"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "User {{PrincipalEmail}} made storage bucket {{BucketName}} publicly accessible in project {{ProjectId}}.\nThis may expose sensitive data to unauthorized access. Investigate immediately to determine if this action was authorized and assess potential data exposure.\nReview bucket contents and access logs for any unauthorized access attempts.",
-          "alertDisplayNameFormat": "GCP Storage Bucket {{BucketName}} Made Public by {{PrincipalEmail}}"
-        },
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
-        "query": "GCPAuditLogs\n| where ServiceName == \"storage.googleapis.com\"\n| where MethodName == \"storage.setIamPermissions\"\n| where GCPResourceType == \"gcs_bucket\"\n| extend \n    ServiceDataJson = parse_json(ServiceData),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend PolicyDelta = ServiceDataJson.policyDelta.bindingDeltas\n| mv-expand PolicyDelta\n| extend \n    Action = tostring(PolicyDelta.action),\n    Member = tostring(PolicyDelta.member),\n    Role = tostring(PolicyDelta.role)\n| where Action == \"ADD\"\n| where Member in~ (\"allUsers\", \"allAuthenticatedUsers\")\n| extend \n    BucketName = extract(@\"buckets/([^/]+)\", 1, GCPResourceName),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend \n    PublicAccessType = case(\n        Member =~ \"allUsers\", \"Public to Everyone\",\n        Member =~ \"allAuthenticatedUsers\", \"Public to All Authenticated Users\",\n        \"Unknown\"),\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          BucketName,\n          ResourceName = GCPResourceName,\n          PublicAccessType,\n          Member,\n          Role,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
-        "status": "Available",
-        "queryFrequency": "1h",
         "tactics": [
           "Collection",
           "InitialAccess",
           "Exfiltration"
-        ]
+        ],
+        "customDetails": {
+          "UserAgent": "UserAgent",
+          "PublicAccessType": "PublicAccessType",
+          "ProjectId": "ProjectId",
+          "BucketName": "BucketName",
+          "Permission": "Permission",
+          "ResourceName": "ResourceName",
+          "RoleGranted": "Role"
+        },
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "User {{PrincipalEmail}} made storage bucket {{BucketName}} publicly accessible in project {{ProjectId}}.\nThis may expose sensitive data to unauthorized access. Investigate immediately to determine if this action was authorized and assess potential data exposure.\nReview bucket contents and access logs for any unauthorized access attempts.",
+          "alertDisplayNameFormat": "GCP Storage Bucket {{BucketName}} Made Public by {{PrincipalEmail}}"
+        },
+        "queryFrequency": "1h",
+        "severity": "High",
+        "query": "GCPAuditLogs\n| where ServiceName == \"storage.googleapis.com\"\n| where MethodName == \"storage.setIamPermissions\"\n| where GCPResourceType == \"gcs_bucket\"\n| extend \n    ServiceDataJson = parse_json(ServiceData),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend PolicyDelta = ServiceDataJson.policyDelta.bindingDeltas\n| mv-expand PolicyDelta\n| extend \n    Action = tostring(PolicyDelta.action),\n    Member = tostring(PolicyDelta.member),\n    Role = tostring(PolicyDelta.role)\n| where Action == \"ADD\"\n| where Member in~ (\"allUsers\", \"allAuthenticatedUsers\")\n| extend \n    BucketName = extract(@\"buckets/([^/]+)\", 1, GCPResourceName),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| extend \n    PublicAccessType = case(\n        Member =~ \"allUsers\", \"Public to Everyone\",\n        Member =~ \"allAuthenticatedUsers\", \"Public to All Authenticated Users\",\n        \"Unknown\"),\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          BucketName,\n          ResourceName = GCPResourceName,\n          PublicAccessType,\n          Member,\n          Role,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
+        "description": "'Detects when a Google Cloud Storage bucket is made publicly accessible by granting permissions to allUsers or allAuthenticatedUsers.\nMaking buckets public can expose sensitive data to unauthorized access and may indicate a misconfiguration or malicious activity.\nAdversaries may make buckets public to exfiltrate data or as part of a data exposure attack.\nThis rule monitors setIamPermissions operations that add public access roles to storage buckets.'\n",
+        "queryPeriod": "1h"
       }
     }
   ]
