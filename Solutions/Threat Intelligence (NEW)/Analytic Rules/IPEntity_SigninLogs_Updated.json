@@ -14,10 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "name": "TI Map IP Entity to SigninLogs",
+        "description": "'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SigninLogs.'\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "UserPrincipalName",
@@ -31,37 +34,34 @@
                 "columnName": "UPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IPAddress",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "Url",
                 "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
         "tactics": [
           "CommandAndControl"
         ],
+        "queryPeriod": "14d",
         "queryFrequency": "1h",
-        "severity": "Medium",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet Signins = materialize(union isfuzzy=true\n  (SigninLogs\n  | where TimeGenerated >= ago(dt_lookBack)),\n  (AADNonInteractiveUserSignInLogs\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)));\nlet SigninIPs = Signins | summarize make_list(IPAddress);\nlet TI = materialize(ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = NetworkSourceIP\n  | extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where TI_ipEntity in (SigninIPs)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | extend Description = tostring(parse_json(Data).description)\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n  | where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\");\nTI\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (Signins) on $left.TI_ipEntity == $right.IPAddress\n| project-rename SigninLogs_TimeGenerated = TimeGenerated\n| where SigninLogs_TimeGenerated < ValidUntil\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, IPAddress\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkSourceIP, Type, Url\n| extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n",
-        "description": "'This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SigninLogs.'\n",
-        "queryPeriod": "14d"
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet Signins = materialize(union isfuzzy=true\n  (SigninLogs\n  | where TimeGenerated >= ago(dt_lookBack)),\n  (AADNonInteractiveUserSignInLogs\n  | where TimeGenerated >= ago(dt_lookBack)\n  | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)));\nlet SigninIPs = Signins | summarize make_list(IPAddress);\nlet TI = materialize(ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | extend TI_ipEntity = NetworkSourceIP\n  | extend Url = iff(ObservableKey == \"url:value\", ObservableValue, \"\")\n  | where TI_ipEntity in (SigninIPs)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | extend Description = tostring(parse_json(Data).description)\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n  | where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\");\nTI\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (Signins) on $left.TI_ipEntity == $right.IPAddress\n| project-rename SigninLogs_TimeGenerated = TimeGenerated\n| where SigninLogs_TimeGenerated < ValidUntil\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails), StatusReason = tostring(Status.failureReason)\n| summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by Id, IPAddress\n| extend Description = tostring(parse_json(Data).description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n| project SigninLogs_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence, TI_ipEntity, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, StatusReason, NetworkSourceIP, Type, Url\n| extend timestamp = SigninLogs_TimeGenerated, Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n"
       }
     }
   ]
