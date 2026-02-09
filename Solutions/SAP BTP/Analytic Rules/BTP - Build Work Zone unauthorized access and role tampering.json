@@ -15,13 +15,28 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "triggerOperator": "gt",
-        "status": "Available",
-        "severity": "High",
         "customDetails": {
-          "ProviderId": "ProviderId",
-          "EventCategory": "EventCategory"
+          "EventCategory": "EventCategory",
+          "ProviderId": "ProviderId"
         },
-        "description": "Identifies unauthorized OData access attempts and mass role/user deletions in SAP Build Work Zone \nStandard Edition. These events may indicate an attacker accessing restricted resources or \nremoving access controls to cover their tracks.\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP Build Work Zone: {{MessageText}}",
+          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} in tenant {{Tenant}}.\n\nThis could indicate unauthorized access attempts or malicious removal of access controls.\n"
+        },
+        "status": "Available",
+        "queryPeriod": "15m",
+        "name": "BTP - Build Work Zone unauthorized access and role tampering",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "severity": "High",
+        "queryFrequency": "15m",
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "DefenseEvasion",
+          "Impact"
+        ],
         "entityMappings": [
           {
             "fieldMappings": [
@@ -46,24 +61,9 @@
             "entityType": "CloudApplication"
           }
         ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SAP Build Work Zone: {{MessageText}}",
-          "alertDescriptionFormat": "{{MessageText}} by {{UserName}} in tenant {{Tenant}}.\n\nThis could indicate unauthorized access attempts or malicious removal of access controls.\n"
-        },
-        "tactics": [
-          "InitialAccess",
-          "Persistence",
-          "DefenseEvasion",
-          "Impact"
-        ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
         "triggerThreshold": 0,
-        "queryPeriod": "15m",
         "query": "SAPBTPAuditLog_CL\n| extend LogMessage = coalesce(tostring(Message.message), tostring(Message.data), tostring(Message))\n| where LogMessage has_any (\"Unauthorized access to the oData service\", \n                            \"All roles for providerId\", \n                            \"All users for providerId\",\n                            \"were deleted successfully\",\n                            \"were removed successfully\")\n| extend EventCategory = case(\n    LogMessage contains \"Unauthorized access\", \"Unauthorized Access\",\n    LogMessage contains \"All roles\" or LogMessage contains \"All users\", \"Mass Deletion\",\n    \"Role Tampering\"\n)\n| extend MessageText = case(\n    LogMessage contains \"Unauthorized access to the oData service\", \"Unauthorized OData service access attempt\",\n    LogMessage contains \"All roles for providerId\" and LogMessage contains \"deleted\", \"Mass role deletion detected\",\n    LogMessage contains \"All users for providerId\" and LogMessage contains \"deleted\", \"Mass user deletion detected\",\n    LogMessage contains \"assignments were removed\", \"User/role assignments removed\",\n    \"Suspicious access control modification\"\n)\n| extend ProviderId = extract(@\"providerId\\s+(\\S+)\", 1, LogMessage)\n| project\n    TimeGenerated,\n    UserName,\n    MessageText,\n    EventCategory,\n    ProviderId,\n    Tenant,\n    CloudApp = \"SAP Build Work Zone Standard Edition\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "queryFrequency": "15m",
-        "name": "BTP - Build Work Zone unauthorized access and role tampering"
+        "description": "Identifies unauthorized OData access attempts and mass role/user deletions in SAP Build Work Zone \nStandard Edition. These events may indicate an attacker accessing restricted resources or \nremoving access controls to cover their tracks.\n"
       }
     }
   ]
