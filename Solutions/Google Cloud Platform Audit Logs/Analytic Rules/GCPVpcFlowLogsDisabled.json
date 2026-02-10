@@ -14,41 +14,36 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "description": "'Detects when Google Cloud Platform VPC Flow Logs configurations are disabled or deleted.\nVPC Flow Logs capture information about IP traffic going to and from network interfaces in VPC networks, providing critical visibility for security monitoring and forensic analysis.\nDisabling VPC Flow Logs reduces network visibility and may indicate an attempt to evade detection before performing malicious activities.\nAdversaries may disable flow logs to hide lateral movement, data exfiltration, or command and control traffic.'\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "GCP VPC Flow Logs {{FlowLogsConfigName}} {{Action}} by {{PrincipalEmail}}",
-          "alertDescriptionFormat": "GCP VPC Flow Logs configuration {{FlowLogsConfigName}} {{Action}} in project {{ProjectId}}.\nThis action reduces network traffic visibility and may indicate an attempt to evade detection.    \nInvestigate immediately to determine if this action was authorized and assess the security implications.\nReview recent network activity before the logs were disabled for signs of malicious behavior."
-        },
-        "status": "Available",
-        "queryPeriod": "1h",
-        "name": "GCP Audit Logs - VPC Flow Logs Disabled",
-        "customDetails": {
-          "ResourceName": "ResourceName",
-          "Permission": "Permission",
-          "Action": "Action",
-          "ProjectId": "ProjectId",
-          "FlowLogsConfigName": "FlowLogsConfigName"
-        },
-        "severity": "High",
         "queryFrequency": "1h",
+        "query": "GCPAuditLogs\n| where ServiceName == \"networkmanagement.googleapis.com\"\n| where MethodName has_any (\"VpcFlowLogsService.UpdateVpcFlowLogsConfig\", \"VpcFlowLogsService.DeleteVpcFlowLogsConfig\")\n| extend \n    RequestJson = parse_json(Request),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend \n    FlowLogsConfigName = split(GCPResourceName, \"/\")[-1],\n    ConfigState = tostring(RequestJson.vpc_flow_logs_config.state),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionType = tostring(AuthzInfoJson[0].permissionType),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| where PermissionType == \"ADMIN_WRITE\"\n| where MethodName has \"DeleteVpcFlowLogsConfig\" or ConfigState == \"DISABLED\"\n| extend \n    Action = case(\n        MethodName has \"DeleteVpcFlowLogsConfig\", \"Deleted\",\n        ConfigState == \"DISABLED\", \"Disabled\",\n        \"Modified\"),\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ResourceName = GCPResourceName,\n          FlowLogsConfigName,\n          Action,\n          CallerIpAddress,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
+        "name": "GCP Audit Logs - VPC Flow Logs Disabled",
+        "severity": "High",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "GCP VPC Flow Logs configuration {{FlowLogsConfigName}} {{Action}} in project {{ProjectId}}.\nThis action reduces network traffic visibility and may indicate an attempt to evade detection.    \nInvestigate immediately to determine if this action was authorized and assess the security implications.\nReview recent network activity before the logs were disabled for signs of malicious behavior.",
+          "alertDisplayNameFormat": "GCP VPC Flow Logs {{FlowLogsConfigName}} {{Action}} by {{PrincipalEmail}}"
+        },
         "tactics": [
           "DefenseEvasion"
         ],
+        "status": "Available",
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "description": "'Detects when Google Cloud Platform VPC Flow Logs configurations are disabled or deleted.\nVPC Flow Logs capture information about IP traffic going to and from network interfaces in VPC networks, providing critical visibility for security monitoring and forensic analysis.\nDisabling VPC Flow Logs reduces network visibility and may indicate an attempt to evade detection before performing malicious activities.\nAdversaries may disable flow logs to hide lateral movement, data exfiltration, or command and control traffic.'\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "PrincipalEmail",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "PrincipalEmail"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -56,8 +51,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "CallerIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "CallerIpAddress"
               }
             ],
             "entityType": "IP"
@@ -65,19 +60,24 @@
           {
             "fieldMappings": [
               {
-                "columnName": "ProjectId",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "ProjectId"
               },
               {
-                "columnName": "ResourceName",
-                "identifier": "InstanceName"
+                "identifier": "InstanceName",
+                "columnName": "ResourceName"
               }
             ],
             "entityType": "CloudApplication"
           }
         ],
-        "triggerThreshold": 0,
-        "query": "GCPAuditLogs\n| where ServiceName == \"networkmanagement.googleapis.com\"\n| where MethodName has_any (\"VpcFlowLogsService.UpdateVpcFlowLogsConfig\", \"VpcFlowLogsService.DeleteVpcFlowLogsConfig\")\n| extend \n    RequestJson = parse_json(Request),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo),\n    AuthzInfoJson = parse_json(AuthorizationInfo)\n| extend \n    FlowLogsConfigName = split(GCPResourceName, \"/\")[-1],\n    ConfigState = tostring(RequestJson.vpc_flow_logs_config.state),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    AuthEmail = tostring(AuthInfoJson.principalEmail),\n    Permission = tostring(AuthzInfoJson[0].permission),\n    PermissionType = tostring(AuthzInfoJson[0].permissionType),\n    PermissionGranted = tostring(AuthzInfoJson[0].granted)\n| where PermissionType == \"ADMIN_WRITE\"\n| where MethodName has \"DeleteVpcFlowLogsConfig\" or ConfigState == \"DISABLED\"\n| extend \n    Action = case(\n        MethodName has \"DeleteVpcFlowLogsConfig\", \"Deleted\",\n        ConfigState == \"DISABLED\", \"Disabled\",\n        \"Modified\"),\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          ResourceName = GCPResourceName,\n          FlowLogsConfigName,\n          Action,\n          CallerIpAddress,\n          MethodName,\n          ServiceName,\n          Severity,\n          Permission,\n          PermissionGranted,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n"
+        "customDetails": {
+          "ResourceName": "ResourceName",
+          "Permission": "Permission",
+          "ProjectId": "ProjectId",
+          "FlowLogsConfigName": "FlowLogsConfigName",
+          "Action": "Action"
+        }
       }
     }
   ]
