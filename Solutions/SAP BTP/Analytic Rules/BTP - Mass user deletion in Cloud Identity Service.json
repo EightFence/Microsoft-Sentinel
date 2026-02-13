@@ -14,28 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "BTP - Mass user deletion in SAP Cloud Identity Service",
-        "queryFrequency": "1h",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "Medium",
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
+        "queryPeriod": "1h",
+        "query": "let bulk_delete_threshold = 10;\nSAPBTPAuditLog_CL\n| extend data_s = tostring(Message.data)\n| extend action = extract(@\"action=\"\"([^\"\"]+)\"\"\", 1, data_s),\n         objectType = extract(@\"objectType=\"\"([^\"\"]+)\"\"\", 1, data_s),\n         impactedUser = extract(@\"serviceProviderName=\"\"([^\"\"]+)\"\"\", 1, data_s)\n| where action == \"delete\"\n| where objectType == \"authorization\"\n| where isnotempty(impactedUser)\n| summarize\n    Start = min(UpdatedOn),\n    End = max(UpdatedOn),\n    DeleteCount = count(),\n    DeletedUsers = make_set(impactedUser, 100)\n    by UserName, Tenant, SpaceId\n| where array_length(DeletedUsers) > bulk_delete_threshold\n| project Start, End, UserName, DeletedUsers, DeleteCount, Tenant, SpaceId, CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "triggerOperator": "gt",
         "tactics": [
           "Impact"
         ],
+        "status": "Available",
+        "name": "BTP - Mass user deletion in SAP Cloud Identity Service",
         "description": "Identifies mass user deletion activity in SAP Cloud Identity Service where the amount of deleted users exceeds a predefined threshold.",
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
               }
             ],
             "entityType": "Account"
@@ -43,16 +46,13 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "CloudApp"
+                "columnName": "CloudApp",
+                "identifier": "Name"
               }
             ],
             "entityType": "CloudApplication"
           }
-        ],
-        "query": "let bulk_delete_threshold = 10;\nSAPBTPAuditLog_CL\n| extend data_s = tostring(Message.data)\n| extend action = extract(@\"action=\"\"([^\"\"]+)\"\"\", 1, data_s),\n         objectType = extract(@\"objectType=\"\"([^\"\"]+)\"\"\", 1, data_s),\n         impactedUser = extract(@\"serviceProviderName=\"\"([^\"\"]+)\"\"\", 1, data_s)\n| where action == \"delete\"\n| where objectType == \"authorization\"\n| where isnotempty(impactedUser)\n| summarize\n    Start = min(UpdatedOn),\n    End = max(UpdatedOn),\n    DeleteCount = count(),\n    DeletedUsers = make_set(impactedUser, 100)\n    by UserName, Tenant, SpaceId\n| where array_length(DeletedUsers) > bulk_delete_threshold\n| project Start, End, UserName, DeletedUsers, DeleteCount, Tenant, SpaceId, CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
-        "queryPeriod": "1h",
-        "triggerOperator": "gt"
+        ]
       }
     }
   ]
