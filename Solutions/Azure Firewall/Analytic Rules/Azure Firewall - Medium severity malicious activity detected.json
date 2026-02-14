@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/dfbe3963-42fb-4ebe-a00c-1cc44e2aa9f0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/dfbe3963-42fb-4ebe-a00c-1cc44e2aa9f0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryPeriod": "24h",
+        "status": "Available",
+        "name": "Medium severity malicious activity detected",
+        "severity": "Medium",
+        "query": "let TimeWindow   = 90d;    \nlet HitThreshold = 10;\nlet MinSeverity  = 2;\nlet EnableCategoryFilter    = true;\nlet EnableDescriptionFilter = false;\nlet EnableActionFilter      = false;\nlet CategoriesOfInterest = dynamic([\n    \"Possibly Unwanted Program Detected\",\n    \"Possible Social Engineering Attempted\",\n    \"Crypto Currency Mining Activity Detected\",\n    \"A suspicious filename was detected\",\n    \"A system call was detected\"\n]);\nlet DescriptionsOfInterest = dynamic([\n    \"pup-activity\",\n    \"social-engineering\",\n    \"coin-mining\",\n    \"suspicious-filename-detect\",\n    \"system-call-detect\"\n]);\nlet MatchActions = dynamic([\"Deny\", \"alert\"]);\nAZFWIdpsSignature\n| where TimeGenerated >= ago(TimeWindow)\n| where Severity >= MinSeverity\n| where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))\n| where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))\n| where (EnableActionFilter == false) or (Action in~ (MatchActions))\n| summarize\n    StartTime   = min(TimeGenerated),\n    EndTime     = max(TimeGenerated),\n    TotalHits   = count(),\n    MaxSeverity = max(Severity),\n    Actions     = make_set(Action, 5),\n    Signatures  = make_set(SignatureId, 20),\n    Description = make_set(substring(tostring(Description), 0, 120), 3)\n    by SourceIp, ThreatCategory = Category\n| where TotalHits >= HitThreshold\n| project\n    StartTime,\n    EndTime,\n    SourceIp,\n    ThreatCategory,\n    TotalHits,\n    MaxSeverity,\n    Actions,\n    Signatures,\n    Description\n| order by MaxSeverity desc, TotalHits desc\n",
+        "triggerThreshold": 1,
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess",
+          "Execution",
+          "DefenseEvasion",
+          "Impact"
+        ],
+        "description": "Identifies medium severity malicious activity in Azure Firewall IDPS logs.\n",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIp",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
+      }
+    }
+  ]
+}

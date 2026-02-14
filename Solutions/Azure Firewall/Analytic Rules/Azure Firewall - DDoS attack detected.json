@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c3ffdbe6-2e62-4984-9e80-933ed90b2f6a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c3ffdbe6-2e62-4984-9e80-933ed90b2f6a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryPeriod": "24h",
+        "status": "Available",
+        "name": "DDoS attack detected",
+        "severity": "High",
+        "query": "let TimeWindow   = 90d;    \nlet HitThreshold = 10;\nlet MinSeverity  = 2;\nlet EnableCategoryFilter    = true;\nlet EnableDescriptionFilter = false;\nlet EnableActionFilter      = false;\nlet CategoriesOfInterest = dynamic([\n    \"Attempted Denial of Service\",\n    \"Denial of Service\",\n    \"Detection of a Denial of Service Attack\"\n]);\nlet DescriptionsOfInterest = dynamic([\n    \"attempted-dos\",\n    \"successful-dos\",\n    \"denial-of-service\"\n]);\nlet MatchActions = dynamic([\"Deny\", \"alert\"]);\nAZFWIdpsSignature\n| where TimeGenerated >= ago(TimeWindow)\n| where Severity >= MinSeverity\n| where (EnableCategoryFilter == false) or (Category has_any (CategoriesOfInterest))\n| where (EnableDescriptionFilter == false) or (Description has_any (DescriptionsOfInterest))\n| where (EnableActionFilter == false) or (Action in~ (MatchActions))\n| summarize\n    StartTime   = min(TimeGenerated),\n    EndTime     = max(TimeGenerated),\n    TotalHits   = count(),\n    MaxSeverity = max(Severity),\n    Actions     = make_set(Action, 5),\n    Signatures  = make_set(SignatureId, 20),\n    Description = make_set(substring(tostring(Description), 0, 120), 3)\n    by SourceIp, ThreatCategory = Category\n| where TotalHits >= HitThreshold\n| project\n    StartTime,\n    EndTime,\n    SourceIp,\n    ThreatCategory,\n    TotalHits,\n    MaxSeverity,\n    Actions,\n    Signatures,\n    Description\n| order by MaxSeverity desc, TotalHits desc\n",
+        "triggerThreshold": 1,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "description": "Identifies DDoS attack in Azure Firewall IDPS logs.\n",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SourceIp",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
+      }
+    }
+  ]
+}
