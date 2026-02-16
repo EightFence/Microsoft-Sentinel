@@ -14,46 +14,46 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "14d",
-        "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet SecurityAlerts = SecurityAlert\n| where TimeGenerated > ago(dt_lookBack)\n| extend domain = todynamic(dynamic_to_json(extract_all(@\"(((xn--)?[a-z0-9\\-]+\\.)+([a-z]+|(xn--[a-z0-9]+)))\", dynamic([1]), tolower(Entities))))\n| where isnotempty(domain)\n| mv-expand domain\n| extend domain = tostring(domain)\n| extend EntitiesDynamicArray = parse_json(Entities)\n| mv-apply EntitiesDynamicArray on\n    (summarize\n        HostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == \"host\"),\n        IP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == \"ip\")\n    )\n| extend Alert_TimeGenerated = TimeGenerated\n| extend Alert_Description = Description;\nlet AlertDomains = SecurityAlerts\n| distinct domain\n| summarize make_list(domain);\nlet Domain_Indicators = materialize(ThreatIntelIndicators\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"domain-name\"\n| extend DomainName = tolower(ObservableValue)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where DomainName in (AlertDomains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\");\nDomain_Indicators\n// Using innerunique to keep performance fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (SecurityAlerts) on $left.DomainName == $right.domain\n| where Alert_TimeGenerated < ValidUntil\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by Id, AlertName\n| extend ActivityGroupNames = extract(\"ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n| extend Url = DomainName\n| project Alert_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type\n| extend timestamp = Alert_TimeGenerated\n| project-reorder *, ConfidenceScore, DomainName, AlertName, Alert_TimeGenerated, ProviderName, AlertSeverity, Entities, Type, timestamp\n",
+        "name": "TI map Domain entity to SecurityAlert",
+        "severity": "Medium",
+        "description": "'Identifies a match in SecurityAlert table from any Domain IOC from TI'\n",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IP_addr"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "Url"
+              }
+            ]
+          }
+        ],
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerOperator": "gt",
-        "description": "'Identifies a match in SecurityAlert table from any Domain IOC from TI'\n",
-        "name": "TI map Domain entity to SecurityAlert",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "HostName",
-                "identifier": "HostName"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "IP_addr",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Url",
-                "identifier": "Url"
-              }
-            ],
-            "entityType": "URL"
-          }
-        ],
+        "queryPeriod": "14d",
         "queryFrequency": "1h",
-        "severity": "Medium"
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet SecurityAlerts = SecurityAlert\n| where TimeGenerated > ago(dt_lookBack)\n| extend domain = todynamic(dynamic_to_json(extract_all(@\"(((xn--)?[a-z0-9\\-]+\\.)+([a-z]+|(xn--[a-z0-9]+)))\", dynamic([1]), tolower(Entities))))\n| where isnotempty(domain)\n| mv-expand domain\n| extend domain = tostring(domain)\n| extend EntitiesDynamicArray = parse_json(Entities)\n| mv-apply EntitiesDynamicArray on\n    (summarize\n        HostName = take_anyif(tostring(EntitiesDynamicArray.HostName), EntitiesDynamicArray.Type == \"host\"),\n        IP_addr = take_anyif(tostring(EntitiesDynamicArray.Address), EntitiesDynamicArray.Type == \"ip\")\n    )\n| extend Alert_TimeGenerated = TimeGenerated\n| extend Alert_Description = Description;\nlet AlertDomains = SecurityAlerts\n| distinct domain\n| summarize make_list(domain);\nlet Domain_Indicators = materialize(ThreatIntelIndicators\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"domain-name\"\n| extend DomainName = tolower(ObservableValue)\n| where TimeGenerated >= ago(ioc_lookBack)\n| where DomainName in (AlertDomains)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| extend Description = tostring(parse_json(Data).description)\n| where Description !contains_cs \"State: inactive;\" and Description !contains_cs \"State: falsepos;\");\nDomain_Indicators\n// Using innerunique to keep performance fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (SecurityAlerts) on $left.DomainName == $right.domain\n| where Alert_TimeGenerated < ValidUntil\n| summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by Id, AlertName\n| extend ActivityGroupNames = extract(\"ActivityGroup:([^,]+)\", 1, tostring(parse_json(Data).labels))\n| extend Url = DomainName\n| project Alert_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, ConfidenceScore, DomainName, AlertName, Alert_Description, ProviderName, AlertSeverity, ConfidenceLevel, HostName, IP_addr, Url, Entities, Type\n| extend timestamp = Alert_TimeGenerated\n| project-reorder *, ConfidenceScore, DomainName, AlertName, Alert_TimeGenerated, ProviderName, AlertSeverity, Entities, Type, timestamp\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt"
       }
     }
   ]
