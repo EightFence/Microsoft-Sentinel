@@ -14,75 +14,75 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Microsoft COVID-19 file hash indicator matches",
-        "severity": "Medium",
         "description": "'Identifies a match in CommonSecurityLog Event data from any FileHash published in the Microsoft COVID-19 Threat Intel Feed - as described at https://www.microsoft.com/security/blog/2020/05/14/open-sourcing-covid-threat-intelligence/'\n",
+        "queryFrequency": "1h",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "query": "let dt_lookBack = 1h;\nlet covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )\n[@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv\"] with (format=\"csv\"));\nlet fileHashIndicators = covidIndicators\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n   CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n   | where isnotempty(FileHash)\n   | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n   )\non $left.FileHashValue == $right.FileHash\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue\n| project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity\n| extend AccountName = tostring(split(SourceUserName, \"@\")[0]), AccountUPNSuffix = tostring(split(SourceUserName, \"@\")[1])\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n",
+        "triggerThreshold": 0,
+        "name": "Microsoft COVID-19 file hash indicator matches",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "SourceUserName"
+                "columnName": "SourceUserName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "DeviceName"
+                "columnName": "DeviceName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "HostName",
-                "columnName": "HostName"
+                "columnName": "HostName",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "HostNameDomain"
+                "columnName": "HostNameDomain",
+                "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIP"
+                "columnName": "SourceIP",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
-                "identifier": "Value",
-                "columnName": "FileHashValue"
+                "columnName": "FileHashValue",
+                "identifier": "Value"
               },
               {
-                "identifier": "Algorithm",
-                "columnName": "FileHashType"
+                "columnName": "FileHashType",
+                "identifier": "Algorithm"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
         "tactics": [
           "Execution"
         ],
-        "queryPeriod": "14d",
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "query": "let dt_lookBack = 1h;\nlet covidIndicators = (externaldata(TimeGenerated:datetime, FileHashValue:string, FileHashType: string, TlpLevel: string, Product: string, ThreatType: string, Description: string )\n[@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.csv\"] with (format=\"csv\"));\nlet fileHashIndicators = covidIndicators\n| where isnotempty(FileHashValue);\n// Handle matches against both lower case and uppercase versions of the hash:\n(fileHashIndicators | extend FileHashValue = tolower(FileHashValue)\n| union (fileHashIndicators | extend FileHashValue = toupper(FileHashValue)))\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n|  join kind=innerunique (\n   CommonSecurityLog | where TimeGenerated >= ago(dt_lookBack)\n   | where isnotempty(FileHash)\n   | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n   )\non $left.FileHashValue == $right.FileHash\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by FileHashValue\n| project CommonSecurityLog_TimeGenerated, FileHashValue, FileHashType, Description, ThreatType,\nSourceIP, SourcePort, DestinationIP, DestinationPort, SourceUserID, SourceUserName, DeviceName, DeviceAction,\nRequestURL, DestinationUserName, DestinationUserID, ApplicationProtocol, Activity\n| extend AccountName = tostring(split(SourceUserName, \"@\")[0]), AccountUPNSuffix = tostring(split(SourceUserName, \"@\")[1])\n| extend HostName = tostring(split(DeviceName, \".\")[0]), DomainIndex = toint(indexof(DeviceName, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)\n",
-        "triggerThreshold": 0,
         "status": "Available"
       }
     }

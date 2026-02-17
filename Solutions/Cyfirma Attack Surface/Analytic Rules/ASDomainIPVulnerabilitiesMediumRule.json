@@ -14,52 +14,69 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "CYFIRMA - Attack Surface - Domain/IP Vulnerability Exposure Medium Rule",
-        "severity": "Medium",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": false,
             "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": false
+          }
         },
+        "queryFrequency": "5m",
         "description": "\"This rule is triggered when CYFIRMA identifies publicly exposed vulnerabilities on domains or IP addresses within your organization's attack surface. These vulnerabilities may include outdated software, missing patches, insecure services, or misconfigurations that can be exploited by threat actors.Such exposure significantly increases the risk of exploitation, lateral movement, or data breach. Immediate investigation and remediation are recommended.\"\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "triggerOperator": "gt",
+        "queryPeriod": "5m",
+        "query": "// Medium Severity Domain/IP Vulnerability Exposure Detected\nlet timeFrame = 5m;\nCyfirmaASDomainIPVulnerabilityAlerts_CL\n| where severity == 'High' and TimeGenerated between (ago(timeFrame) .. now())\n| mv-expand pvuln = possible_vulnerabilities\n| extend cve = tostring(pvuln.cveNo), vulProducts = pvuln.products\n| mv-expand vul_Products = vulProducts\n| summarize cveList = make_set(cve, 100), vul_products1 = make_set(vul_Products, 100)    by uid\n| join kind=inner (CyfirmaASDomainIPVulnerabilityAlerts_CL\n    | where severity == 'High'\n    | summarize arg_max(TimeGenerated, *) by uid)\n    on uid\n| extend\n    Vulnerabilities = strcat_array(cveList, ', '),\n    VulnerabilityProducts = strcat_array(vul_products1, ', '),\n    Description=description,\n    FirstSeen=first_seen,\n    LastSeen=last_seen,\n    RiskScore=risk_score,\n    Domain=sub_domain,\n    TopDomain=top_domain,\n    NetworkIP=ip,\n    AlertUID=alert_uid,\n    UID=uid,\n    OpenPorts=open_ports,\n    HostProvider=host_provider,\n    Country=country,\n    Softwares=softwares,\n    WebServer=web_server,\n    WebServerVersion=web_server_version,\n    ProviderName='CYFIRMA',\n    ProductName='DeCYFIR/DeTCT'\n| project\n    TimeGenerated,\n    Description,\n    Domain,\n    TopDomain,\n    RiskScore,\n    FirstSeen,\n    LastSeen,\n    NetworkIP,\n    AlertUID,\n    UID,\n    Vulnerabilities,\n    VulnerabilityProducts,\n    OpenPorts,\n    HostProvider,\n    Country,\n    Softwares,\n    WebServer,\n    WebServerVersion,\n    ProviderName,\n    ProductName\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "CYFIRMA - Medium Severity Domain/IP Vulnerability Exposure Detected - Domain: {{Domain}}, IP: {{NetworkIP}}",
+          "alertDynamicProperties": [
+            {
+              "value": "ProductName",
+              "alertProperty": "ProductName"
+            },
+            {
+              "value": "ProviderName",
+              "alertProperty": "ProviderName"
+            }
+          ],
+          "alertDescriptionFormat": "CYFIRMA - Medium Severity Domain/IP Vulnerability Exposure Detected - {{Description}}"
+        },
+        "triggerThreshold": 0,
         "entityMappings": [
           {
-            "entityType": "DNS",
             "fieldMappings": [
               {
-                "identifier": "DomainName",
-                "columnName": "Domain"
+                "columnName": "Domain",
+                "identifier": "DomainName"
               }
-            ]
+            ],
+            "entityType": "DNS"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "TopDomain"
+                "columnName": "TopDomain",
+                "identifier": "HostName"
               },
               {
-                "identifier": "DnsDomain",
-                "columnName": "Domain"
+                "columnName": "Domain",
+                "identifier": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "NetworkIP"
+                "columnName": "NetworkIP",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "tactics": [
@@ -71,42 +88,25 @@
           "Impact",
           "PrivilegeEscalation"
         ],
-        "queryPeriod": "5m",
-        "queryFrequency": "5m",
-        "triggerOperator": "gt",
-        "query": "// Medium Severity Domain/IP Vulnerability Exposure Detected\nlet timeFrame = 5m;\nCyfirmaASDomainIPVulnerabilityAlerts_CL\n| where severity == 'High' and TimeGenerated between (ago(timeFrame) .. now())\n| mv-expand pvuln = possible_vulnerabilities\n| extend cve = tostring(pvuln.cveNo), vulProducts = pvuln.products\n| mv-expand vul_Products = vulProducts\n| summarize cveList = make_set(cve, 100), vul_products1 = make_set(vul_Products, 100)    by uid\n| join kind=inner (CyfirmaASDomainIPVulnerabilityAlerts_CL\n    | where severity == 'High'\n    | summarize arg_max(TimeGenerated, *) by uid)\n    on uid\n| extend\n    Vulnerabilities = strcat_array(cveList, ', '),\n    VulnerabilityProducts = strcat_array(vul_products1, ', '),\n    Description=description,\n    FirstSeen=first_seen,\n    LastSeen=last_seen,\n    RiskScore=risk_score,\n    Domain=sub_domain,\n    TopDomain=top_domain,\n    NetworkIP=ip,\n    AlertUID=alert_uid,\n    UID=uid,\n    OpenPorts=open_ports,\n    HostProvider=host_provider,\n    Country=country,\n    Softwares=softwares,\n    WebServer=web_server,\n    WebServerVersion=web_server_version,\n    ProviderName='CYFIRMA',\n    ProductName='DeCYFIR/DeTCT'\n| project\n    TimeGenerated,\n    Description,\n    Domain,\n    TopDomain,\n    RiskScore,\n    FirstSeen,\n    LastSeen,\n    NetworkIP,\n    AlertUID,\n    UID,\n    Vulnerabilities,\n    VulnerabilityProducts,\n    OpenPorts,\n    HostProvider,\n    Country,\n    Softwares,\n    WebServer,\n    WebServerVersion,\n    ProviderName,\n    ProductName\n",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "CYFIRMA - Medium Severity Domain/IP Vulnerability Exposure Detected - {{Description}}",
-          "alertDisplayNameFormat": "CYFIRMA - Medium Severity Domain/IP Vulnerability Exposure Detected - Domain: {{Domain}}, IP: {{NetworkIP}}",
-          "alertDynamicProperties": [
-            {
-              "alertProperty": "ProductName",
-              "value": "ProductName"
-            },
-            {
-              "alertProperty": "ProviderName",
-              "value": "ProviderName"
-            }
-          ]
-        },
+        "severity": "Medium",
         "status": "Available",
         "customDetails": {
-          "WebServerVersion": "WebServerVersion",
-          "UID": "UID",
-          "RiskScore": "RiskScore",
-          "Vulnerabilities": "Vulnerabilities",
-          "AlertUID": "AlertUID",
-          "Country": "Country",
-          "WebServer": "WebServer",
-          "HostProvider": "HostProvider",
-          "LastSeen": "LastSeen",
-          "vulnerableProducts": "VulnerabilityProducts",
           "Softwares": "Softwares",
-          "OpenPorts": "OpenPorts",
+          "Vulnerabilities": "Vulnerabilities",
+          "WebServer": "WebServer",
           "TimeGenerated": "TimeGenerated",
-          "FirstSeen": "FirstSeen"
-        }
+          "WebServerVersion": "WebServerVersion",
+          "LastSeen": "LastSeen",
+          "FirstSeen": "FirstSeen",
+          "OpenPorts": "OpenPorts",
+          "vulnerableProducts": "VulnerabilityProducts",
+          "RiskScore": "RiskScore",
+          "Country": "Country",
+          "AlertUID": "AlertUID",
+          "UID": "UID",
+          "HostProvider": "HostProvider"
+        },
+        "name": "CYFIRMA - Attack Surface - Domain/IP Vulnerability Exposure Medium Rule"
       }
     }
   ]

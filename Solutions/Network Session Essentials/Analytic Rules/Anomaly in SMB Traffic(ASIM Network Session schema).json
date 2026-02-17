@@ -14,31 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Anomaly in SMB Traffic(ASIM Network Session schema)",
-        "severity": "Medium",
+        "queryFrequency": "1d",
         "description": "'This detection detects abnormal SMB traffic, a file-sharing protocol. By calculating the average deviation of SMB connections over last 14 days, flagging sources exceeding 50 average deviations.'\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "query": "// Define the threshold for deviation\nlet threshold = 50;\n// Define the time range for the baseline data\nlet starttime = 14d;\nlet endtime = 1d;\n// Define the SMB ports to monitor\nlet SMBPorts = dynamic([\"139\", \"445\"]);\n// Get the baseline data for user network sessions and Filter for the defined time range\nlet userBaseline = _Im_NetworkSession(starttime=ago(starttime), endtime=ago(endtime))\n  | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports\n  | summarize Count = count() by SrcIpAddr, DstPortNumber // Group by source IP and destination port\n  | summarize AvgCount = avg(Count) by SrcIpAddr, DstPortNumber; // Calculate the average count\n// Get the recent user activity data and Filter for recent activity\nlet recentUserActivity = _Im_NetworkSession(starttime=ago(endtime))\n  | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports\n  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by SrcIpAddr, DstPortNumber; // Group by source IP and destination port\n// Join the baseline and recent activity data\nlet UserBehaviorAnalysis = userBaseline\n  | join kind=inner (recentUserActivity) on SrcIpAddr, DstPortNumber\n  | extend Deviation = abs(RecentCount - AvgCount) / AvgCount; // Calculate the deviation\n// Filter for deviations greater than the threshold\nUserBehaviorAnalysis\n  | where Deviation > threshold\n  | project SrcIpAddr, DstPortNumber, Deviation, Count = RecentCount; // Project the required columns\n",
+        "triggerThreshold": 0,
+        "name": "Anomaly in SMB Traffic(ASIM Network Session schema)",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SrcIpAddr"
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
         "tactics": [
           "LateralMovement"
         ],
-        "queryPeriod": "14d",
-        "queryFrequency": "1d",
-        "query": "// Define the threshold for deviation\nlet threshold = 50;\n// Define the time range for the baseline data\nlet starttime = 14d;\nlet endtime = 1d;\n// Define the SMB ports to monitor\nlet SMBPorts = dynamic([\"139\", \"445\"]);\n// Get the baseline data for user network sessions and Filter for the defined time range\nlet userBaseline = _Im_NetworkSession(starttime=ago(starttime), endtime=ago(endtime))\n  | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports\n  | summarize Count = count() by SrcIpAddr, DstPortNumber // Group by source IP and destination port\n  | summarize AvgCount = avg(Count) by SrcIpAddr, DstPortNumber; // Calculate the average count\n// Get the recent user activity data and Filter for recent activity\nlet recentUserActivity = _Im_NetworkSession(starttime=ago(endtime))\n  | where ipv4_is_private(SrcIpAddr) and tostring(DstPortNumber) has_any (SMBPorts) and SrcIpAddr != DstIpAddr // Filter for private IP addresses and SMB ports\n  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by SrcIpAddr, DstPortNumber; // Group by source IP and destination port\n// Join the baseline and recent activity data\nlet UserBehaviorAnalysis = userBaseline\n  | join kind=inner (recentUserActivity) on SrcIpAddr, DstPortNumber\n  | extend Deviation = abs(RecentCount - AvgCount) / AvgCount; // Calculate the deviation\n// Filter for deviations greater than the threshold\nUserBehaviorAnalysis\n  | where Deviation > threshold\n  | project SrcIpAddr, DstPortNumber, Deviation, Count = RecentCount; // Project the required columns\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
         "status": "Available"
       }
     }

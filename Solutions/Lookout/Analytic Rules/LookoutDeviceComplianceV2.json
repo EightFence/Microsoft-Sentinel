@@ -14,58 +14,65 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Lookout - Device Compliance and Security Status Changes (v2)",
-        "severity": "Medium",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "groupByAlertDetails": [
-              "DeviceGuid"
-            ],
-            "reopenClosedIncident": false,
-            "lookbackDuration": "P1D",
-            "enabled": true,
             "groupByEntities": [
               "Account",
               "Host"
             ],
+            "groupByAlertDetails": [
+              "DeviceGuid"
+            ],
+            "matchingMethod": "Selected",
             "groupByCustomDetails": [
               "SecurityPosture",
               "DevicePlatform"
             ],
-            "matchingMethod": "Selected"
-          },
-          "createIncident": true
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "enabled": true
+          }
         },
         "description": "'Monitors device compliance status changes and security posture degradation using Lookout Mobile Risk API v2 enhanced device fields. Detects devices becoming non-compliant, security status changes, and potential device compromise indicators with detailed device context and MDM integration data.'\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "queryFrequency": "10m",
+        "queryPeriod": "30m",
+        "severity": "Medium",
+        "query": "LookoutEvents\n| where EventType == \"DEVICE\"\n| where DeviceComplianceStatus in (\"Non-Compliant\", \"Partial\") \n   or DeviceSecurityStatus in (\"THREATS_HIGH\", \"THREATS_MEDIUM\")\n   or ChangeType == \"UPDATE\"\n| extend \n    DeviceRiskScore = case(\n        DeviceSecurityStatus == \"THREATS_HIGH\", 9,\n        DeviceSecurityStatus == \"THREATS_MEDIUM\", 6,\n        DeviceSecurityStatus == \"THREATS_LOW\", 3,\n        DeviceComplianceStatus == \"Non-Compliant\", 7,\n        DeviceComplianceStatus == \"Partial\", 4,\n        1\n    ),\n    ComplianceReason = case(\n        isempty(DeviceCheckinTime), \"No Recent Check-in\",\n        DeviceActivationStatus != \"ACTIVE\", \"Inactive Device\",\n        isempty(ClientLookoutSDKVersion), \"Missing Security Client\",\n        \"Configuration Issue\"\n    ),\n    PlatformRisk = case(\n        DevicePlatform == \"ANDROID\" and DeviceOSVersion matches regex @\"^[1-9]\\..*\", \"Outdated Android\",\n        DevicePlatform == \"IOS\" and DeviceOSVersion matches regex @\"^1[0-4]\\..*\", \"Outdated iOS\",\n        DevicePlatform == \"UNKNOWN\", \"Unknown Platform\",\n        \"Current\"\n    )\n| extend MDMIntegrationStatus = case(\n    isnotempty(MDMConnectorId) and isnotempty(MDMExternalId), \"Fully Integrated\",\n    isnotempty(MDMConnectorId), \"Partial Integration\", \n    \"Not Integrated\"\n)\n| extend SecurityPosture = case(\n    DeviceRiskScore >= 8, \"Critical\",\n    DeviceRiskScore >= 6, \"High\",\n    DeviceRiskScore >= 4, \"Medium\",\n    \"Low\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceActivationStatus,\n    DeviceSecurityStatus,\n    DeviceComplianceStatus,\n    DeviceRiskScore,\n    SecurityPosture,\n    ComplianceReason,\n    PlatformRisk,\n    DeviceCheckinTime,\n    DeviceActivatedAt,\n    DeviceDeactivatedAt,\n    DeviceGroupGuid,\n    ClientLookoutSDKVersion,\n    ClientOTAVersion,\n    ClientPackageName,\n    ClientPackageVersion,\n    MDMConnectorId,\n    MDMConnectorUuid,\n    MDMExternalId,\n    MDMIntegrationStatus,\n    ActorType,\n    ActorGuid,\n    ChangeType\n",
+        "suppressionDuration": "PT30M",
+        "suppressionEnabled": false,
+        "triggerThreshold": 0,
+        "name": "Lookout - Device Compliance and Security Status Changes (v2)",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "DeviceEmailAddress"
+                "columnName": "DeviceEmailAddress",
+                "identifier": "FullName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "DeviceGuid"
+                "columnName": "DeviceGuid",
+                "identifier": "HostName"
               },
               {
-                "identifier": "OSFamily",
-                "columnName": "DevicePlatform"
+                "columnName": "DevicePlatform",
+                "identifier": "OSFamily"
               },
               {
-                "identifier": "OSVersion",
-                "columnName": "DeviceOSVersion"
+                "columnName": "DeviceOSVersion",
+                "identifier": "OSVersion"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
         "tactics": [
@@ -73,32 +80,25 @@
           "DefenseEvasion",
           "Persistence"
         ],
-        "queryPeriod": "30m",
-        "queryFrequency": "10m",
-        "suppressionDuration": "PT30M",
-        "triggerOperator": "gt",
-        "query": "LookoutEvents\n| where EventType == \"DEVICE\"\n| where DeviceComplianceStatus in (\"Non-Compliant\", \"Partial\") \n   or DeviceSecurityStatus in (\"THREATS_HIGH\", \"THREATS_MEDIUM\")\n   or ChangeType == \"UPDATE\"\n| extend \n    DeviceRiskScore = case(\n        DeviceSecurityStatus == \"THREATS_HIGH\", 9,\n        DeviceSecurityStatus == \"THREATS_MEDIUM\", 6,\n        DeviceSecurityStatus == \"THREATS_LOW\", 3,\n        DeviceComplianceStatus == \"Non-Compliant\", 7,\n        DeviceComplianceStatus == \"Partial\", 4,\n        1\n    ),\n    ComplianceReason = case(\n        isempty(DeviceCheckinTime), \"No Recent Check-in\",\n        DeviceActivationStatus != \"ACTIVE\", \"Inactive Device\",\n        isempty(ClientLookoutSDKVersion), \"Missing Security Client\",\n        \"Configuration Issue\"\n    ),\n    PlatformRisk = case(\n        DevicePlatform == \"ANDROID\" and DeviceOSVersion matches regex @\"^[1-9]\\..*\", \"Outdated Android\",\n        DevicePlatform == \"IOS\" and DeviceOSVersion matches regex @\"^1[0-4]\\..*\", \"Outdated iOS\",\n        DevicePlatform == \"UNKNOWN\", \"Unknown Platform\",\n        \"Current\"\n    )\n| extend MDMIntegrationStatus = case(\n    isnotempty(MDMConnectorId) and isnotempty(MDMExternalId), \"Fully Integrated\",\n    isnotempty(MDMConnectorId), \"Partial Integration\", \n    \"Not Integrated\"\n)\n| extend SecurityPosture = case(\n    DeviceRiskScore >= 8, \"Critical\",\n    DeviceRiskScore >= 6, \"High\",\n    DeviceRiskScore >= 4, \"Medium\",\n    \"Low\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceActivationStatus,\n    DeviceSecurityStatus,\n    DeviceComplianceStatus,\n    DeviceRiskScore,\n    SecurityPosture,\n    ComplianceReason,\n    PlatformRisk,\n    DeviceCheckinTime,\n    DeviceActivatedAt,\n    DeviceDeactivatedAt,\n    DeviceGroupGuid,\n    ClientLookoutSDKVersion,\n    ClientOTAVersion,\n    ClientPackageName,\n    ClientPackageVersion,\n    MDMConnectorId,\n    MDMConnectorUuid,\n    MDMExternalId,\n    MDMIntegrationStatus,\n    ActorType,\n    ActorGuid,\n    ChangeType\n",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertTacticsColumnName": "SecurityPosture",
-          "alertDescriptionFormat": "{{SecurityPosture}} posture with {{DeviceComplianceStatus}} compliance",
-          "alertSeverityColumnName": "SecurityPosture",
-          "alertDisplayNameFormat": "Device Compliance Issue: {{SecurityPosture}} Risk on {{DevicePlatform}} Device"
-        },
         "status": "Available",
-        "suppressionEnabled": false,
         "customDetails": {
-          "DevCompliance": "DeviceComplianceStatus",
-          "DevicePlatform": "DevicePlatform",
+          "ComplianceReason": "ComplianceReason",
+          "SecurityPosture": "SecurityPosture",
+          "DeviceSecStatus": "DeviceSecurityStatus",
+          "PlatformRisk": "PlatformRisk",
           "DeviceRiskScore": "DeviceRiskScore",
           "DeviceManufacturer": "DeviceManufacturer",
           "ClientSDKVersion": "ClientLookoutSDKVersion",
-          "SecurityPosture": "SecurityPosture",
-          "PlatformRisk": "PlatformRisk",
           "MDMIntegration": "MDMIntegrationStatus",
+          "DevCompliance": "DeviceComplianceStatus",
           "DeviceModel": "DeviceModel",
-          "ComplianceReason": "ComplianceReason",
-          "DeviceSecStatus": "DeviceSecurityStatus"
+          "DevicePlatform": "DevicePlatform"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Device Compliance Issue: {{SecurityPosture}} Risk on {{DevicePlatform}} Device",
+          "alertTacticsColumnName": "SecurityPosture",
+          "alertSeverityColumnName": "SecurityPosture",
+          "alertDescriptionFormat": "{{SecurityPosture}} posture with {{DeviceComplianceStatus}} compliance"
         }
       }
     }
