@@ -14,63 +14,63 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Dataverse - Unusual sign-in after IP address-based cookie binding disabled",
-          "alertDescriptionFormat": "IP address-based cookie binding was disabled by in {{InstanceUrl}}. Following this, sign-in events from new IP {{ClientIp}}  for {{UserId}} were detected."
-        },
+        "queryPeriod": "14d",
+        "query": "let query_frequency = 1h;\nlet query_lookback = 14d;\nlet cookie_lifetime = 24h;\nlet cookie_binding_disabled_events = DataverseActivity\n    | where TimeGenerated >= ago(query_lookback)\n    | where Message == \"Update\" and EntityName == \"organization\"\n    | mv-expand Fields\n    | where Fields.Name == \"enableipbasedcookiebinding\" and Fields.Value == 'False'\n    | summarize CookieBindingDisabled = min(TimeGenerated) by CookieBindingDisabledBy = UserId, InstanceUrl;\nlet current_activity = cookie_binding_disabled_events\n    | join kind=inner(DataverseActivity\n        | where UserId !endswith \"@onmicrosoft.com\" and UserId !endswith \"@microsoft.com\"\n        | where isnotempty(ClientIp) and isnotempty(UserAgent)\n        | where TimeGenerated >= ago(query_frequency + cookie_lifetime)\n        | summarize LatestEvent = arg_max(TimeGenerated, *) by UserId, ClientIp, InstanceUrl)\n        on InstanceUrl;\nlet users_switched_ip = current_activity\n    | summarize IPCount = count() by UserId, InstanceUrl\n    | where IPCount > 1\n    | join kind=inner (current_activity) on UserId, InstanceUrl\n    | summarize arg_max(LatestEvent, *) by UserId, InstanceUrl;\nusers_switched_ip\n| join kind = inner (DataverseActivity\n    | where TimeGenerated >= ago (query_lookback)\n    | where UserId !endswith \"@onmicrosoft.com\" and UserId !endswith \"@microsoft.com\"\n    | where isnotempty(ClientIp) and isnotempty(UserAgent)\n    | project-rename\n        HistoricalTime = TimeGenerated,\n        HistoricalIP = ClientIp,\n        HistoricalAgent = UserAgent)\n    on UserId, InstanceUrl\n| where HistoricalTime >= ago(query_lookback) and HistoricalTime < LatestEvent\n| summarize\n    HistoricalIPs = make_set(HistoricalIP, 100),\n    HistoricalAgents = make_set(HistoricalAgent, 100)\n    by\n    UserId,\n    UserAgent,\n    ClientIp,\n    InstanceUrl,\n    LatestEvent,\n    CookieBindingDisabled,\n    CookieBindingDisabledBy\n| where (HistoricalIPs !has ClientIp) and (HistoricalAgents !has UserAgent)\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    LatestEvent,\n    UserId,\n    ClientIp,\n    UserAgent,\n    InstanceUrl,\n    HistoricalIPs,\n    HistoricalAgents,\n    CookieBindingDisabled,\n    CookieBindingDisabledBy,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
         "description": "Identifies previously unseen IP and user agents in a Dataverse instance following disabling of cookie binding protection. See https://docs.microsoft.com/power-platform/admin/block-cookie-replay-attack",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "severity": "Medium",
-        "query": "let query_frequency = 1h;\nlet query_lookback = 14d;\nlet cookie_lifetime = 24h;\nlet cookie_binding_disabled_events = DataverseActivity\n    | where TimeGenerated >= ago(query_lookback)\n    | where Message == \"Update\" and EntityName == \"organization\"\n    | mv-expand Fields\n    | where Fields.Name == \"enableipbasedcookiebinding\" and Fields.Value == 'False'\n    | summarize CookieBindingDisabled = min(TimeGenerated) by CookieBindingDisabledBy = UserId, InstanceUrl;\nlet current_activity = cookie_binding_disabled_events\n    | join kind=inner(DataverseActivity\n        | where UserId !endswith \"@onmicrosoft.com\" and UserId !endswith \"@microsoft.com\"\n        | where isnotempty(ClientIp) and isnotempty(UserAgent)\n        | where TimeGenerated >= ago(query_frequency + cookie_lifetime)\n        | summarize LatestEvent = arg_max(TimeGenerated, *) by UserId, ClientIp, InstanceUrl)\n        on InstanceUrl;\nlet users_switched_ip = current_activity\n    | summarize IPCount = count() by UserId, InstanceUrl\n    | where IPCount > 1\n    | join kind=inner (current_activity) on UserId, InstanceUrl\n    | summarize arg_max(LatestEvent, *) by UserId, InstanceUrl;\nusers_switched_ip\n| join kind = inner (DataverseActivity\n    | where TimeGenerated >= ago (query_lookback)\n    | where UserId !endswith \"@onmicrosoft.com\" and UserId !endswith \"@microsoft.com\"\n    | where isnotempty(ClientIp) and isnotempty(UserAgent)\n    | project-rename\n        HistoricalTime = TimeGenerated,\n        HistoricalIP = ClientIp,\n        HistoricalAgent = UserAgent)\n    on UserId, InstanceUrl\n| where HistoricalTime >= ago(query_lookback) and HistoricalTime < LatestEvent\n| summarize\n    HistoricalIPs = make_set(HistoricalIP, 100),\n    HistoricalAgents = make_set(HistoricalAgent, 100)\n    by\n    UserId,\n    UserAgent,\n    ClientIp,\n    InstanceUrl,\n    LatestEvent,\n    CookieBindingDisabled,\n    CookieBindingDisabledBy\n| where (HistoricalIPs !has ClientIp) and (HistoricalAgents !has UserAgent)\n| extend\n    CloudAppId = int(32780),\n    AccountName = tostring(split(UserId, '@')[0]),\n    UPNSuffix = tostring(split(UserId, '@')[1])\n| project\n    LatestEvent,\n    UserId,\n    ClientIp,\n    UserAgent,\n    InstanceUrl,\n    HistoricalIPs,\n    HistoricalAgents,\n    CookieBindingDisabled,\n    CookieBindingDisabledBy,\n    AccountName,\n    UPNSuffix,\n    CloudAppId\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ClientIp",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "CloudAppId",
-                "identifier": "AppId"
-              },
-              {
-                "columnName": "InstanceUrl",
-                "identifier": "InstanceName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          }
-        ],
         "tactics": [
           "DefenseEvasion"
         ],
+        "name": "Dataverse - Unusual sign-in following disabled IP address-based cookie binding protection",
         "status": "Available",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "IP address-based cookie binding was disabled by in {{InstanceUrl}}. Following this, sign-in events from new IP {{ClientIp}}  for {{UserId}} were detected.",
+          "alertDisplayNameFormat": "Dataverse - Unusual sign-in after IP address-based cookie binding disabled"
+        },
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "customDetails": {},
-        "name": "Dataverse - Unusual sign-in following disabled IP address-based cookie binding protection"
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "CloudAppId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "InstanceUrl"
+              }
+            ]
+          }
+        ],
+        "triggerOperator": "gt"
       }
     }
   ]

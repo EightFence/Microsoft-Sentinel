@@ -14,77 +14,77 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies a match across filename and commandline IOC's related to an actor tracked by Microsoft as Zinc.\nReference: https://www.microsoft.com/security/blog/2022/09/29/zinc-weaponizing-open-source-software/'\n",
-        "queryFrequency": "6h",
         "queryPeriod": "6h",
-        "severity": "High",
         "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ZincOctober2022IOCs.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet file_path = (iocs | where Type =~ \"filepath\" | project IoC);\nlet commandline = (iocs | where Type =~ \"commandline\" | project IoC);\n(union isfuzzy=true \n(DeviceNetworkEvents\n| where  InitiatingProcessFolderPath has_any (file_path) or InitiatingProcessCommandLine has_any (commandline)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, LocalIP, Type\n| extend timestamp = TimeGenerated, HostEntity = DeviceName\n),\n(Event\n| where Source =~ \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Image = EventDetail.[4].[\"#text\"],  CommandLine = EventDetail.[10].[\"#text\"]\n| where Image has_any (file_path)  or   CommandLine has_any (commandline)\n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, CommandLine, Image\n| extend Type = strcat(Type, \": \", Source)\n| extend timestamp = TimeGenerated, HostEntity = Computer , AccountEntity = UserName, ProcessEntity = tostring(split(Image, '\\\\', -1)[-1])\n),  \n(DeviceProcessEvents\n| where  ( InitiatingProcessCommandLine has_any (file_path)) or ( InitiatingProcessCommandLine has_any (commandline))  or (InitiatingProcessFolderPath has_any (file_path)) or (InitiatingProcessFolderPath has_any (commandline)) or (FolderPath  has_any (file_path)) or (FolderPath has_any (commandline))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type\n| extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName\n),\n(DeviceFileEvents\n| where  (InitiatingProcessFolderPath has_any (file_path)) or (InitiatingProcessFolderPath has_any (commandline)) or (FolderPath  has_any (file_path)) or (FolderPath  has_any (commandline)) or ( InitiatingProcessCommandLine has_any (commandline)) or ( InitiatingProcessCommandLine has_any (file_path))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RequestAccountName, RequestSourceIP, InitiatingProcessSHA256, FolderPath, Type\n| extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = RequestAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = \"SHA256\", FileHashEntity = InitiatingProcessSHA256\n),\n(DeviceEvents\n| where  ( InitiatingProcessCommandLine has_any (file_path)) or ( InitiatingProcessCommandLine has_any (commandline)) or (InitiatingProcessFolderPath has_any (file_path)) or (InitiatingProcessFolderPath has_any (commandline)) or (FolderPath  has_any (file_path)) or (FolderPath has_any (commandline))\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, FolderPath, Type\n| extend CommandLine = InitiatingProcessCommandLine\n| extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName\n),\n(SecurityEvent\n| where EventID == 4688\n| where ( CommandLine has_any (file_path)) or ( CommandLine has_any (commandline))  or (NewProcessName has_any (file_path)) or (NewProcessName has_any (commandline)) or (ParentProcessName has_any (file_path)) or (ParentProcessName has_any (commandline))\n| project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type\n| extend timestamp = TimeGenerated, HostEntity = Computer , AccountEntity = Account, ProcessEntity = NewProcessName\n)\n)\n| extend HostName = tostring(split(HostEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostEntity, '.'), 1, -1), '.'))\n| extend Name = tostring(split(AccountEntity, '@', 0)[0]), UPNSuffix = tostring(split(AccountEntity, '@', 1)[0])\n",
-        "triggerThreshold": 0,
-        "name": "Zinc Actor IOCs files - October 2022",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Name",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "HostName",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "DnsDomain",
-                "identifier": "DnsDomain"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "RemoteIP",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "ProcessEntity",
-                "identifier": "ProcessId"
-              }
-            ],
-            "entityType": "Process"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AlgorithmEntity",
-                "identifier": "Algorithm"
-              },
-              {
-                "columnName": "FileHashEntity",
-                "identifier": "Value"
-              }
-            ],
-            "entityType": "FileHash"
-          }
-        ],
+        "description": "'Identifies a match across filename and commandline IOC's related to an actor tracked by Microsoft as Zinc.\nReference: https://www.microsoft.com/security/blog/2022/09/29/zinc-weaponizing-open-source-software/'\n",
         "tactics": [
           "Persistence"
         ],
-        "status": "Available"
+        "name": "Zinc Actor IOCs files - October 2022",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "queryFrequency": "6h",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "Name"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "DnsDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "RemoteIP"
+              }
+            ]
+          },
+          {
+            "entityType": "Process",
+            "fieldMappings": [
+              {
+                "identifier": "ProcessId",
+                "columnName": "ProcessEntity"
+              }
+            ]
+          },
+          {
+            "entityType": "FileHash",
+            "fieldMappings": [
+              {
+                "identifier": "Algorithm",
+                "columnName": "AlgorithmEntity"
+              },
+              {
+                "identifier": "Value",
+                "columnName": "FileHashEntity"
+              }
+            ]
+          }
+        ],
+        "triggerOperator": "gt"
       }
     }
   ]
