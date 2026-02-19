@@ -14,30 +14,6 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "query": "GCPAuditLogs\n | where ServiceName == \"cloudresourcemanager.googleapis.com\"\n | where MethodName == \"SetIamPolicy\"\n | where GCPResourceType == \"project\" and Severity == \"NOTICE\"\n | where isnotempty(ServiceData)\n | extend ServiceDataJson = parse_json(ServiceData)\n | extend PolicyDelta = ServiceDataJson.policyDelta.auditConfigDeltas\n | where isnotempty(PolicyDelta)\n | mv-expand ConfigDelta = PolicyDelta\n | where ConfigDelta.action == \"ADD\"\n | extend LogType = tostring(ConfigDelta.logType)\n | where LogType in (\"ADMIN_READ\", \"DATA_READ\", \"DATA_WRITE\")\n | extend \n     ExemptedMember = tostring(ConfigDelta.exemptedMember),\n     ServiceAffected = tostring(ConfigDelta.service),\n     RequestMetadataJson = parse_json(RequestMetadata),\n     AuthInfoJson = parse_json(AuthenticationInfo)\n | where isnotempty(ExemptedMember)\n | extend \n     CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n     UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n     AuthEmail = tostring(AuthInfoJson.principalEmail),\n     ExemptedAccountName = tostring(split(ExemptedMember, \":\")[1])\n | summarize \n     ExemptedLogTypes = make_set(LogType, 10),\n     ExemptedServices = make_set(ServiceAffected, 50),\n     FirstExemption = min(TimeGenerated),\n     LastExemption = max(TimeGenerated)\n     by PrincipalEmail, ProjectId, GCPResourceName, ExemptedMember, \n        CallerIpAddress, UserAgent, LogName, ExemptedAccountName, MethodName, ServiceName, AuthEmail\n | extend\n     AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n     AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n | project TimeGenerated = LastExemption,\n     PrincipalEmail,\n     ProjectId,\n     ResourceName = GCPResourceName,\n     ExemptedMember,\n     ExemptedAccountName,\n     ExemptedLogTypes,\n     ExemptedServices,\n     FirstExemption,\n     LastExemption,\n     CallerIpAddress,\n     UserAgent,\n     AuthEmail,\n     MethodName,\n     ServiceName,\n     LogName,\n     AccountName,\n     AccountUPNSuffix\n",
-        "description": "'Detects when a principal (user or service account) is exempted from GCP data access audit logging.\nThis is a critical security event as it reduces visibility into privileged operations and may indicate an attempt to hide malicious activity.\nAdversaries may exempt their accounts from audit logging to evade detection while performing reconnaissance, privilege escalation, or data exfiltration.\nThis rule monitors SetIamPolicy operations that add audit log exemptions for ADMIN_READ, DATA_READ, or DATA_WRITE log types.'\n",
-        "tactics": [
-          "DefenseEvasion",
-          "PrivilegeEscalation"
-        ],
-        "name": "GCP Audit Logs - Data Access Logging Exemption Added for Principal",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Principal {{ExemptedAccountName}} added as exception from Data Access logging in project {{ProjectId}} for Service {{ExemptedServices}}.\nThis action reduces audit visibility and may indicate an attempt to evade detection. Verify this change was authorized and investigate any suspicious activity performed by the exempted principal.",
-          "alertDisplayNameFormat": "GCP Data Access Logging Exemption Added for {{ExemptedAccountName}} by {{PrincipalEmail}} in Service {{ExemptedServices}}"
-        },
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "customDetails": {
-          "ExemptedMember": "ExemptedMember",
-          "ExemptedLogTypes": "ExemptedLogTypes",
-          "ProjectId": "ProjectId",
-          "ExemptedAccountName": "ExemptedAccountName",
-          "UserAgent": "UserAgent",
-          "ExemptedServices": "ExemptedServices"
-        },
-        "severity": "High",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -79,7 +55,31 @@
             ]
           }
         ],
-        "triggerOperator": "gt"
+        "queryPeriod": "1h",
+        "tactics": [
+          "DefenseEvasion",
+          "PrivilegeEscalation"
+        ],
+        "triggerOperator": "gt",
+        "description": "'Detects when a principal (user or service account) is exempted from GCP data access audit logging.\nThis is a critical security event as it reduces visibility into privileged operations and may indicate an attempt to hide malicious activity.\nAdversaries may exempt their accounts from audit logging to evade detection while performing reconnaissance, privilege escalation, or data exfiltration.\nThis rule monitors SetIamPolicy operations that add audit log exemptions for ADMIN_READ, DATA_READ, or DATA_WRITE log types.'\n",
+        "severity": "High",
+        "triggerThreshold": 0,
+        "query": "GCPAuditLogs\n | where ServiceName == \"cloudresourcemanager.googleapis.com\"\n | where MethodName == \"SetIamPolicy\"\n | where GCPResourceType == \"project\" and Severity == \"NOTICE\"\n | where isnotempty(ServiceData)\n | extend ServiceDataJson = parse_json(ServiceData)\n | extend PolicyDelta = ServiceDataJson.policyDelta.auditConfigDeltas\n | where isnotempty(PolicyDelta)\n | mv-expand ConfigDelta = PolicyDelta\n | where ConfigDelta.action == \"ADD\"\n | extend LogType = tostring(ConfigDelta.logType)\n | where LogType in (\"ADMIN_READ\", \"DATA_READ\", \"DATA_WRITE\")\n | extend \n     ExemptedMember = tostring(ConfigDelta.exemptedMember),\n     ServiceAffected = tostring(ConfigDelta.service),\n     RequestMetadataJson = parse_json(RequestMetadata),\n     AuthInfoJson = parse_json(AuthenticationInfo)\n | where isnotempty(ExemptedMember)\n | extend \n     CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n     UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n     AuthEmail = tostring(AuthInfoJson.principalEmail),\n     ExemptedAccountName = tostring(split(ExemptedMember, \":\")[1])\n | summarize \n     ExemptedLogTypes = make_set(LogType, 10),\n     ExemptedServices = make_set(ServiceAffected, 50),\n     FirstExemption = min(TimeGenerated),\n     LastExemption = max(TimeGenerated)\n     by PrincipalEmail, ProjectId, GCPResourceName, ExemptedMember, \n        CallerIpAddress, UserAgent, LogName, ExemptedAccountName, MethodName, ServiceName, AuthEmail\n | extend\n     AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n     AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n | project TimeGenerated = LastExemption,\n     PrincipalEmail,\n     ProjectId,\n     ResourceName = GCPResourceName,\n     ExemptedMember,\n     ExemptedAccountName,\n     ExemptedLogTypes,\n     ExemptedServices,\n     FirstExemption,\n     LastExemption,\n     CallerIpAddress,\n     UserAgent,\n     AuthEmail,\n     MethodName,\n     ServiceName,\n     LogName,\n     AccountName,\n     AccountUPNSuffix\n",
+        "customDetails": {
+          "ExemptedAccountName": "ExemptedAccountName",
+          "ExemptedMember": "ExemptedMember",
+          "ExemptedServices": "ExemptedServices",
+          "UserAgent": "UserAgent",
+          "ProjectId": "ProjectId",
+          "ExemptedLogTypes": "ExemptedLogTypes"
+        },
+        "name": "GCP Audit Logs - Data Access Logging Exemption Added for Principal",
+        "queryFrequency": "1h",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Principal {{ExemptedAccountName}} added as exception from Data Access logging in project {{ProjectId}} for Service {{ExemptedServices}}.\nThis action reduces audit visibility and may indicate an attempt to evade detection. Verify this change was authorized and investigate any suspicious activity performed by the exempted principal.",
+          "alertDisplayNameFormat": "GCP Data Access Logging Exemption Added for {{ExemptedAccountName}} by {{PrincipalEmail}} in Service {{ExemptedServices}}"
+        },
+        "status": "Available"
       }
     }
   ]
