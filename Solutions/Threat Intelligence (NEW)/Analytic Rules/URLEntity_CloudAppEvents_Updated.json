@@ -16,65 +16,65 @@
       "properties": {
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "ObjectGuid",
-                "columnName": "AccountObjectId"
+                "columnName": "AccountObjectId",
+                "identifier": "ObjectGuid"
               },
               {
-                "identifier": "FullName",
-                "columnName": "userPrincipalName"
+                "columnName": "userPrincipalName",
+                "identifier": "FullName"
               },
               {
-                "identifier": "DisplayName",
-                "columnName": "AccountDisplayName"
+                "columnName": "AccountDisplayName",
+                "identifier": "DisplayName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "Url"
+                "columnName": "Url",
+                "identifier": "Url"
               }
-            ]
+            ],
+            "entityType": "URL"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "Application"
+                "columnName": "Application",
+                "identifier": "Name"
               },
               {
-                "identifier": "AppId",
-                "columnName": "ApplicationID"
+                "columnName": "ApplicationID",
+                "identifier": "AppId"
               }
-            ]
+            ],
+            "entityType": "CloudApplication"
           }
         ],
+        "triggerThreshold": 0,
         "queryPeriod": "14d",
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n//extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| join kind=innerunique (CloudAppEvents\n| where TimeGenerated >= ago(dt_lookBack)\n| extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1, tostring(ActivityObjects))\n| extend userPrincipalName = tostring(RawEventData.UserId)\n| extend TargetResourceDisplayName = tostring(ActivityObjects[0].displayName)\n| extend CloudApps_TimeGenerated = TimeGenerated) on Url\n| where CloudApps_TimeGenerated < ValidUntil\n| summarize CloudApps_TimeGenerated = argmax(CloudApps_TimeGenerated, *) by IndicatorId, Url\n| extend \n  Description = column_ifexists(\"max_CloudApps_TimeGenerated_Description\", \"\"),\n  ActivityGroupNames = column_ifexists(\"max_CloudApps_TimeGenerated_ActivityGroupNames\", \"\"),\n  ThreatType = column_ifexists(\"max_CloudApps_TimeGenerated_ThreatType\", \"\"),\n  ExpirationDateTime = column_ifexists(\"max_CloudApps_TimeGenerated_ExpirationDateTime\", \"\"),\n  ConfidenceScore = column_ifexists(\"max_CloudApps_TimeGenerated_ConfidenceScore\", \"\"),\n  IPAddress = column_ifexists(\"max_CloudApps_TimeGenerated_IPAddress\", \"\"),\n  AccountObjectId = column_ifexists(\"max_CloudApps_TimeGenerated_AccountObjectId\", \"\"),\n  AccountDisplayName = column_ifexists(\"max_CloudApps_TimeGenerated_AccountDisplayName\", \"\"),\n  ObjectName = column_ifexists(\"max_CloudApps_TimeGenerated_ObjectName\", \"\"),\n  Application = column_ifexists(\"max_CloudApps_TimeGenerated_Application\", \"\"),\n  ApplicationID = column_ifexists(\"max_CloudApps_TimeGenerated_ApplicationId\", \"\"),\n  userPrincipalName = column_ifexists(\"max_CloudApps_TimeGenerated_userPrincipalName\", \"\")\n| project CloudApps_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, IPAddress, userPrincipalName, AccountObjectId, AccountDisplayName, ObjectName, Application, ApplicationID\n",
+        "name": "TI map URL entity to Cloud App Events",
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerOperator": "gt",
-        "description": "'Identifies compromises and attacks and detect malicious activities in one's URL entity from TI'\n",
         "severity": "Medium",
-        "triggerThreshold": 0,
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelIndicators\n//extract key part of kv pair\n| extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n| where IndicatorType == \"url\"\n| extend Url = ObservableValue\n| extend IndicatorId = tostring(split(Id, \"--\")[2])\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId, ObservableValue\n| where IsActive and (ValidUntil > now() or isempty(ValidUntil))\n| join kind=innerunique (CloudAppEvents\n| where TimeGenerated >= ago(dt_lookBack)\n| extend Url = extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)\", 1, tostring(ActivityObjects))\n| extend userPrincipalName = tostring(RawEventData.UserId)\n| extend TargetResourceDisplayName = tostring(ActivityObjects[0].displayName)\n| extend CloudApps_TimeGenerated = TimeGenerated) on Url\n| where CloudApps_TimeGenerated < ValidUntil\n| summarize CloudApps_TimeGenerated = argmax(CloudApps_TimeGenerated, *) by IndicatorId, Url\n| extend \n  Description = column_ifexists(\"max_CloudApps_TimeGenerated_Description\", \"\"),\n  ActivityGroupNames = column_ifexists(\"max_CloudApps_TimeGenerated_ActivityGroupNames\", \"\"),\n  ThreatType = column_ifexists(\"max_CloudApps_TimeGenerated_ThreatType\", \"\"),\n  ExpirationDateTime = column_ifexists(\"max_CloudApps_TimeGenerated_ExpirationDateTime\", \"\"),\n  ConfidenceScore = column_ifexists(\"max_CloudApps_TimeGenerated_ConfidenceScore\", \"\"),\n  IPAddress = column_ifexists(\"max_CloudApps_TimeGenerated_IPAddress\", \"\"),\n  AccountObjectId = column_ifexists(\"max_CloudApps_TimeGenerated_AccountObjectId\", \"\"),\n  AccountDisplayName = column_ifexists(\"max_CloudApps_TimeGenerated_AccountDisplayName\", \"\"),\n  ObjectName = column_ifexists(\"max_CloudApps_TimeGenerated_ObjectName\", \"\"),\n  Application = column_ifexists(\"max_CloudApps_TimeGenerated_Application\", \"\"),\n  ApplicationID = column_ifexists(\"max_CloudApps_TimeGenerated_ApplicationId\", \"\"),\n  userPrincipalName = column_ifexists(\"max_CloudApps_TimeGenerated_userPrincipalName\", \"\")\n| project CloudApps_TimeGenerated, Description, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, IPAddress, userPrincipalName, AccountObjectId, AccountDisplayName, ObjectName, Application, ApplicationID\n",
-        "name": "TI map URL entity to Cloud App Events",
-        "queryFrequency": "1h"
+        "queryFrequency": "1h",
+        "description": "'Identifies compromises and attacks and detect malicious activities in one's URL entity from TI'\n"
       }
     }
   ]

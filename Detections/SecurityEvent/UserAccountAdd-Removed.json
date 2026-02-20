@@ -14,9 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nlet AC_Add =\n(union isfuzzy=true\n(SecurityEvent\n// Event ID related to member addition.\n| where EventID in (4728, 4732,4756)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData with * '\"MemberName\">' * '=' AccountAdded \",OU\" *\n| where isnotempty(AccountAdded)\n| extend GroupAddedTo = TargetUserName, AddingAccount = Account\n| extend  AccountAdded_GroupAddedTo_AddingAccount = strcat(AccountAdded, \"||\", GroupAddedTo, \"||\", AddingAccount )\n| project AccountAdded_GroupAddedTo_AddingAccount, AccountAddedTime = TimeGenerated\n),\n(WindowsEvent\n// Event ID related to member addition.\n| where EventID in (4728, 4732,4756)\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData.MemberName with * '\"MemberName\">' * '=' AccountAdded \",OU\" *\n| where isnotempty(AccountAdded)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend AddingAccount =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend GroupAddedTo = TargetUserName\n| extend  AccountAdded_GroupAddedTo_AddingAccount = strcat(AccountAdded, \"||\", GroupAddedTo, \"||\", AddingAccount )\n| project AccountAdded_GroupAddedTo_AddingAccount, AccountAddedTime = TimeGenerated\n)\n);\nlet AC_Remove =\n( union isfuzzy=true\n(SecurityEvent\n// Event IDs related to member removal.\n| where EventID in (4729,4733,4757)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData with * '\"MemberName\">' * '=' AccountRemoved \",OU\" *\n| where isnotempty(AccountRemoved)\n| extend GroupRemovedFrom = TargetUserName, RemovingAccount = Account\n| extend AccountRemoved_GroupRemovedFrom_RemovingAccount = strcat(AccountRemoved, \"||\", GroupRemovedFrom, \"||\", RemovingAccount)\n| project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, AccountRemoved = tolower(AccountRemoved),\nRemovingAccount, RemovingAccountLogonId = SubjectLogonId, GroupRemovedFrom = TargetUserName, TargetDomainName\n),\n(WindowsEvent\n// Event IDs related to member removal.\n| where EventID in (4729,4733,4757)\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData.MemberName with * '\"MemberName\">' * '=' AccountRemoved \",OU\" *\n| where isnotempty(AccountRemoved)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend RemovingAccount =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend GroupRemovedFrom = TargetUserName\n| extend AccountRemoved_GroupRemovedFrom_RemovingAccount = strcat(AccountRemoved, \"||\", GroupRemovedFrom, \"||\", RemovingAccount)\n| extend RemovedAccountLogonId= tostring(EventData.SubjectLogonId)\n| extend TargetDomainName = tostring(EventData.TargetDomainName)\n| project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, AccountRemoved = tolower(AccountRemoved),\nRemovingAccount, RemovedAccountLogonId, GroupRemovedFrom = TargetUserName, TargetDomainName\n));\nAC_Add\n| join kind = inner AC_Remove \non $left.AccountAdded_GroupAddedTo_AddingAccount == $right.AccountRemoved_GroupRemovedFrom_RemovingAccount\n| extend DurationinSecondAfter_Removed = datetime_diff ('second', AccountRemovedTime, AccountAddedTime)\n| where DurationinSecondAfter_Removed > 0\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend RemovedAccountName = tostring(split(AccountRemoved, @\"\\\")[1]), RemovedAccountNTDomain = tostring(split(AccountRemoved, @\"\\\")[0])\n| extend RemovingAccountName = tostring(split(RemovingAccount, @\"\\\")[1]), RemovingAccountNTDomain = tostring(split(RemovingAccount, @\"\\\")[0])\n| project-away DomainIndex\n",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "queryFrequency": "1d",
-        "severity": "Low",
+        "description": "'Identifies accounts that are added to a privileged group and then quickly removed, which could be a sign of compromise.'\n",
         "metadata": {
+          "support": {
+            "tier": "Community"
+          },
+          "author": {
+            "name": "Microsoft Security Research"
+          },
           "source": {
             "kind": "Community"
           },
@@ -25,30 +35,24 @@
               "Security - Others",
               "Identity"
             ]
-          },
-          "support": {
-            "tier": "Community"
-          },
-          "author": {
-            "name": "Microsoft Security Research"
           }
         },
-        "queryPeriod": "1d",
         "name": "Account added and removed from privileged groups",
+        "severity": "Low",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "AccountRemoved",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountRemoved"
               },
               {
-                "columnName": "RemovedAccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "RemovedAccountName"
               },
               {
-                "columnName": "RemovedAccountNTDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "RemovedAccountNTDomain"
               }
             ],
             "entityType": "Account"
@@ -56,16 +60,16 @@
           {
             "fieldMappings": [
               {
-                "columnName": "RemovingAccount",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "RemovingAccount"
               },
               {
-                "columnName": "RemovingAccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "RemovingAccountName"
               },
               {
-                "columnName": "RemovingAccountNTDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "RemovingAccountNTDomain"
               }
             ],
             "entityType": "Account"
@@ -73,16 +77,16 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Computer",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "Computer"
               },
               {
-                "columnName": "HostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName"
               },
               {
-                "columnName": "HostNameDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "HostNameDomain"
               }
             ],
             "entityType": "Host"
@@ -91,11 +95,7 @@
         "tactics": [
           "Persistence",
           "PrivilegeEscalation"
-        ],
-        "triggerOperator": "gt",
-        "description": "'Identifies accounts that are added to a privileged group and then quickly removed, which could be a sign of compromise.'\n",
-        "triggerThreshold": 0,
-        "query": "let WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nlet AC_Add =\n(union isfuzzy=true\n(SecurityEvent\n// Event ID related to member addition.\n| where EventID in (4728, 4732,4756)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData with * '\"MemberName\">' * '=' AccountAdded \",OU\" *\n| where isnotempty(AccountAdded)\n| extend GroupAddedTo = TargetUserName, AddingAccount = Account\n| extend  AccountAdded_GroupAddedTo_AddingAccount = strcat(AccountAdded, \"||\", GroupAddedTo, \"||\", AddingAccount )\n| project AccountAdded_GroupAddedTo_AddingAccount, AccountAddedTime = TimeGenerated\n),\n(WindowsEvent\n// Event ID related to member addition.\n| where EventID in (4728, 4732,4756)\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData.MemberName with * '\"MemberName\">' * '=' AccountAdded \",OU\" *\n| where isnotempty(AccountAdded)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend AddingAccount =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend GroupAddedTo = TargetUserName\n| extend  AccountAdded_GroupAddedTo_AddingAccount = strcat(AccountAdded, \"||\", GroupAddedTo, \"||\", AddingAccount )\n| project AccountAdded_GroupAddedTo_AddingAccount, AccountAddedTime = TimeGenerated\n)\n);\nlet AC_Remove =\n( union isfuzzy=true\n(SecurityEvent\n// Event IDs related to member removal.\n| where EventID in (4729,4733,4757)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData with * '\"MemberName\">' * '=' AccountRemoved \",OU\" *\n| where isnotempty(AccountRemoved)\n| extend GroupRemovedFrom = TargetUserName, RemovingAccount = Account\n| extend AccountRemoved_GroupRemovedFrom_RemovingAccount = strcat(AccountRemoved, \"||\", GroupRemovedFrom, \"||\", RemovingAccount)\n| project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, AccountRemoved = tolower(AccountRemoved),\nRemovingAccount, RemovingAccountLogonId = SubjectLogonId, GroupRemovedFrom = TargetUserName, TargetDomainName\n),\n(WindowsEvent\n// Event IDs related to member removal.\n| where EventID in (4729,4733,4757)\n| extend TargetSid = tostring(EventData.TargetSid)\n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n| parse EventData.MemberName with * '\"MemberName\">' * '=' AccountRemoved \",OU\" *\n| where isnotempty(AccountRemoved)\n| extend TargetUserName = tostring(EventData.TargetUserName)\n| extend RemovingAccount =  strcat(tostring(EventData.SubjectDomainName),\"\\\\\", tostring(EventData.SubjectUserName))\n| extend GroupRemovedFrom = TargetUserName\n| extend AccountRemoved_GroupRemovedFrom_RemovingAccount = strcat(AccountRemoved, \"||\", GroupRemovedFrom, \"||\", RemovingAccount)\n| extend RemovedAccountLogonId= tostring(EventData.SubjectLogonId)\n| extend TargetDomainName = tostring(EventData.TargetDomainName)\n| project AccountRemoved_GroupRemovedFrom_RemovingAccount, AccountRemovedTime = TimeGenerated, Computer, AccountRemoved = tolower(AccountRemoved),\nRemovingAccount, RemovedAccountLogonId, GroupRemovedFrom = TargetUserName, TargetDomainName\n));\nAC_Add\n| join kind = inner AC_Remove \non $left.AccountAdded_GroupAddedTo_AddingAccount == $right.AccountRemoved_GroupRemovedFrom_RemovingAccount\n| extend DurationinSecondAfter_Removed = datetime_diff ('second', AccountRemovedTime, AccountAddedTime)\n| where DurationinSecondAfter_Removed > 0\n| extend HostName = tostring(split(Computer, \".\")[0]), DomainIndex = toint(indexof(Computer, '.'))\n| extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)\n| extend RemovedAccountName = tostring(split(AccountRemoved, @\"\\\")[1]), RemovedAccountNTDomain = tostring(split(AccountRemoved, @\"\\\")[0])\n| extend RemovingAccountName = tostring(split(RemovingAccount, @\"\\\")[1]), RemovingAccountNTDomain = tostring(split(RemovingAccount, @\"\\\")[0])\n| project-away DomainIndex\n"
+        ]
       }
     }
   ]
