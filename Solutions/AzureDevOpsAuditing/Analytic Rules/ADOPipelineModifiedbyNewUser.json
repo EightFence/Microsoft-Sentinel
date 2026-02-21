@@ -14,8 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "status": "Available",
+        "tactics": [
+          "Execution",
+          "DefenseEvasion"
+        ],
+        "queryPeriod": "14d",
+        "description": "'There are several potential pipeline steps that could be modified by an attacker to inject malicious code into the build cycle. A likely attacker path is the modification to an existing pipeline that they have access to. \nThis detection looks for users modifying a pipeline when they have not previously been observed modifying or creating that pipeline before. This query also joins events with data to Microsoft Entra ID Protection in order to show if the user conducting the action has any associated Microsoft Entra ID Protection alerts. You can also choose to filter this detection to only alert when the user also has Microsoft Entra ID Protection alerts associated with them.'\n",
+        "queryFrequency": "1d",
+        "query": "// Set the lookback to determine if user has created pipelines before\nlet timeback = 14d;\n// Set the period for detections\nlet timeframe = 1d;\n// Get a list of previous Release Pipeline creators to exclude\nlet releaseusers = ADOAuditLogs\n| where TimeGenerated > ago(timeback) and TimeGenerated < ago(timeframe)\n| where OperationName in (\"Release.ReleasePipelineCreated\", \"Release.ReleasePipelineModified\")\n// We want to look for users performing actions in specific projects so we create this userscope object to match on\n| extend UserScope = strcat(ActorUserId, \"-\", ProjectName)\n| summarize by UserScope;\n// Get Release Pipeline creations by new users\nADOAuditLogs\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineModified\"\n| extend UserScope = strcat(ActorUserId, \"-\", ProjectName)\n| where UserScope !in (releaseusers)\n| extend ActorUPN = tolower(ActorUPN)\n| project-away Id, ActivityId, ActorCUID, ScopeId, ProjectId, TenantId, SourceSystem, UserScope\n// See if any of these users have Azure AD alerts associated with them in the same timeframe\n| join kind = leftouter (\nSecurityAlert\n| where TimeGenerated > ago(timeframe)\n| where ProviderName == \"IPC\"\n| extend AadUserId = tostring(parse_json(Entities)[0].AadUserId)\n| summarize Alerts=count() by AadUserId) on $left.ActorUserId == $right.AadUserId\n| extend Alerts = iif(isnotempty(Alerts), Alerts, 0)\n// Uncomment the line below to only show results where the user as AADIdP alerts\n//| where Alerts > 0\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "ActorUPN",
@@ -29,32 +41,20 @@
                 "columnName": "AccountUPNSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "triggerThreshold": 0,
-        "queryPeriod": "14d",
-        "triggerOperator": "gt",
-        "query": "// Set the lookback to determine if user has created pipelines before\nlet timeback = 14d;\n// Set the period for detections\nlet timeframe = 1d;\n// Get a list of previous Release Pipeline creators to exclude\nlet releaseusers = ADOAuditLogs\n| where TimeGenerated > ago(timeback) and TimeGenerated < ago(timeframe)\n| where OperationName in (\"Release.ReleasePipelineCreated\", \"Release.ReleasePipelineModified\")\n// We want to look for users performing actions in specific projects so we create this userscope object to match on\n| extend UserScope = strcat(ActorUserId, \"-\", ProjectName)\n| summarize by UserScope;\n// Get Release Pipeline creations by new users\nADOAuditLogs\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineModified\"\n| extend UserScope = strcat(ActorUserId, \"-\", ProjectName)\n| where UserScope !in (releaseusers)\n| extend ActorUPN = tolower(ActorUPN)\n| project-away Id, ActivityId, ActorCUID, ScopeId, ProjectId, TenantId, SourceSystem, UserScope\n// See if any of these users have Azure AD alerts associated with them in the same timeframe\n| join kind = leftouter (\nSecurityAlert\n| where TimeGenerated > ago(timeframe)\n| where ProviderName == \"IPC\"\n| extend AadUserId = tostring(parse_json(Entities)[0].AadUserId)\n| summarize Alerts=count() by AadUserId) on $left.ActorUserId == $right.AadUserId\n| extend Alerts = iif(isnotempty(Alerts), Alerts, 0)\n// Uncomment the line below to only show results where the user as AADIdP alerts\n//| where Alerts > 0\n| extend timestamp = TimeGenerated\n| extend AccountName = tostring(split(ActorUPN, \"@\")[0]), AccountUPNSuffix = tostring(split(ActorUPN, \"@\")[1])\n",
         "name": "Azure DevOps Pipeline modified by a new user",
-        "status": "Available",
-        "tactics": [
-          "Execution",
-          "DefenseEvasion"
-        ],
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "description": "'There are several potential pipeline steps that could be modified by an attacker to inject malicious code into the build cycle. A likely attacker path is the modification to an existing pipeline that they have access to. \nThis detection looks for users modifying a pipeline when they have not previously been observed modifying or creating that pipeline before. This query also joins events with data to Microsoft Entra ID Protection in order to show if the user conducting the action has any associated Microsoft Entra ID Protection alerts. You can also choose to filter this detection to only alert when the user also has Microsoft Entra ID Protection alerts associated with them.'\n"
+        "triggerThreshold": 0
       }
     }
   ]
