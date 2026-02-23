@@ -14,10 +14,64 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "10m",
-        "suppressionDuration": "PT30M",
-        "queryPeriod": "30m",
+        "suppressionEnabled": false,
+        "query": "LookoutEvents\n| where EventType == \"DEVICE\"\n| where DeviceComplianceStatus in (\"Non-Compliant\", \"Partial\") \n   or DeviceSecurityStatus in (\"THREATS_HIGH\", \"THREATS_MEDIUM\")\n   or ChangeType == \"UPDATE\"\n| extend \n    DeviceRiskScore = case(\n        DeviceSecurityStatus == \"THREATS_HIGH\", 9,\n        DeviceSecurityStatus == \"THREATS_MEDIUM\", 6,\n        DeviceSecurityStatus == \"THREATS_LOW\", 3,\n        DeviceComplianceStatus == \"Non-Compliant\", 7,\n        DeviceComplianceStatus == \"Partial\", 4,\n        1\n    ),\n    ComplianceReason = case(\n        isempty(DeviceCheckinTime), \"No Recent Check-in\",\n        DeviceActivationStatus != \"ACTIVE\", \"Inactive Device\",\n        isempty(ClientLookoutSDKVersion), \"Missing Security Client\",\n        \"Configuration Issue\"\n    ),\n    PlatformRisk = case(\n        DevicePlatform == \"ANDROID\" and DeviceOSVersion matches regex @\"^[1-9]\\..*\", \"Outdated Android\",\n        DevicePlatform == \"IOS\" and DeviceOSVersion matches regex @\"^1[0-4]\\..*\", \"Outdated iOS\",\n        DevicePlatform == \"UNKNOWN\", \"Unknown Platform\",\n        \"Current\"\n    )\n| extend MDMIntegrationStatus = case(\n    isnotempty(MDMConnectorId) and isnotempty(MDMExternalId), \"Fully Integrated\",\n    isnotempty(MDMConnectorId), \"Partial Integration\", \n    \"Not Integrated\"\n)\n| extend SecurityPosture = case(\n    DeviceRiskScore >= 8, \"Critical\",\n    DeviceRiskScore >= 6, \"High\",\n    DeviceRiskScore >= 4, \"Medium\",\n    \"Low\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceActivationStatus,\n    DeviceSecurityStatus,\n    DeviceComplianceStatus,\n    DeviceRiskScore,\n    SecurityPosture,\n    ComplianceReason,\n    PlatformRisk,\n    DeviceCheckinTime,\n    DeviceActivatedAt,\n    DeviceDeactivatedAt,\n    DeviceGroupGuid,\n    ClientLookoutSDKVersion,\n    ClientOTAVersion,\n    ClientPackageName,\n    ClientPackageVersion,\n    MDMConnectorId,\n    MDMConnectorUuid,\n    MDMExternalId,\n    MDMIntegrationStatus,\n    ActorType,\n    ActorGuid,\n    ChangeType\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Device Compliance Issue: {{SecurityPosture}} Risk on {{DevicePlatform}} Device",
+          "alertTacticsColumnName": "SecurityPosture",
+          "alertDescriptionFormat": "{{SecurityPosture}} posture with {{DeviceComplianceStatus}} compliance",
+          "alertSeverityColumnName": "SecurityPosture"
+        },
         "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "10m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "description": "'Monitors device compliance status changes and security posture degradation using Lookout Mobile Risk API v2 enhanced device fields. Detects devices becoming non-compliant, security status changes, and potential device compromise indicators with detailed device context and MDM integration data.'\n",
+        "suppressionDuration": "PT30M",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Discovery",
+          "DefenseEvasion",
+          "Persistence"
+        ],
+        "queryPeriod": "30m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "groupByCustomDetails": [
+              "SecurityPosture",
+              "DevicePlatform"
+            ],
+            "lookbackDuration": "P1D",
+            "matchingMethod": "Selected",
+            "groupByAlertDetails": [
+              "DeviceGuid"
+            ],
+            "groupByEntities": [
+              "Account",
+              "Host"
+            ],
+            "reopenClosedIncident": false,
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "name": "Lookout - Device Compliance and Security Status Changes (v2)",
+        "status": "Available",
+        "customDetails": {
+          "PlatformRisk": "PlatformRisk",
+          "DevicePlatform": "DevicePlatform",
+          "ClientSDKVersion": "ClientLookoutSDKVersion",
+          "SecurityPosture": "SecurityPosture",
+          "ComplianceReason": "ComplianceReason",
+          "DevCompliance": "DeviceComplianceStatus",
+          "DeviceModel": "DeviceModel",
+          "DeviceManufacturer": "DeviceManufacturer",
+          "DeviceSecStatus": "DeviceSecurityStatus",
+          "MDMIntegration": "MDMIntegrationStatus",
+          "DeviceRiskScore": "DeviceRiskScore"
+        },
         "entityMappings": [
           {
             "entityType": "Account",
@@ -45,61 +99,7 @@
               }
             ]
           }
-        ],
-        "query": "LookoutEvents\n| where EventType == \"DEVICE\"\n| where DeviceComplianceStatus in (\"Non-Compliant\", \"Partial\") \n   or DeviceSecurityStatus in (\"THREATS_HIGH\", \"THREATS_MEDIUM\")\n   or ChangeType == \"UPDATE\"\n| extend \n    DeviceRiskScore = case(\n        DeviceSecurityStatus == \"THREATS_HIGH\", 9,\n        DeviceSecurityStatus == \"THREATS_MEDIUM\", 6,\n        DeviceSecurityStatus == \"THREATS_LOW\", 3,\n        DeviceComplianceStatus == \"Non-Compliant\", 7,\n        DeviceComplianceStatus == \"Partial\", 4,\n        1\n    ),\n    ComplianceReason = case(\n        isempty(DeviceCheckinTime), \"No Recent Check-in\",\n        DeviceActivationStatus != \"ACTIVE\", \"Inactive Device\",\n        isempty(ClientLookoutSDKVersion), \"Missing Security Client\",\n        \"Configuration Issue\"\n    ),\n    PlatformRisk = case(\n        DevicePlatform == \"ANDROID\" and DeviceOSVersion matches regex @\"^[1-9]\\..*\", \"Outdated Android\",\n        DevicePlatform == \"IOS\" and DeviceOSVersion matches regex @\"^1[0-4]\\..*\", \"Outdated iOS\",\n        DevicePlatform == \"UNKNOWN\", \"Unknown Platform\",\n        \"Current\"\n    )\n| extend MDMIntegrationStatus = case(\n    isnotempty(MDMConnectorId) and isnotempty(MDMExternalId), \"Fully Integrated\",\n    isnotempty(MDMConnectorId), \"Partial Integration\", \n    \"Not Integrated\"\n)\n| extend SecurityPosture = case(\n    DeviceRiskScore >= 8, \"Critical\",\n    DeviceRiskScore >= 6, \"High\",\n    DeviceRiskScore >= 4, \"Medium\",\n    \"Low\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceActivationStatus,\n    DeviceSecurityStatus,\n    DeviceComplianceStatus,\n    DeviceRiskScore,\n    SecurityPosture,\n    ComplianceReason,\n    PlatformRisk,\n    DeviceCheckinTime,\n    DeviceActivatedAt,\n    DeviceDeactivatedAt,\n    DeviceGroupGuid,\n    ClientLookoutSDKVersion,\n    ClientOTAVersion,\n    ClientPackageName,\n    ClientPackageVersion,\n    MDMConnectorId,\n    MDMConnectorUuid,\n    MDMExternalId,\n    MDMIntegrationStatus,\n    ActorType,\n    ActorGuid,\n    ChangeType\n",
-        "tactics": [
-          "Discovery",
-          "DefenseEvasion",
-          "Persistence"
-        ],
-        "suppressionEnabled": false,
-        "status": "Available",
-        "customDetails": {
-          "MDMIntegration": "MDMIntegrationStatus",
-          "DeviceSecStatus": "DeviceSecurityStatus",
-          "ClientSDKVersion": "ClientLookoutSDKVersion",
-          "PlatformRisk": "PlatformRisk",
-          "DeviceManufacturer": "DeviceManufacturer",
-          "SecurityPosture": "SecurityPosture",
-          "DeviceModel": "DeviceModel",
-          "DevCompliance": "DeviceComplianceStatus",
-          "DeviceRiskScore": "DeviceRiskScore",
-          "ComplianceReason": "ComplianceReason",
-          "DevicePlatform": "DevicePlatform"
-        },
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{SecurityPosture}} posture with {{DeviceComplianceStatus}} compliance",
-          "alertDisplayNameFormat": "Device Compliance Issue: {{SecurityPosture}} Risk on {{DevicePlatform}} Device",
-          "alertTacticsColumnName": "SecurityPosture",
-          "alertSeverityColumnName": "SecurityPosture"
-        },
-        "description": "'Monitors device compliance status changes and security posture degradation using Lookout Mobile Risk API v2 enhanced device fields. Detects devices becoming non-compliant, security status changes, and potential device compromise indicators with detailed device context and MDM integration data.'\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "P1D",
-            "groupByAlertDetails": [
-              "DeviceGuid"
-            ],
-            "groupByCustomDetails": [
-              "SecurityPosture",
-              "DevicePlatform"
-            ],
-            "groupByEntities": [
-              "Account",
-              "Host"
-            ]
-          },
-          "createIncident": true
-        },
-        "name": "Lookout - Device Compliance and Security Status Changes (v2)"
+        ]
       }
     }
   ]

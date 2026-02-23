@@ -14,9 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "15m",
-        "queryPeriod": "15m",
+        "query": "SAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| extend Object = Message.object, Attributes = Message.attributes\n| where Object.type == \"IdentityProvider\"\n| extend CrudType = tostring(parse_json(tostring(Object.id)).crudType)\n| mv-expand Attributes\n| extend MessageText = case(\n                           CrudType == \"CREATE\",\n                           \"An identity provider was created\",\n                           CrudType == \"UPDATE\",\n                           \"An identity provider was updated\",\n                           CrudType == \"DELETE\",\n                           \"An identity provider was deleted\",\n                           \"Unclassified CRUD operation encountered\"\n                       )\n| extend NewAttributes = parse_json(replace_regex(tostring(Attributes.new), \"\\\\r\", \"\"))\n| extend OldAttributes = parse_json(replace_regex(tostring(Attributes.old), \"\\\\r\", \"\"))\n| extend IdentityProviderName = case(\n                                    CrudType == \"CREATE\" or CrudType == \"UPDATE\",\n                                    NewAttributes.name,\n                                    CrudType == \"DELETE\",\n                                    OldAttributes.name,\n                                    \"Unknown\"\n                                )\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    IdentityProviderName,\n    Tenant,\n    SpaceId,\n    CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP BTP: {{MessageText}}",
+          "alertDescriptionFormat": "{{MessageText}} by {{UserName}}. Identity provider name: {{IdentityProviderName}}"
+        },
         "severity": "Medium",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -41,23 +45,19 @@
             ]
           }
         ],
-        "query": "SAPBTPAuditLog_CL\n| where isnotnull(Message.object)\n| extend Object = Message.object, Attributes = Message.attributes\n| where Object.type == \"IdentityProvider\"\n| extend CrudType = tostring(parse_json(tostring(Object.id)).crudType)\n| mv-expand Attributes\n| extend MessageText = case(\n                           CrudType == \"CREATE\",\n                           \"An identity provider was created\",\n                           CrudType == \"UPDATE\",\n                           \"An identity provider was updated\",\n                           CrudType == \"DELETE\",\n                           \"An identity provider was deleted\",\n                           \"Unclassified CRUD operation encountered\"\n                       )\n| extend NewAttributes = parse_json(replace_regex(tostring(Attributes.new), \"\\\\r\", \"\"))\n| extend OldAttributes = parse_json(replace_regex(tostring(Attributes.old), \"\\\\r\", \"\"))\n| extend IdentityProviderName = case(\n                                    CrudType == \"CREATE\" or CrudType == \"UPDATE\",\n                                    NewAttributes.name,\n                                    CrudType == \"DELETE\",\n                                    OldAttributes.name,\n                                    \"Unknown\"\n                                )\n| project\n    UpdatedOn,\n    UserName,\n    MessageText,\n    IdentityProviderName,\n    Tenant,\n    SpaceId,\n    CloudApp = \"SAP BTP\"\n| extend AccountName = split(UserName, \"@\")[0], UPNSuffix = split(UserName, \"@\")[1]\n",
+        "queryFrequency": "15m",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
         "description": "Identifies CRUD operations on Identity Provider settings within a sub account.",
-        "status": "Available",
-        "triggerOperator": "gt",
         "triggerThreshold": 0,
         "tactics": [
           "CredentialAccess",
           "PrivilegeEscalation"
         ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SAP BTP: {{MessageText}}",
-          "alertDescriptionFormat": "{{MessageText}} by {{UserName}}. Identity provider name: {{IdentityProviderName}}"
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "SingleAlert"
-        },
-        "name": "BTP - Trust and authorization Identity Provider monitor"
+        "queryPeriod": "15m",
+        "name": "BTP - Trust and authorization Identity Provider monitor",
+        "status": "Available"
       }
     }
   ]
