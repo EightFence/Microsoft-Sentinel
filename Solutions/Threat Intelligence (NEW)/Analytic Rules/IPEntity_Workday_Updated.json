@@ -14,45 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let dtLookBack = 1h; // Define the lookback period for audit events\nlet ioc_lookBack = 14d; // Define the lookback period for threat intelligence indicators\nThreatIntelIndicators \n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n     | where isnotempty(NetworkSourceIP)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue // Get the latest indicator time for each IndicatorId\n  | extend TI_ipEntity = coalesce(NetworkSourceIP, NetworkSourceIP, NetworkSourceIP, NetworkSourceIP) // Combine IP fields into a single entity\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil)) // Filter for active indicators that have not expired\n  | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  | join kind=inner (\n      ASimAuditEventLogs\n      | where EventVendor == \"Workday\" // Filter for Workday events\n      | where TimeGenerated >= ago(dtLookBack) // Filter events within the lookback period\n      | where isnotempty(DvcIpAddr) // Filter for events with a device IP address\n      | extend WD_TimeGenerated = EventStartTime // Rename the event start time column\n      | project WD_TimeGenerated, ActorUsername, DvcIpAddr, Operation, Object // Select relevant columns\n      )\n      on $left.TI_ipEntity == $right.DvcIpAddr // Join on the IP entity\n      | extend Description = tostring(parse_json(Data).description)\n      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n  | project\n      LatestIndicatorTime,\n      Description,\n      ActivityGroupNames,\n      Id,\n      ValidUntil,\n      Confidence,\n      WD_TimeGenerated,\n      ActorUsername,\n      DvcIpAddr,\n      Operation,\n      Object // Select relevant columns after the join\n  | extend\n      timestamp = WD_TimeGenerated,\n      Name = tostring(split(ActorUsername, '@', 0)),\n      UPNSuffix = tostring(split(ActorUsername, '@', 1)) // Add additional fields for timestamp, name, and UPN suffix   \n",
-        "severity": "Medium",
         "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "description": "Detects a match in Workday activity from any IP Indicator of Compromise (IOC) provided by Threat Intelligence (TI).\n",
-        "triggerThreshold": 0,
         "tactics": [
           "CommandAndControl"
         ],
-        "queryPeriod": "14d",
-        "name": "TI map IP entity to Workday(ASimAuditEventLogs)",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "description": "Detects a match in Workday activity from any IP Indicator of Compromise (IOC) provided by Threat Intelligence (TI).\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "ActorUsername",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "ActorUsername"
               },
               {
-                "columnName": "Name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Name"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "DvcIpAddr",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "DvcIpAddr"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
-        ]
+        ],
+        "name": "TI map IP entity to Workday(ASimAuditEventLogs)",
+        "query": "let dtLookBack = 1h; // Define the lookback period for audit events\nlet ioc_lookBack = 14d; // Define the lookback period for threat intelligence indicators\nThreatIntelIndicators \n| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n     | where isnotempty(NetworkSourceIP)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue // Get the latest indicator time for each IndicatorId\n  | extend TI_ipEntity = coalesce(NetworkSourceIP, NetworkSourceIP, NetworkSourceIP, NetworkSourceIP) // Combine IP fields into a single entity\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil)) // Filter for active indicators that have not expired\n  | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  | join kind=inner (\n      ASimAuditEventLogs\n      | where EventVendor == \"Workday\" // Filter for Workday events\n      | where TimeGenerated >= ago(dtLookBack) // Filter events within the lookback period\n      | where isnotempty(DvcIpAddr) // Filter for events with a device IP address\n      | extend WD_TimeGenerated = EventStartTime // Rename the event start time column\n      | project WD_TimeGenerated, ActorUsername, DvcIpAddr, Operation, Object // Select relevant columns\n      )\n      on $left.TI_ipEntity == $right.DvcIpAddr // Join on the IP entity\n      | extend Description = tostring(parse_json(Data).description)\n      | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n  | project\n      LatestIndicatorTime,\n      Description,\n      ActivityGroupNames,\n      Id,\n      ValidUntil,\n      Confidence,\n      WD_TimeGenerated,\n      ActorUsername,\n      DvcIpAddr,\n      Operation,\n      Object // Select relevant columns after the join\n  | extend\n      timestamp = WD_TimeGenerated,\n      Name = tostring(split(ActorUsername, '@', 0)),\n      UPNSuffix = tostring(split(ActorUsername, '@', 1)) // Add additional fields for timestamp, name, and UPN suffix   \n",
+        "queryPeriod": "14d"
       }
     }
   ]
