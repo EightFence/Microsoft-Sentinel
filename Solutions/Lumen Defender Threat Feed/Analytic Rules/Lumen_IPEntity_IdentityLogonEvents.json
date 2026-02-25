@@ -14,31 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "suppressionEnabled": true,
         "severity": "Medium",
-        "queryFrequency": "4h",
-        "suppressionDuration": "5h",
-        "triggerThreshold": 0,
-        "description": "This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in Azure AD sign-in logs.\n",
-        "displayName": "Lumen TI IPAddress in IdentityLogonEvents",
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ILE_ipEntity"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
+        "suppressionDuration": "5h",
         "name": "Lumen TI IPAddress in IdentityLogonEvents",
-        "query": "let dt_lookBack = 1d;  // Data lookback for AAD sign-in logs\nlet ioc_lookBack = 14d; // TI lookback\nlet IP_Indicators =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | where IsActive == true and ValidUntil > now()\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n    | where SourceSystem == 'Lumen'\n    | where ObservableKey == 'ipv4-addr:value'\n    | extend TI_ipEntity = ObservableValue\n    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';\nlet SignInUnion =\n    union isfuzzy=true\n    (\n        AADNonInteractiveUserSignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(UserDisplayName, UserPrincipalName),\n            Application = coalesce(column_ifexists('AppDisplayName',''), column_ifexists('ResourceDisplayName','')),\n            LogonType = column_ifexists('ClientAppUsed',''),\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    ),\n    (\n        AADServicePrincipalSignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(ServicePrincipalName, tostring(ServicePrincipalId)),\n            Application = coalesce(column_ifexists('AppDisplayName',''), column_ifexists('ResourceDisplayName','')),\n            LogonType = \"ServicePrincipal\",\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    ),\n    (\n        AADManagedIdentitySignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(ServicePrincipalName, tostring(ServicePrincipalId)),\n            Application = ResourceDisplayName,\n            LogonType = \"ManagedIdentity\",\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    ),\n    (\n        ADFSSignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(UserDisplayName, UserPrincipalName),\n            Application = coalesce(AppDisplayName, ResourceDisplayName),\n            LogonType = coalesce(Requirement, AuthenticationRequirement),\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    );\nIP_Indicators\n| join kind=innerunique (SignInUnion) on $left.TI_ipEntity == $right.ILE_ipEntity\n| where IdentityLogonEvents_TimeGenerated < ValidUntil\n| summarize arg_max(IdentityLogonEvents_TimeGenerated, *), StartTime = min(IdentityLogonEvents_TimeGenerated), EndTime = max(IdentityLogonEvents_TimeGenerated) by Id, ILE_ipEntity\n| project timestamp = EndTime, StartTime, EndTime, AccountDisplayName, IPAddress, Application, LogonType, Id, Tags, ValidUntil, Confidence, TI_ipEntity, ILE_ipEntity, Type\n",
-        "queryPeriod": "14d"
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "suppressionEnabled": true,
+        "queryFrequency": "4h",
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
+        "displayName": "Lumen TI IPAddress in IdentityLogonEvents",
+        "description": "This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in Azure AD sign-in logs.\n",
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1d;  // Data lookback for AAD sign-in logs\nlet ioc_lookBack = 14d; // TI lookback\nlet IP_Indicators =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookBack)\n    | where IsActive == true and ValidUntil > now()\n    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n    | where SourceSystem == 'Lumen'\n    | where ObservableKey == 'ipv4-addr:value'\n    | extend TI_ipEntity = ObservableValue\n    | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';\nlet SignInUnion =\n    union isfuzzy=true\n    (\n        AADNonInteractiveUserSignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(UserDisplayName, UserPrincipalName),\n            Application = coalesce(column_ifexists('AppDisplayName',''), column_ifexists('ResourceDisplayName','')),\n            LogonType = column_ifexists('ClientAppUsed',''),\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    ),\n    (\n        AADServicePrincipalSignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(ServicePrincipalName, tostring(ServicePrincipalId)),\n            Application = coalesce(column_ifexists('AppDisplayName',''), column_ifexists('ResourceDisplayName','')),\n            LogonType = \"ServicePrincipal\",\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    ),\n    (\n        AADManagedIdentitySignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(ServicePrincipalName, tostring(ServicePrincipalId)),\n            Application = ResourceDisplayName,\n            LogonType = \"ManagedIdentity\",\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    ),\n    (\n        ADFSSignInLogs\n        | where TimeGenerated >= ago(dt_lookBack)\n        | extend\n            ILE_ipEntity = IPAddress,\n            AccountDisplayName = coalesce(UserDisplayName, UserPrincipalName),\n            Application = coalesce(AppDisplayName, ResourceDisplayName),\n            LogonType = coalesce(Requirement, AuthenticationRequirement),\n            IdentityLogonEvents_TimeGenerated = TimeGenerated\n        | project IdentityLogonEvents_TimeGenerated, ILE_ipEntity, AccountDisplayName, Application, LogonType, IPAddress, Type\n    );\nIP_Indicators\n| join kind=innerunique (SignInUnion) on $left.TI_ipEntity == $right.ILE_ipEntity\n| where IdentityLogonEvents_TimeGenerated < ValidUntil\n| summarize arg_max(IdentityLogonEvents_TimeGenerated, *), StartTime = min(IdentityLogonEvents_TimeGenerated), EndTime = max(IdentityLogonEvents_TimeGenerated) by Id, ILE_ipEntity\n| project timestamp = EndTime, StartTime, EndTime, AccountDisplayName, IPAddress, Application, LogonType, Id, Tags, ValidUntil, Confidence, TI_ipEntity, ILE_ipEntity, Type\n"
       }
     }
   ]

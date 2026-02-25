@@ -14,28 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "tactics": [
-          "CommandAndControl"
-        ],
         "severity": "Medium",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SQL Security Audit Events.\n",
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "ClientIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
         "name": "TI Map IP Entity to Azure SQL Security Audit Events",
-        "query": "let dt_lookBack = 1h; // Look back 1 hour for AzureDiagnostics logs\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n     | where TimeGenerated >= ago(ioc_lookBack)\n     | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n     | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform a join between IP indicators and AzureDiagnostics logs for SQL Security Audit events\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      AzureDiagnostics\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where ResourceProvider == 'MICROSOFT.SQL'\n      | where Category == 'SQLSecurityAuditEvents'\n      | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated\n      | extend ClientIP = column_ifexists(\"client_ip_s\", \"Not Available\")\n      | extend Action = column_ifexists(\"action_name_s\", \"Not Available\")\n      | extend Application = column_ifexists(\"application_name_s\", \"Not Available\")\n      | extend HostName = column_ifexists(\"host_name_s\", \"Not Available\")\n  )\n  on $left.TI_ipEntity == $right.ClientIP\n  // Filter out logs that occurred after the expiration of the corresponding indicator\n  | where SQLSecurityAuditEvents_TimeGenerated < ValidUntil\n  // Group the results by IndicatorId and ClientIP, and keep the log entry with the latest timestamp\n  | summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by Id, ClientIP\n  // Select the desired output fields\n  | extend Description = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n  | project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,\n    TI_ipEntity, ResourceId, ClientIP, Action, Application, HostName,  NetworkSourceIP, Type\n  // Rename the timestamp field\n  | extend timestamp = SQLSecurityAuditEvents_TimeGenerated\n",
-        "queryPeriod": "14d"
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "queryFrequency": "1h",
+        "queryPeriod": "14d",
+        "triggerThreshold": 0,
+        "description": "This query maps any IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in SQL Security Audit Events.\n",
+        "triggerOperator": "gt",
+        "query": "let dt_lookBack = 1h; // Look back 1 hour for AzureDiagnostics logs\nlet ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators\n// Fetch threat intelligence indicators related to IP addresses\nlet IP_Indicators = ThreatIntelIndicators\n//extract key part of kv pair\n     | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n     | where IndicatorType in (\"ipv4-addr\", \"ipv6-addr\", \"network-traffic\")\n     | extend NetworkSourceIP = toupper(ObservableValue)\n     | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n     | where TimeGenerated >= ago(ioc_lookBack)\n     | extend TI_ipEntity = iff(isnotempty(NetworkSourceIP), NetworkSourceIP, NetworkSourceIP)\n     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n     | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, ObservableValue\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Perform a join between IP indicators and AzureDiagnostics logs for SQL Security Audit events\nIP_Indicators\n   | project-reorder *, Tags, TrafficLightProtocolLevel, NetworkSourceIP, Type, TI_ipEntity\n  // Use innerunique to keep performance fast and result set low, as we only need one match to indicate potential malicious activity that needs investigation\n  | join kind=innerunique (\n      AzureDiagnostics\n      | where TimeGenerated >= ago(dt_lookBack)\n      | where ResourceProvider == 'MICROSOFT.SQL'\n      | where Category == 'SQLSecurityAuditEvents'\n      | extend SQLSecurityAuditEvents_TimeGenerated = TimeGenerated\n      | extend ClientIP = column_ifexists(\"client_ip_s\", \"Not Available\")\n      | extend Action = column_ifexists(\"action_name_s\", \"Not Available\")\n      | extend Application = column_ifexists(\"application_name_s\", \"Not Available\")\n      | extend HostName = column_ifexists(\"host_name_s\", \"Not Available\")\n  )\n  on $left.TI_ipEntity == $right.ClientIP\n  // Filter out logs that occurred after the expiration of the corresponding indicator\n  | where SQLSecurityAuditEvents_TimeGenerated < ValidUntil\n  // Group the results by IndicatorId and ClientIP, and keep the log entry with the latest timestamp\n  | summarize SQLSecurityAuditEvents_TimeGenerated = arg_max(SQLSecurityAuditEvents_TimeGenerated, *) by Id, ClientIP\n  // Select the desired output fields\n  | extend Description = tostring(parse_json(Data).description)\n  | extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(parse_json(Data).labels))\n  | project SQLSecurityAuditEvents_TimeGenerated, Description, ActivityGroupNames, Id, ValidUntil, Confidence,\n    TI_ipEntity, ResourceId, ClientIP, Action, Application, HostName,  NetworkSourceIP, Type\n  // Rename the timestamp field\n  | extend timestamp = SQLSecurityAuditEvents_TimeGenerated\n"
       }
     }
   ]
