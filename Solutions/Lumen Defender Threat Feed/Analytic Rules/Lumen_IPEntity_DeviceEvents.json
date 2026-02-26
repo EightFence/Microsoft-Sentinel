@@ -14,30 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "4h",
+        "name": "Lumen TI IPAddress in DeviceEvents",
+        "triggerThreshold": 0,
+        "displayName": "Lumen TI IPAddress in DeviceEvents",
         "severity": "Medium",
+        "triggerOperator": "gt",
+        "suppressionDuration": "5h",
+        "suppressionEnabled": true,
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "DE_ipEntity"
+                "columnName": "DE_ipEntity",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "suppressionDuration": "5h",
-        "name": "Lumen TI IPAddress in DeviceEvents",
+        "description": "This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DeviceEvents.\n",
         "tactics": [
           "CommandAndControl"
         ],
-        "suppressionEnabled": true,
-        "queryFrequency": "4h",
         "queryPeriod": "14d",
-        "triggerThreshold": 0,
-        "displayName": "Lumen TI IPAddress in DeviceEvents",
-        "description": "This query maps Lumen IP indicators of compromise (IOCs) from threat intelligence (TI), by searching for matches in DeviceEvents.\n",
-        "triggerOperator": "gt",
         "query": "let dt_lookBack = 1d;  // Data lookback for DeviceEvents\nlet ioc_lookBack = 14d; // TI lookback\nlet IP_Indicators = ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where IsActive == true and ValidUntil > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n  | where SourceSystem == 'Lumen'\n  | where ObservableKey == 'ipv4-addr:value'\n  | extend TI_ipEntity = ObservableValue\n  | where ipv4_is_private(TI_ipEntity) == false and TI_ipEntity !startswith 'fe80' and TI_ipEntity !startswith '::' and TI_ipEntity !startswith '127.';\nIP_Indicators\n| join kind=innerunique (\n    DeviceEvents\n    | where TimeGenerated >= ago(dt_lookBack)\n    | extend DE_ipEntity = RemoteIP\n    | extend DeviceEvents_TimeGenerated = TimeGenerated\n  ) on $left.TI_ipEntity == $right.DE_ipEntity\n| where DeviceEvents_TimeGenerated < ValidUntil\n| summarize arg_max(DeviceEvents_TimeGenerated, *), StartTime = min(DeviceEvents_TimeGenerated), EndTime = max(DeviceEvents_TimeGenerated) by Id, DE_ipEntity\n| project timestamp = EndTime, StartTime, EndTime, DeviceName, RemoteIP, ActionType, ReportId, Id, Tags, ValidUntil, Confidence, TI_ipEntity, DE_ipEntity, Type\n"
       }
     }
