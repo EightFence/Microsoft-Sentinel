@@ -14,24 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "CommandAndControl",
+          "InitialAccess"
+        ],
         "queryFrequency": "1h",
-        "name": "TI map URL entity to Web Session Events (ASIM Web Session schema)",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "A web request from {{SrcIpAddr}} to malicious URL matched an IoC",
-          "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{RequestedUrl}}, which is a known malicious URL associated with {{ThreatType}}. Review threat intelligence blade for further context."
-        },
-        "customDetails": {
-          "ThreatType": "ThreatType",
-          "ActivityGroupNames": "ActivityGroupNames",
-          "IoCConfidenceScore": "Confidence",
-          "IoCDescription": "Description",
-          "IoCExpirationTime": "ValidUntil",
-          "IndicatorId": "IndicatorId",
-          "EventTime": "Event_TimeGenerated"
-        },
-        "severity": "Medium",
+        "queryPeriod": "14d",
         "triggerOperator": "gt",
-        "triggerThreshold": 0,
+        "description": "This rule identifies Web Sessions where the full requested URL matches a known\nmalicious URL from Threat Intelligence sources. The rule uses the Advanced Security\nInformation Model (ASIM) and supports any web session source compliant with ASIM.\n",
+        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -52,13 +43,22 @@
             "entityType": "URL"
           }
         ],
-        "description": "This rule identifies Web Sessions where the full requested URL matches a known\nmalicious URL from Threat Intelligence sources. The rule uses the Advanced Security\nInformation Model (ASIM) and supports any web session source compliant with ASIM.\n",
-        "tactics": [
-          "CommandAndControl",
-          "InitialAccess"
-        ],
-        "queryPeriod": "14d",
-        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n// Extract URL-based Threat Intelligence indicators\nlet URL_TI =\n  ThreatIntelIndicators\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"url\"\n  | extend MaliciousUrl = tolower(ObservableValue)\n  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, MaliciousUrl\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Build a dynamic list of malicious URLs\nlet URL_TI_list =\n  toscalar(\n      URL_TI\n      | summarize NIoCs = dcount(MaliciousUrl),\n                  Urls = make_set(MaliciousUrl)\n      | project Urls = iff(NIoCs > HAS_ANY_MAX, dynamic([]), Urls)\n    );\n// Match against ASIM Web Session events\nURL_TI\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any = URL_TI_list)\n    | extend RequestedUrl = tolower(Url)\n    | where isnotempty(RequestedUrl)\n    | extend Event_TimeGenerated = TimeGenerated\n  ) on $left.MaliciousUrl == $right.RequestedUrl\n| where Event_TimeGenerated < ValidUntil\n| summarize Event_TimeGenerated = arg_max(Event_TimeGenerated, *) by IndicatorId, RequestedUrl\n| extend ParsedData = parse_json(Data)\n| extend Description = tostring(ParsedData.description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(ParsedData.labels))\n| extend ThreatType = tostring(ParsedData.indicator_types[0])\n| project\n    Event_TimeGenerated,\n    SrcIpAddr,\n    RequestedUrl,\n    IndicatorId,\n    ThreatType,\n    Confidence,\n    ValidUntil,\n    Description,\n    ActivityGroupNames\n"
+        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n// Extract URL-based Threat Intelligence indicators\nlet URL_TI =\n  ThreatIntelIndicators\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"url\"\n  | extend MaliciousUrl = tolower(ObservableValue)\n  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, MaliciousUrl\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Build a dynamic list of malicious URLs\nlet URL_TI_list =\n  toscalar(\n      URL_TI\n      | summarize NIoCs = dcount(MaliciousUrl),\n                  Urls = make_set(MaliciousUrl)\n      | project Urls = iff(NIoCs > HAS_ANY_MAX, dynamic([]), Urls)\n    );\n// Match against ASIM Web Session events\nURL_TI\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any = URL_TI_list)\n    | extend RequestedUrl = tolower(Url)\n    | where isnotempty(RequestedUrl)\n    | extend Event_TimeGenerated = TimeGenerated\n  ) on $left.MaliciousUrl == $right.RequestedUrl\n| where Event_TimeGenerated < ValidUntil\n| summarize Event_TimeGenerated = arg_max(Event_TimeGenerated, *) by IndicatorId, RequestedUrl\n| extend ParsedData = parse_json(Data)\n| extend Description = tostring(ParsedData.description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(ParsedData.labels))\n| extend ThreatType = tostring(ParsedData.indicator_types[0])\n| project\n    Event_TimeGenerated,\n    SrcIpAddr,\n    RequestedUrl,\n    IndicatorId,\n    ThreatType,\n    Confidence,\n    ValidUntil,\n    Description,\n    ActivityGroupNames\n",
+        "triggerThreshold": 0,
+        "name": "TI map URL entity to Web Session Events (ASIM Web Session schema)",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "A web request from {{SrcIpAddr}} to malicious URL matched an IoC",
+          "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{RequestedUrl}}, which is a known malicious URL associated with {{ThreatType}}. Review threat intelligence blade for further context."
+        },
+        "customDetails": {
+          "IoCConfidenceScore": "Confidence",
+          "ActivityGroupNames": "ActivityGroupNames",
+          "IoCDescription": "Description",
+          "EventTime": "Event_TimeGenerated",
+          "IndicatorId": "IndicatorId",
+          "IoCExpirationTime": "ValidUntil",
+          "ThreatType": "ThreatType"
+        }
       }
     }
   ]
