@@ -19,71 +19,71 @@
           "Persistence",
           "InitialAccess"
         ],
+        "query": "GCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n| where MethodName has_any (\"firewalls.insert\", \"firewalls.patch\")\n| where GCPResourceType == \"gce_firewall_rule\"\n| where Severity == \"NOTICE\"\n| extend \n    RequestJson = parse_json(Request),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n| extend \n    SourceRanges = RequestJson.sourceRanges,\n    Alloweds = RequestJson.alloweds,\n    Direction = tostring(RequestJson.direction),\n    RuleName = tostring(RequestJson.name),\n    Network = tostring(RequestJson.network),\n    Priority = tostring(RequestJson.priority),\n    LogConfig = RequestJson.logConfig,\n    Disabled = tobool(RequestJson.disabled)\n| mv-expand SourceRange = SourceRanges\n| extend SourceRangeStr = tostring(SourceRange)\n| where SourceRangeStr in (\"0.0.0.0/0\", \"0.0.0.0\")\n| extend \n    FirewallRuleName = extract(@\"firewalls/([^/]+)$\", 1, GCPResourceName),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail)\n| mv-expand Allowed = Alloweds\n| extend \n    AllowedProtocol = tostring(Allowed.IPProtocol),\n    AllowedPorts = tostring(Allowed.ports),\n    OperationType = case(\n        MethodName has \"insert\", \"Created\",\n        MethodName has \"patch\", \"Modified\",\n        \"Unknown\")\n| summarize \n    AllowedProtocols = make_set(AllowedProtocol, 30),\n    AllowedPortsList = make_set(AllowedPorts, 100),\n    SourceRangesList = make_set(SourceRangeStr, 100)\n    by TimeGenerated, PrincipalEmail, AuthEmail, ProjectId, FirewallRuleName, \n       GCPResourceName, Direction, Priority, Network, CallerIpAddress, UserAgent, \n       MethodName, ServiceName, Severity, OperationType, LogName, InsertId\n| extend\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          FirewallRuleName,\n          ResourceName = GCPResourceName,\n          OperationType,\n          Direction,\n          SourceRangesList,\n          AllowedProtocols,\n          AllowedPortsList,\n          Priority,\n          Network,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
         "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
+        "name": "GCP Audit Logs - Open Firewall Rule Created or Modified",
+        "severity": "High",
+        "customDetails": {
+          "FirewallRuleName": "FirewallRuleName",
+          "SourceRanges": "SourceRangesList",
+          "ResourceName": "ResourceName",
+          "Network": "Network",
+          "AllowedProtocols": "AllowedProtocols",
+          "AllowedPorts": "AllowedPortsList",
+          "ProjectId": "ProjectId",
+          "OperationType": "OperationType",
+          "Direction": "Direction"
+        },
+        "description": "'Detects when a Google Cloud Platform firewall rule is created or modified to allow traffic from any source (0.0.0.0/0 or 0.0.0.0).\nOpen firewall rules expose resources to the internet and can significantly increase the attack surface of cloud infrastructure.\nThis may indicate a misconfiguration, lack of security awareness, or malicious activity to create backdoor access.\nAdversaries may create or modify firewall rules to enable persistent access or facilitate lateral movement.\nThis rule monitors firewall insert and patch operations where sourceRanges include unrestricted access patterns.'\n",
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "GCP Open Firewall Rule {{OperationType}} - {{FirewallRuleName}} by {{PrincipalEmail}}",
           "alertDescriptionFormat": "User {{PrincipalEmail}} created/modified firewall rule {{FirewallRuleName}} in project {{ProjectId}} to allow traffic from unrestricted sources (0.0.0.0/0).\nThis configuration exposes resources to the internet and significantly increases attack surface. Investigate immediately to determine if this was authorized and assess potential security exposure. Consider restricting source ranges to specific trusted IP addresses or networks."
         },
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
-        "description": "'Detects when a Google Cloud Platform firewall rule is created or modified to allow traffic from any source (0.0.0.0/0 or 0.0.0.0).\nOpen firewall rules expose resources to the internet and can significantly increase the attack surface of cloud infrastructure.\nThis may indicate a misconfiguration, lack of security awareness, or malicious activity to create backdoor access.\nAdversaries may create or modify firewall rules to enable persistent access or facilitate lateral movement.\nThis rule monitors firewall insert and patch operations where sourceRanges include unrestricted access patterns.'\n",
-        "severity": "High",
         "status": "Available",
-        "query": "GCPAuditLogs\n| where ServiceName == \"compute.googleapis.com\"\n| where MethodName has_any (\"firewalls.insert\", \"firewalls.patch\")\n| where GCPResourceType == \"gce_firewall_rule\"\n| where Severity == \"NOTICE\"\n| extend \n    RequestJson = parse_json(Request),\n    RequestMetadataJson = parse_json(RequestMetadata),\n    AuthInfoJson = parse_json(AuthenticationInfo)\n| extend \n    SourceRanges = RequestJson.sourceRanges,\n    Alloweds = RequestJson.alloweds,\n    Direction = tostring(RequestJson.direction),\n    RuleName = tostring(RequestJson.name),\n    Network = tostring(RequestJson.network),\n    Priority = tostring(RequestJson.priority),\n    LogConfig = RequestJson.logConfig,\n    Disabled = tobool(RequestJson.disabled)\n| mv-expand SourceRange = SourceRanges\n| extend SourceRangeStr = tostring(SourceRange)\n| where SourceRangeStr in (\"0.0.0.0/0\", \"0.0.0.0\")\n| extend \n    FirewallRuleName = extract(@\"firewalls/([^/]+)$\", 1, GCPResourceName),\n    CallerIpAddress = tostring(RequestMetadataJson.callerIp),\n    UserAgent = tostring(RequestMetadataJson.callerSuppliedUserAgent),\n    AuthEmail = tostring(AuthInfoJson.principalEmail)\n| mv-expand Allowed = Alloweds\n| extend \n    AllowedProtocol = tostring(Allowed.IPProtocol),\n    AllowedPorts = tostring(Allowed.ports),\n    OperationType = case(\n        MethodName has \"insert\", \"Created\",\n        MethodName has \"patch\", \"Modified\",\n        \"Unknown\")\n| summarize \n    AllowedProtocols = make_set(AllowedProtocol, 30),\n    AllowedPortsList = make_set(AllowedPorts, 100),\n    SourceRangesList = make_set(SourceRangeStr, 100)\n    by TimeGenerated, PrincipalEmail, AuthEmail, ProjectId, FirewallRuleName, \n       GCPResourceName, Direction, Priority, Network, CallerIpAddress, UserAgent, \n       MethodName, ServiceName, Severity, OperationType, LogName, InsertId\n| extend\n    AccountName = tostring(split(PrincipalEmail, \"@\")[0]), \n    AccountUPNSuffix = tostring(split(PrincipalEmail, \"@\")[1])\n| project TimeGenerated,\n          PrincipalEmail,\n          AuthEmail,\n          ProjectId,\n          FirewallRuleName,\n          ResourceName = GCPResourceName,\n          OperationType,\n          Direction,\n          SourceRangesList,\n          AllowedProtocols,\n          AllowedPortsList,\n          Priority,\n          Network,\n          CallerIpAddress,\n          UserAgent,\n          MethodName,\n          ServiceName,\n          Severity,\n          LogName,\n          InsertId,\n          AccountName,\n          AccountUPNSuffix\n",
-        "triggerThreshold": 0,
-        "name": "GCP Audit Logs - Open Firewall Rule Created or Modified",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "PrincipalEmail",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "PrincipalEmail"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "CallerIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "CallerIpAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "ProjectId",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "ProjectId"
               },
               {
-                "columnName": "ResourceName",
-                "identifier": "InstanceName"
+                "identifier": "InstanceName",
+                "columnName": "ResourceName"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
-        ],
-        "customDetails": {
-          "OperationType": "OperationType",
-          "AllowedProtocols": "AllowedProtocols",
-          "ResourceName": "ResourceName",
-          "ProjectId": "ProjectId",
-          "FirewallRuleName": "FirewallRuleName",
-          "Direction": "Direction",
-          "Network": "Network",
-          "SourceRanges": "SourceRangesList",
-          "AllowedPorts": "AllowedPortsList"
-        }
+        ]
       }
     }
   ]
