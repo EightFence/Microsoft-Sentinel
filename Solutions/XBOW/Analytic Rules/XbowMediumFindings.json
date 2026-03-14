@@ -1,0 +1,77 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b3c5e2f9-6a8d-4127-9b2e-4f6a8c9d0e12')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b3c5e2f9-6a8d-4127-9b2e-4f6a8c9d0e12')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "StartUrl",
+                "identifier": "Url"
+              }
+            ],
+            "entityType": "URL"
+          }
+        ],
+        "name": "XbowMediumFindings",
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "24h",
+            "matchingMethod": "Selected",
+            "groupByCustomDetails": [
+              "FindingId"
+            ],
+            "groupByAlertDetails": [],
+            "groupByEntities": [],
+            "reopenClosedIncident": false
+          }
+        },
+        "queryFrequency": "30m",
+        "queryPeriod": "1h",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Medium severity finding on asset {{AssetName}} ({{AssetId}}). {{Summary}}",
+          "alertDisplayNameFormat": "XBOW Medium: {{FindingName}}"
+        },
+        "description": "Creates an incident for each Medium severity finding reported by XBOW that is currently\nin an open state. These findings represent moderate security risks that should be\naddressed in a timely manner. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
+        "customDetails": {
+          "AssetName": "AssetName",
+          "FindingName": "FindingName",
+          "FindingId": "FindingId",
+          "State": "State",
+          "Severity": "Severity",
+          "AssetId": "AssetId",
+          "OrganizationId": "OrganizationId",
+          "CreatedAt": "CreatedAt",
+          "Mitigations": "Mitigations"
+        },
+        "tactics": [
+          "Discovery",
+          "Reconnaissance",
+          "CredentialAccess"
+        ],
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) == 'medium'\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "triggerThreshold": 0,
+        "status": "Available"
+      }
+    }
+  ]
+}

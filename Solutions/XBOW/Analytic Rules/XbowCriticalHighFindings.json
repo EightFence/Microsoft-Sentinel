@@ -1,0 +1,79 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f8e7d6c5-4b3a-4912-8f0e-2d1c3b4a5678')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f8e7d6c5-4b3a-4912-8f0e-2d1c3b4a5678')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "StartUrl",
+                "identifier": "Url"
+              }
+            ],
+            "entityType": "URL"
+          }
+        ],
+        "name": "XbowCriticalHighFindings",
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "24h",
+            "matchingMethod": "Selected",
+            "groupByCustomDetails": [
+              "FindingId"
+            ],
+            "groupByAlertDetails": [],
+            "groupByEntities": [],
+            "reopenClosedIncident": false
+          }
+        },
+        "queryFrequency": "30m",
+        "queryPeriod": "1h",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}",
+          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}"
+        },
+        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
+        "customDetails": {
+          "AssetName": "AssetName",
+          "FindingName": "FindingName",
+          "FindingId": "FindingId",
+          "State": "State",
+          "Severity": "Severity",
+          "AssetId": "AssetId",
+          "OrganizationId": "OrganizationId",
+          "CreatedAt": "CreatedAt",
+          "Mitigations": "Mitigations"
+        },
+        "tactics": [
+          "InitialAccess",
+          "Execution",
+          "PrivilegeEscalation",
+          "DefenseEvasion",
+          "Impact"
+        ],
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "triggerThreshold": 0,
+        "status": "Available"
+      }
+    }
+  ]
+}
