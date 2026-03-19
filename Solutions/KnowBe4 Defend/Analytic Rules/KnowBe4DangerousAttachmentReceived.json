@@ -1,0 +1,76 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b75a4a7a-dedb-47be-b7e6-344f4d50af19')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b75a4a7a-dedb-47be-b7e6-344f4d50af19')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryPeriod": "30m",
+        "queryFrequency": "30m",
+        "description": "'Defend has detected a user has a suspicious file type from a suspicious sender in their mailbox.'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Account_0_FullName",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Attachments_name",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "File"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Account_0_FullName",
+                "identifier": "MailboxPrimaryAddress"
+              }
+            ],
+            "entityType": "Mailbox"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SenderIP",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Alert - {{Account_0_FullName}} has suspicious attachment."
+        },
+        "tactics": [
+          "Execution",
+          "InitialAccess",
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "query": "DefendAuditData\n| where ThreatLevel == \"suspicious\" or ThreatLevel == \"dangerous\"\n| mv-expand todynamic(Attachments)\n| where Attachments.name matches regex @\"(?i)^.*\\.(doc|docx|docm|pdf|xls|xlsx|xlsm|html|zip)$(?-i)\"\n| summarize attachmentCount=count() by TimeGenerated, tostring(Attachments.name), Subject, From, Account_0_FullName = trim(@\"[^@.\\w]+\",Recipients), timesClicked = LinksClicked, SenderIP\n",
+        "name": "KnowBe4 Defend - Dangerous Attachment Detected",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "status": "Available"
+      }
+    }
+  ]
+}
