@@ -14,12 +14,10 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n// Extract URL-based Threat Intelligence indicators\nlet URL_TI =\n  ThreatIntelIndicators\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"url\"\n  | extend MaliciousUrl = tolower(ObservableValue)\n  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, MaliciousUrl\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Build a dynamic list of malicious URLs\nlet URL_TI_list =\n  toscalar(\n      URL_TI\n      | summarize NIoCs = dcount(MaliciousUrl),\n                  Urls = make_set(MaliciousUrl)\n      | project Urls = iff(NIoCs > HAS_ANY_MAX, dynamic([]), Urls)\n    );\n// Match against ASIM Web Session events\nURL_TI\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any = URL_TI_list)\n    | extend RequestedUrl = tolower(Url)\n    | where isnotempty(RequestedUrl)\n    | extend Event_TimeGenerated = TimeGenerated\n  ) on $left.MaliciousUrl == $right.RequestedUrl\n| where Event_TimeGenerated < ValidUntil\n| summarize Event_TimeGenerated = arg_max(Event_TimeGenerated, *) by IndicatorId, RequestedUrl\n| extend ParsedData = parse_json(Data)\n| extend Description = tostring(ParsedData.description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(ParsedData.labels))\n| extend ThreatType = tostring(ParsedData.indicator_types[0])\n| project\n    Event_TimeGenerated,\n    SrcIpAddr,\n    RequestedUrl,\n    IndicatorId,\n    ThreatType,\n    Confidence,\n    ValidUntil,\n    Description,\n    ActivityGroupNames\n",
         "severity": "Medium",
-        "tactics": [
-          "CommandAndControl",
-          "InitialAccess"
-        ],
+        "name": "TI map URL entity to Web Session Events (ASIM Web Session schema)",
+        "queryFrequency": "1h",
+        "description": "This rule identifies Web Sessions where the full requested URL matches a known\nmalicious URL from Threat Intelligence sources. The rule uses the Advanced Security\nInformation Model (ASIM) and supports any web session source compliant with ASIM.\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -40,24 +38,26 @@
             "entityType": "URL"
           }
         ],
-        "queryPeriod": "14d",
-        "description": "This rule identifies Web Sessions where the full requested URL matches a known\nmalicious URL from Threat Intelligence sources. The rule uses the Advanced Security\nInformation Model (ASIM) and supports any web session source compliant with ASIM.\n",
+        "query": "let HAS_ANY_MAX = 10000;\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n// Extract URL-based Threat Intelligence indicators\nlet URL_TI =\n  ThreatIntelIndicators\n  | extend IndicatorType = replace(@\"\\[|\\]|\\\"\"\", \"\", tostring(split(ObservableKey, \":\", 0)))\n  | where IndicatorType == \"url\"\n  | extend MaliciousUrl = tolower(ObservableValue)\n  | extend TrafficLightProtocolLevel = tostring(parse_json(AdditionalFields).TLPLevel)\n  | extend IndicatorId = tostring(split(Id, \"--\")[2])\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id, MaliciousUrl\n  | where IsActive and (ValidUntil > now() or isempty(ValidUntil));\n// Build a dynamic list of malicious URLs\nlet URL_TI_list =\n  toscalar(\n      URL_TI\n      | summarize NIoCs = dcount(MaliciousUrl),\n                  Urls = make_set(MaliciousUrl)\n      | project Urls = iff(NIoCs > HAS_ANY_MAX, dynamic([]), Urls)\n    );\n// Match against ASIM Web Session events\nURL_TI\n| join kind=innerunique (\n    _Im_WebSession(starttime=ago(dt_lookBack), url_has_any = URL_TI_list)\n    | extend RequestedUrl = tolower(Url)\n    | where isnotempty(RequestedUrl)\n    | extend Event_TimeGenerated = TimeGenerated\n  ) on $left.MaliciousUrl == $right.RequestedUrl\n| where Event_TimeGenerated < ValidUntil\n| summarize Event_TimeGenerated = arg_max(Event_TimeGenerated, *) by IndicatorId, RequestedUrl\n| extend ParsedData = parse_json(Data)\n| extend Description = tostring(ParsedData.description)\n| extend ActivityGroupNames = extract(@\"ActivityGroup:(\\S+)\", 1, tostring(ParsedData.labels))\n| extend ThreatType = tostring(ParsedData.indicator_types[0])\n| project\n    Event_TimeGenerated,\n    SrcIpAddr,\n    RequestedUrl,\n    IndicatorId,\n    ThreatType,\n    Confidence,\n    ValidUntil,\n    Description,\n    ActivityGroupNames\n",
         "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "CommandAndControl",
+          "InitialAccess"
+        ],
+        "queryPeriod": "14d",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "A client with address {{SrcIpAddr}} requested the URL {{RequestedUrl}}, which is a known malicious URL associated with {{ThreatType}}. Review threat intelligence blade for further context.",
           "alertDisplayNameFormat": "A web request from {{SrcIpAddr}} to malicious URL matched an IoC"
         },
-        "name": "TI map URL entity to Web Session Events (ASIM Web Session schema)",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
         "customDetails": {
-          "IoCExpirationTime": "ValidUntil",
           "EventTime": "Event_TimeGenerated",
-          "ActivityGroupNames": "ActivityGroupNames",
-          "ThreatType": "ThreatType",
+          "IoCExpirationTime": "ValidUntil",
+          "IoCConfidenceScore": "Confidence",
           "IoCDescription": "Description",
+          "ThreatType": "ThreatType",
           "IndicatorId": "IndicatorId",
-          "IoCConfidenceScore": "Confidence"
+          "ActivityGroupNames": "ActivityGroupNames"
         }
       }
     }
