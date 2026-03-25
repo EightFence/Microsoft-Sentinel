@@ -14,25 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "status": "Available",
+        "name": "XbowCriticalHighFindings",
         "queryPeriod": "1h",
+        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "severity": "High",
         "entityMappings": [
           {
-            "entityType": "URL",
             "fieldMappings": [
               {
                 "identifier": "Url",
                 "columnName": "StartUrl"
               }
-            ]
+            ],
+            "entityType": "URL"
           }
         ],
+        "customDetails": {
+          "AssetName": "AssetName",
+          "OrganizationId": "OrganizationId",
+          "Severity": "Severity",
+          "CreatedAt": "CreatedAt",
+          "Mitigations": "Mitigations",
+          "FindingId": "FindingId",
+          "State": "State",
+          "FindingName": "FindingName",
+          "AssetId": "AssetId"
+        },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}",
           "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}"
         },
+        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess",
           "Execution",
@@ -40,38 +58,20 @@
           "DefenseEvasion",
           "Impact"
         ],
-        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
-        "severity": "High",
         "queryFrequency": "30m",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "Selected",
             "groupByEntities": [],
-            "groupByAlertDetails": [],
+            "matchingMethod": "Selected",
             "groupByCustomDetails": [
               "FindingId"
             ],
-            "lookbackDuration": "24h"
-          },
-          "createIncident": true
-        },
-        "triggerOperator": "gt",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
-        "name": "XbowCriticalHighFindings",
-        "customDetails": {
-          "OrganizationId": "OrganizationId",
-          "AssetId": "AssetId",
-          "FindingId": "FindingId",
-          "Severity": "Severity",
-          "Mitigations": "Mitigations",
-          "CreatedAt": "CreatedAt",
-          "AssetName": "AssetName",
-          "FindingName": "FindingName",
-          "State": "State"
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [],
+            "lookbackDuration": "24h",
+            "enabled": true
+          }
         }
       }
     }
