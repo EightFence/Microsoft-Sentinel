@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d4e5f6a7-b8c9-40d1-e2f3-a4b5c6d7e8f9')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Copilot - Plugin Tampering (Enable and Disable Within 5 Minutes)",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "'Detects when a user enables and disables Copilot plugins within a 5-minute window. This behavior often indicates probing for security controls or living-off-Copilot techniques.\nThis rule identifies discovery and defense evasion activities where users rapidly toggle plugin states, potentially testing security boundaries.'\n",
+        "tactics": [
+          "Discovery",
+          "DefenseEvasion"
+        ],
+        "query": "CopilotActivity\n| where RecordType in (\"EnableCopilotPlugin\",\"DisableCopilotPlugin\")\n| summarize\n    Actions = make_set(RecordType),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n  by ActorName, SrcIpAddr\n| where Actions has \"EnableCopilotPlugin\" and Actions has \"DisableCopilotPlugin\"\n| where LastSeen - FirstSeen < 5m\n| extend AccountCustomEntity = ActorName, IPCustomEntity = SrcIpAddr\n",
+        "queryFrequency": "5m",
+        "triggerThreshold": 0,
+        "queryPeriod": "5m"
+      }
+    }
+  ]
+}
