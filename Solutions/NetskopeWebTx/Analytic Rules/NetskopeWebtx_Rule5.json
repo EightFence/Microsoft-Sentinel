@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d1b88716-3cd4-4585-a9a2-2dd2c9b04ecb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d1b88716-3cd4-4585-a9a2-2dd2c9b04ecb')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "queryFrequency": "1h",
+        "severity": "High",
+        "query": "let timeWindow = 1h;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername) and isnotempty(XCCountry)\n| summarize \n    Countries = make_set(XCCountry),\n    Locations = make_set(XCLocation),\n    IPs = make_set(CIp),\n    MinTime = min(TimeGenerated),\n    MaxTime = max(TimeGenerated),\n    EventCount = count()\n    by CsUsername, bin(TimeGenerated, timeWindow)\n| where array_length(Countries) > 1\n| extend TimeDiffMinutes = datetime_diff('minute', MaxTime, MinTime)\n| where TimeDiffMinutes < 60\n| project \n    TimeGenerated,\n    User = CsUsername,\n    DistinctCountries = Countries,\n    Locations,\n    SourceIPs = IPs,\n    TimeDifferenceMinutes = TimeDiffMinutes,\n    EventCount,\n    AlertDetails = strcat('User ', CsUsername, ' accessed from ', array_length(Countries), ' countries within ', TimeDiffMinutes, ' minutes')\n",
+        "queryPeriod": "2h",
+        "status": "Available",
+        "name": "Netskope - Impossible Travel Detection (Two Countries in Less Than 1 Hour)",
+        "description": "Detects when a user accesses resources from two distinct countries within less than 1 hour, indicating potential credential compromise or VPN abuse.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}

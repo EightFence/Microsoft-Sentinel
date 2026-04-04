@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/272f9bca-5fd0-4413-b494-03b2d9f0bb9b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/272f9bca-5fd0-4413-b494-03b2d9f0bb9b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "CloudApplication",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "queryFrequency": "1h",
+        "severity": "Medium",
+        "query": "let heavyUsageThresholdMB = 500;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername) and isnotempty(XCsApp)\n| where XCsApp has_any ('Dropbox', 'Google Drive', 'OneDrive', 'Box', 'iCloud', 'pCloud', 'MEGA', 'MediaFire', 'WeTransfer')\n| where XCsAppInstanceTag contains 'Personal' \n    or XCsAppInstanceName contains 'Personal'\n    or XCsAppTags contains 'Unsanctioned'\n    or not(XCsAppTags contains 'Enterprise')\n| summarize \n    TotalBytes = sum(Bytes),\n    UploadBytes = sum(CsBytes),\n    DownloadBytes = sum(ScBytes),\n    FileCount = dcount(XCsAppObjectName),\n    Files = make_set(XCsAppObjectName, 10),\n    Activities = make_set(XCsAppActivity),\n    EventCount = count()\n    by CsUsername, XCsApp, XCsAppCategory, XCsAppInstanceName, XCsAppTags, XCDevice, XCCountry\n| extend \n    TotalMB = round(TotalBytes / 1048576.0, 2),\n    UploadMB = round(UploadBytes / 1048576.0, 2),\n    DownloadMB = round(DownloadBytes / 1048576.0, 2)\n| where TotalMB > heavyUsageThresholdMB or FileCount > 50\n| project \n    TimeGenerated = now(),\n    User = CsUsername,\n    CloudApplication = XCsApp,\n    AppCategory = XCsAppCategory,\n    AppInstance = XCsAppInstanceName,\n    AppTags = XCsAppTags,\n    TotalDataMB = TotalMB,\n    UploadMB,\n    DownloadMB,\n    FileCount,\n    Files,\n    Activities,\n    Device = XCDevice,\n    Country = XCCountry,\n    EventCount\n",
+        "queryPeriod": "1h",
+        "status": "Available",
+        "name": "Netskope - Heavy Personal Cloud Storage Usage (Shadow IT)",
+        "description": "Detects heavy usage of personal cloud storage applications like personal Dropbox, Google Drive, OneDrive personal, etc. Indicates potential Shadow IT or data leakage risk.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}
