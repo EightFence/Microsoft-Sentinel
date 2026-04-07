@@ -14,15 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "queryFrequency": "1h",
         "queryPeriod": "1h",
+        "name": "Netskope - Heavy Personal Cloud Storage Usage (Shadow IT)",
+        "triggerOperator": "gt",
+        "query": "let heavyUsageThresholdMB = 500;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername) and isnotempty(XCsApp)\n| where XCsApp has_any ('Dropbox', 'Google Drive', 'OneDrive', 'Box', 'iCloud', 'pCloud', 'MEGA', 'MediaFire', 'WeTransfer')\n| where XCsAppInstanceTag contains 'Personal' \n    or XCsAppInstanceName contains 'Personal'\n    or XCsAppTags contains 'Unsanctioned'\n    or not(XCsAppTags contains 'Enterprise')\n| summarize \n    TotalBytes = sum(Bytes),\n    UploadBytes = sum(CsBytes),\n    DownloadBytes = sum(ScBytes),\n    FileCount = dcount(XCsAppObjectName),\n    Files = make_set(XCsAppObjectName, 10),\n    Activities = make_set(XCsAppActivity),\n    EventCount = count()\n    by CsUsername, XCsApp, XCsAppCategory, XCsAppInstanceName, XCsAppTags, XCDevice, XCCountry\n| extend \n    TotalMB = round(TotalBytes / 1048576.0, 2),\n    UploadMB = round(UploadBytes / 1048576.0, 2),\n    DownloadMB = round(DownloadBytes / 1048576.0, 2)\n| where TotalMB > heavyUsageThresholdMB or FileCount > 50\n| project \n    TimeGenerated = now(),\n    User = CsUsername,\n    CloudApplication = XCsApp,\n    AppCategory = XCsAppCategory,\n    AppInstance = XCsAppInstanceName,\n    AppTags = XCsAppTags,\n    TotalDataMB = TotalMB,\n    UploadMB,\n    DownloadMB,\n    FileCount,\n    Files,\n    Activities,\n    Device = XCDevice,\n    Country = XCCountry,\n    EventCount\n",
         "description": "Detects heavy usage of personal cloud storage applications like personal Dropbox, Google Drive, OneDrive personal, etc. Indicates potential Shadow IT or data leakage risk.\n",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "User",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "User"
               }
             ]
           },
@@ -30,23 +41,12 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "CloudApplication",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "CloudApplication"
               }
             ]
           }
-        ],
-        "status": "Available",
-        "name": "Netskope - Heavy Personal Cloud Storage Usage (Shadow IT)",
-        "tactics": [
-          "Exfiltration",
-          "Collection"
-        ],
-        "triggerThreshold": 0,
-        "query": "let heavyUsageThresholdMB = 500;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername) and isnotempty(XCsApp)\n| where XCsApp has_any ('Dropbox', 'Google Drive', 'OneDrive', 'Box', 'iCloud', 'pCloud', 'MEGA', 'MediaFire', 'WeTransfer')\n| where XCsAppInstanceTag contains 'Personal' \n    or XCsAppInstanceName contains 'Personal'\n    or XCsAppTags contains 'Unsanctioned'\n    or not(XCsAppTags contains 'Enterprise')\n| summarize \n    TotalBytes = sum(Bytes),\n    UploadBytes = sum(CsBytes),\n    DownloadBytes = sum(ScBytes),\n    FileCount = dcount(XCsAppObjectName),\n    Files = make_set(XCsAppObjectName, 10),\n    Activities = make_set(XCsAppActivity),\n    EventCount = count()\n    by CsUsername, XCsApp, XCsAppCategory, XCsAppInstanceName, XCsAppTags, XCDevice, XCCountry\n| extend \n    TotalMB = round(TotalBytes / 1048576.0, 2),\n    UploadMB = round(UploadBytes / 1048576.0, 2),\n    DownloadMB = round(DownloadBytes / 1048576.0, 2)\n| where TotalMB > heavyUsageThresholdMB or FileCount > 50\n| project \n    TimeGenerated = now(),\n    User = CsUsername,\n    CloudApplication = XCsApp,\n    AppCategory = XCsAppCategory,\n    AppInstance = XCsAppInstanceName,\n    AppTags = XCsAppTags,\n    TotalDataMB = TotalMB,\n    UploadMB,\n    DownloadMB,\n    FileCount,\n    Files,\n    Activities,\n    Device = XCDevice,\n    Country = XCCountry,\n    EventCount\n",
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
-        "severity": "Medium"
+        ]
       }
     }
   ]
