@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "description": "Tracks file uploads and downloads, monitoring data movement direction, size, and destination. Provides visibility into data flow patterns.\n",
         "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "User"
-              }
-            ],
-            "entityType": "Account"
-          }
-        ],
+        "name": "Netskope - Data Movement Tracking (Upload/Download Monitoring)",
         "tactics": [
           "Exfiltration",
           "Collection"
         ],
-        "triggerThreshold": 0,
-        "severity": "Informational",
-        "status": "Available",
-        "name": "Netskope - Data Movement Tracking (Upload/Download Monitoring)",
-        "description": "Tracks file uploads and downloads, monitoring data movement direction, size, and destination. Provides visibility into data flow patterns.\n",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "Name"
+              }
+            ]
+          }
+        ],
         "query": "let significantSizeMB = 50;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername)\n| where CsBytes > 0 or ScBytes > 0 or XRsFileSize > 0\n| extend \n    Direction = case(\n        CsBytes > ScBytes, 'Upload',\n        ScBytes > CsBytes, 'Download',\n        'Unknown'),\n    TransferSize = max_of(CsBytes, ScBytes, XRsFileSize)\n| summarize \n    TotalUploadBytes = sumif(CsBytes, Direction == 'Upload'),\n    TotalDownloadBytes = sumif(ScBytes, Direction == 'Download'),\n    UploadCount = countif(Direction == 'Upload'),\n    DownloadCount = countif(Direction == 'Download'),\n    UniqueFiles = dcount(XCsAppObjectName),\n    Files = make_set(XCsAppObjectName, 20),\n    FileTypes = make_set(XRsFileType),\n    Apps = make_set(XCsApp),\n    Destinations = make_set(CsHost, 20)\n    by CsUsername, XCDevice, XCCountry, bin(TimeGenerated, 1h)\n| extend \n    TotalUploadMB = round(TotalUploadBytes / 1048576.0, 2),\n    TotalDownloadMB = round(TotalDownloadBytes / 1048576.0, 2),\n    TotalTransferMB = round((TotalUploadBytes + TotalDownloadBytes) / 1048576.0, 2)\n| where TotalTransferMB > significantSizeMB\n| extend DataFlowSummary = strcat('Upload: ', TotalUploadMB, ' MB (', UploadCount, ' ops), Download: ', TotalDownloadMB, ' MB (', DownloadCount, ' ops)')\n| project \n    TimeGenerated,\n    User = CsUsername,\n    Device = XCDevice,\n    Country = XCCountry,\n    TotalUploadMB,\n    TotalDownloadMB,\n    TotalTransferMB,\n    UploadOperations = UploadCount,\n    DownloadOperations = DownloadCount,\n    UniqueFiles,\n    FilesSample = Files,\n    FileTypes,\n    Applications = Apps,\n    Destinations,\n    DataFlowSummary\n",
-        "queryFrequency": "1h",
+        "severity": "Informational",
         "queryPeriod": "1h"
       }
     }
