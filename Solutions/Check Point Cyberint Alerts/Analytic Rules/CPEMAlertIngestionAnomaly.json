@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8d3b9c7e-5a2f-4e1d-b6c8-3f9a7e2d1b4c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8d3b9c7e-5a2f-4e1d-b6c8-3f9a7e2d1b4c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "query": "let lookback = 24h;\nlet expected_interval = 1h;\nlet last_record = toscalar(\n    argsentdc_CL\n    | where TimeGenerated > ago(lookback)\n    | summarize max(TimeGenerated)\n);\nlet gap_minutes = datetime_diff('minute', now(), last_record);\n// Alert if no records in the last expected_interval, but there WERE records in the lookback period\n// (avoids alerting on brand-new deployments with no data yet)\nargsentdc_CL\n| where TimeGenerated > ago(lookback)\n| summarize\n    LastIngestionTime = max(TimeGenerated),\n    TotalRecords = count(),\n    DistinctAlerts = dcount(ref_id)\n| where LastIngestionTime < ago(expected_interval)\n| extend GapMinutes = datetime_diff('minute', now(), LastIngestionTime)\n| project\n    LastIngestionTime,\n    GapMinutes,\n    TotalRecords,\n    DistinctAlerts,\n    Message = strcat(\"No Check Point Exposure Management alerts ingested for \", GapMinutes, \" minutes. Last record at \", LastIngestionTime)\n",
+        "name": "Check Point Exposure Management - Alert Ingestion Anomaly",
+        "eventGroupingSettings": {
+          "aggregationKind": "SingleAlert"
+        },
+        "triggerOperator": "gt",
+        "suppressionEnabled": false,
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "queryPeriod": "24h",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Check Point Exposure Management - Ingestion gap detected ({{GapMinutes}} minutes)",
+          "alertDescriptionFormat": "{{Message}}"
+        },
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "24h",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          },
+          "createIncident": true
+        },
+        "description": "Detects when no Check Point Exposure Management alerts have been ingested into the argsentdc_CL table\nfor an extended period. This may indicate a failure in the CCP data connector or the\nImporter playbook, a misconfigured API token, or network connectivity issues.\n",
+        "status": "Available",
+        "suppressionDuration": "5h",
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}
