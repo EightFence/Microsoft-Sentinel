@@ -14,12 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "name": "Netskope - Excessive Downloads Detection (Spike vs Baseline)",
         "severity": "Medium",
-        "status": "Available",
         "description": "Detects users with excessive download activity compared to their 7-day baseline. Triggers when current download volume exceeds 3x the average.\n",
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "triggerOperator": "gt",
+        "queryPeriod": "7d",
+        "triggerThreshold": 0,
         "query": "let lookbackPeriod = 7d;\nlet currentPeriod = 1h;\nlet threshold = 3;\nlet baseline = NetskopeWebTransactions_CL\n    | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))\n    | where isnotempty(CsUsername)\n    | where XCsAppActivity =~ 'Download' or ScBytes > 0\n    | summarize \n        BaselineAvgBytes = avg(ScBytes),\n        BaselineTotalBytes = sum(ScBytes),\n        BaselineCount = count()\n        by CsUsername\n    | extend BaselineDailyAvg = BaselineTotalBytes / 7;\nlet current = NetskopeWebTransactions_CL\n    | where TimeGenerated > ago(currentPeriod)\n    | where isnotempty(CsUsername)\n    | where XCsAppActivity =~ 'Download' or ScBytes > 0\n    | summarize \n        CurrentTotalBytes = sum(ScBytes),\n        CurrentCount = count(),\n        Apps = make_set(XCsApp),\n        Files = make_set(XCsAppObjectName)\n        by CsUsername;\ncurrent\n| join kind=inner baseline on CsUsername\n| where CurrentTotalBytes > (BaselineDailyAvg * threshold)\n| extend \n    SpikeMultiplier = round(CurrentTotalBytes / BaselineDailyAvg, 2),\n    CurrentTotalMB = round(CurrentTotalBytes / 1048576.0, 2),\n    BaselineDailyMB = round(BaselineDailyAvg / 1048576.0, 2)\n| project \n    TimeGenerated = now(),\n    User = CsUsername,\n    CurrentDownloadMB = CurrentTotalMB,\n    BaselineDailyAvgMB = BaselineDailyMB,\n    SpikeMultiplier,\n    DownloadCount = CurrentCount,\n    ApplicationsUsed = Apps,\n    FilesDownloaded = Files\n",
+        "name": "Netskope - Excessive Downloads Detection (Spike vs Baseline)",
+        "status": "Available",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -30,14 +37,7 @@
               }
             ]
           }
-        ],
-        "tactics": [
-          "Exfiltration",
-          "Collection"
-        ],
-        "triggerOperator": "gt",
-        "queryPeriod": "7d",
-        "queryFrequency": "1h"
+        ]
       }
     }
   ]
