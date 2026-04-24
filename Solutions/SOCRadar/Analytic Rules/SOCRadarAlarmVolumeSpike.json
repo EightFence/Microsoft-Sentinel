@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4a7b3c9e-2d15-4e8f-b6a3-9c2e7d5a1b4f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4a7b3c9e-2d15-4e8f-b6a3-9c2e7d5a1b4f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "status": "Available",
+        "query": "let baseline = SOCRadar_Alarms_CL\n| where TimeGenerated > ago(7d) and TimeGenerated < ago(1h)\n| summarize AvgHourly = count() / 168.0;\nlet recent = SOCRadar_Alarms_CL\n| where TimeGenerated > ago(1h)\n| summarize RecentCount = count() by AlarmMainType;\nrecent\n| extend BaselineAvg = toscalar(baseline)\n| where RecentCount > (BaselineAvg * 3) and RecentCount > 5\n| extend SpikeRatio = round(RecentCount / BaselineAvg, 2)\n| extend timestamp = now()\n| extend AccountName = AlarmMainType\n",
+        "queryFrequency": "1h",
+        "name": "SOCRadar Alarm Volume Spike",
+        "description": "'Detects unusual spikes in SOCRadar alarm volume that may indicate an active campaign, coordinated attack, or data breach. Triggers when alarm count in the last hour exceeds the 7-day hourly average by more than 3x.'\n",
+        "severity": "Medium",
+        "queryPeriod": "7d",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              }
+            ],
+            "entityType": "Malware"
+          }
+        ],
+        "tactics": [
+          "Impact",
+          "Exfiltration"
+        ],
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}
