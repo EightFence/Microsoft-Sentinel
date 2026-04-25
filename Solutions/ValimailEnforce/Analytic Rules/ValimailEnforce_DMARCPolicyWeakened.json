@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/44ec1fa4-a502-41ae-879a-3aad3557edce')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/44ec1fa4-a502-41ae-879a-3aad3557edce')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "DefenseEvasion",
+          "InitialAccess"
+        ],
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "The DMARC policy for domain '{{Subject}}' was set to 'none' by '{{User}}',\ndisabling email authentication enforcement. This may expose the domain to spoofing.\n",
+          "alertDisplayNameFormat": "DMARC policy set to NONE on domain {{Subject}} by {{User}}"
+        },
+        "status": "Available",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountDomain",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DomainName",
+                "identifier": "DomainName"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ],
+        "triggerOperator": "gt",
+        "query": "ValimailEnforceEvents_CL\n| where EventSeverity == \"High\"\n| where EventType == \"dmarc_policy_set_to_none\"\n| summarize\n    EventCount = count(),\n    FirstSeen = min(PerformedAt),\n    LastSeen = max(PerformedAt),\n    Changes = make_set(EventChange)\n  by Subject, User, EventCategory\n| extend\n    AccountName = tostring(split(User, \"@\")[0]),\n    AccountDomain = tostring(split(User, \"@\")[1]),\n    DomainName = Subject\n",
+        "severity": "High",
+        "name": "Valimail Enforce - DMARC Policy Weakened to None",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "groupByEntities": [
+              "DNS"
+            ],
+            "lookbackDuration": "1d",
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected"
+          },
+          "createIncident": true
+        },
+        "description": "This query searches for DMARC policies changed to 'none', which disables enforcement\nand leaves the domain vulnerable to spoofing and phishing attacks.\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "queryPeriod": "1h"
+      }
+    }
+  ]
+}
