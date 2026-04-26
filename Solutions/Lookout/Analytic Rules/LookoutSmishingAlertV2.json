@@ -14,32 +14,64 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "suppressionEnabled": false,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [
+              "SmishAlertType",
+              "DeviceGuid"
+            ],
+            "lookbackDuration": "P1D",
+            "groupByCustomDetails": [
+              "ThreatCategory",
+              "ImpersonationRisk",
+              "CampaignIndicators"
+            ],
+            "groupByEntities": [
+              "Account",
+              "Host"
+            ],
+            "enabled": true
+          }
+        },
+        "name": "Lookout - Critical Smishing and Phishing Alerts (v2)",
+        "query": "LookoutEvents\n| where EventType == \"SMISHING_ALERT\"\n| where SmishingAlertSeverity in (\"CRITICAL\", \"HIGH\")\n| where SmishingAlertType in (\"PHISHING_DETECTION\", \"FRAUD_DETECTION\", \"CREDENTIAL_HARVESTING\")\n| extend \n    AlertRiskScore = case(\n        SmishingAlertSeverity == \"CRITICAL\", 10,\n        SmishingAlertSeverity == \"HIGH\", 8,\n        SmishingAlertSeverity == \"MEDIUM\", 5,\n        SmishingAlertSeverity == \"LOW\", 2,\n        1\n    ),\n    ThreatCategory = case(\n        SmishingAlertType == \"PHISHING_DETECTION\", \"Phishing\",\n        SmishingAlertType == \"FRAUD_DETECTION\", \"Fraud\",\n        SmishingAlertType == \"CREDENTIAL_HARVESTING\", \"Credential Theft\",\n        SmishingAlertType == \"MALICIOUS_LINK\", \"Malicious Link\",\n        \"Other\"\n    ),\n    ImpersonationRisk = case(\n        SmishingAlertDescription has \"CEO\" or SmishingAlertDescription has \"executive\", \"Executive Impersonation\",\n        SmishingAlertDescription has \"IT\" or SmishingAlertDescription has \"support\", \"IT Support Impersonation\", \n        SmishingAlertDescription has \"bank\" or SmishingAlertDescription has \"financial\", \"Financial Impersonation\",\n        SmishingAlertDescription has \"delivery\" or SmishingAlertDescription has \"package\", \"Delivery Impersonation\",\n        \"Generic Phishing\"\n    )\n| extend DeviceRiskLevel = case(\n    DeviceSecurityStatus == \"THREATS_HIGH\", \"High\",\n    DeviceSecurityStatus == \"THREATS_MEDIUM\", \"Medium\", \n    DeviceSecurityStatus == \"THREATS_LOW\", \"Low\",\n    \"Unknown\"\n)\n| extend CampaignIndicators = case(\n    AlertRiskScore >= 8 and DeviceRiskLevel == \"High\", \"Targeted Campaign\",\n    AlertRiskScore >= 6 and ImpersonationRisk != \"Generic Phishing\", \"Sophisticated Attack\",\n    AlertRiskScore >= 5, \"Coordinated Threat\",\n    \"Isolated Incident\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    SmishingAlertId,\n    SmishingAlertType,\n    SmishingAlertSeverity,\n    SmishingAlertDescription,\n    AlertRiskScore,\n    ThreatCategory,\n    ImpersonationRisk,\n    CampaignIndicators,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceSecurityStatus,\n    DeviceRiskLevel,\n    TargetEmailAddress,\n    TargetPlatform,\n    ActorType,\n    ActorGuid,\n    ChangeType\n",
+        "status": "Available",
+        "triggerThreshold": 0,
         "tactics": [
           "InitialAccess",
           "CredentialAccess",
           "Collection",
           "Discovery"
         ],
-        "alertDetailsOverride": {
-          "alertTacticsColumnName": "ThreatCategory",
-          "alertDisplayNameFormat": "Critical Smishing Alert: {{ThreatCategory}} targeting {{DevicePlatform}} Device",
-          "alertSeverityColumnName": "SmishingAlertSeverity",
-          "alertDescriptionFormat": "{{SmishingAlertSeverity}} {{ThreatCategory}} attack on {{DevicePlatform}}"
+        "queryFrequency": "5m",
+        "triggerOperator": "gt",
+        "description": "'Detects critical smishing (SMS phishing) and phishing alerts from Lookout Mobile Risk API v2. This rule identifies sophisticated social engineering attacks including CEO fraud, credential harvesting, and malicious link campaigns targeting mobile devices. Leverages enhanced v2 smishing detection capabilities for comprehensive mobile threat protection.'\n",
+        "customDetails": {
+          "SmishSeverity": "SmishingAlertSeverity",
+          "CampaignIndicators": "CampaignIndicators",
+          "DeviceRiskLevel": "DeviceRiskLevel",
+          "ThreatCategory": "ThreatCategory",
+          "ImpersonationRisk": "ImpersonationRisk",
+          "AlertRiskScore": "AlertRiskScore",
+          "SmishAlertType": "SmishingAlertType",
+          "DeviceSecStatus": "DeviceSecurityStatus",
+          "DevicePlatform": "DevicePlatform"
         },
-        "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "queryPeriod": "15m",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "DeviceEmailAddress",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "DeviceEmailAddress"
               },
               {
-                "columnName": "TargetEmailAddress",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "TargetEmailAddress"
               }
             ],
             "entityType": "Account"
@@ -47,16 +79,16 @@
           {
             "fieldMappings": [
               {
-                "columnName": "DeviceGuid",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "DeviceGuid"
               },
               {
-                "columnName": "DevicePlatform",
-                "identifier": "OSFamily"
+                "identifier": "OSFamily",
+                "columnName": "DevicePlatform"
               },
               {
-                "columnName": "DeviceOSVersion",
-                "identifier": "OSVersion"
+                "identifier": "OSVersion",
+                "columnName": "DeviceOSVersion"
               }
             ],
             "entityType": "Host"
@@ -64,56 +96,24 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SmishingAlertDescription",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "SmishingAlertDescription"
               }
             ],
             "entityType": "URL"
           }
         ],
-        "triggerOperator": "gt",
-        "customDetails": {
-          "AlertRiskScore": "AlertRiskScore",
-          "DevicePlatform": "DevicePlatform",
-          "SmishSeverity": "SmishingAlertSeverity",
-          "SmishAlertType": "SmishingAlertType",
-          "ImpersonationRisk": "ImpersonationRisk",
-          "DeviceSecStatus": "DeviceSecurityStatus",
-          "ThreatCategory": "ThreatCategory",
-          "CampaignIndicators": "CampaignIndicators",
-          "DeviceRiskLevel": "DeviceRiskLevel"
-        },
-        "suppressionEnabled": false,
-        "query": "LookoutEvents\n| where EventType == \"SMISHING_ALERT\"\n| where SmishingAlertSeverity in (\"CRITICAL\", \"HIGH\")\n| where SmishingAlertType in (\"PHISHING_DETECTION\", \"FRAUD_DETECTION\", \"CREDENTIAL_HARVESTING\")\n| extend \n    AlertRiskScore = case(\n        SmishingAlertSeverity == \"CRITICAL\", 10,\n        SmishingAlertSeverity == \"HIGH\", 8,\n        SmishingAlertSeverity == \"MEDIUM\", 5,\n        SmishingAlertSeverity == \"LOW\", 2,\n        1\n    ),\n    ThreatCategory = case(\n        SmishingAlertType == \"PHISHING_DETECTION\", \"Phishing\",\n        SmishingAlertType == \"FRAUD_DETECTION\", \"Fraud\",\n        SmishingAlertType == \"CREDENTIAL_HARVESTING\", \"Credential Theft\",\n        SmishingAlertType == \"MALICIOUS_LINK\", \"Malicious Link\",\n        \"Other\"\n    ),\n    ImpersonationRisk = case(\n        SmishingAlertDescription has \"CEO\" or SmishingAlertDescription has \"executive\", \"Executive Impersonation\",\n        SmishingAlertDescription has \"IT\" or SmishingAlertDescription has \"support\", \"IT Support Impersonation\", \n        SmishingAlertDescription has \"bank\" or SmishingAlertDescription has \"financial\", \"Financial Impersonation\",\n        SmishingAlertDescription has \"delivery\" or SmishingAlertDescription has \"package\", \"Delivery Impersonation\",\n        \"Generic Phishing\"\n    )\n| extend DeviceRiskLevel = case(\n    DeviceSecurityStatus == \"THREATS_HIGH\", \"High\",\n    DeviceSecurityStatus == \"THREATS_MEDIUM\", \"Medium\", \n    DeviceSecurityStatus == \"THREATS_LOW\", \"Low\",\n    \"Unknown\"\n)\n| extend CampaignIndicators = case(\n    AlertRiskScore >= 8 and DeviceRiskLevel == \"High\", \"Targeted Campaign\",\n    AlertRiskScore >= 6 and ImpersonationRisk != \"Generic Phishing\", \"Sophisticated Attack\",\n    AlertRiskScore >= 5, \"Coordinated Threat\",\n    \"Isolated Incident\"\n)\n| project\n    TimeGenerated,\n    EventId,\n    SmishingAlertId,\n    SmishingAlertType,\n    SmishingAlertSeverity,\n    SmishingAlertDescription,\n    AlertRiskScore,\n    ThreatCategory,\n    ImpersonationRisk,\n    CampaignIndicators,\n    DeviceGuid,\n    DevicePlatform,\n    DeviceOSVersion,\n    DeviceManufacturer,\n    DeviceModel,\n    DeviceEmailAddress,\n    DeviceSecurityStatus,\n    DeviceRiskLevel,\n    TargetEmailAddress,\n    TargetPlatform,\n    ActorType,\n    ActorGuid,\n    ChangeType\n",
         "severity": "High",
-        "name": "Lookout - Critical Smishing and Phishing Alerts (v2)",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Account",
-              "Host"
-            ],
-            "matchingMethod": "Selected",
-            "enabled": true,
-            "groupByCustomDetails": [
-              "ThreatCategory",
-              "ImpersonationRisk",
-              "CampaignIndicators"
-            ],
-            "lookbackDuration": "P1D",
-            "reopenClosedIncident": false,
-            "groupByAlertDetails": [
-              "SmishAlertType",
-              "DeviceGuid"
-            ]
-          },
-          "createIncident": true
+        "alertDetailsOverride": {
+          "alertSeverityColumnName": "SmishingAlertSeverity",
+          "alertDescriptionFormat": "{{SmishingAlertSeverity}} {{ThreatCategory}} attack on {{DevicePlatform}}",
+          "alertTacticsColumnName": "ThreatCategory",
+          "alertDisplayNameFormat": "Critical Smishing Alert: {{ThreatCategory}} targeting {{DevicePlatform}} Device"
         },
         "suppressionDuration": "PT1H",
-        "description": "'Detects critical smishing (SMS phishing) and phishing alerts from Lookout Mobile Risk API v2. This rule identifies sophisticated social engineering attacks including CEO fraud, credential harvesting, and malicious link campaigns targeting mobile devices. Leverages enhanced v2 smishing detection capabilities for comprehensive mobile threat protection.'\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "5m",
-        "queryPeriod": "15m"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        }
       }
     }
   ]
