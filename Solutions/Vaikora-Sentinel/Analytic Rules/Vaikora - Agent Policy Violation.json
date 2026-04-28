@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/54262ad1-f346-4246-a13f-9557595ff7bd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/54262ad1-f346-4246-a13f-9557595ff7bd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "Medium",
+        "triggerOperator": "GreaterThan",
+        "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where policy_decision_s == \"block\"\n| summarize\n    ViolationCount = count(),\n    PolicyIds = make_set(policy_id_s),\n    ActionTypes = make_set(action_type_s),\n    ResourceTypes = make_set(resource_type_s),\n    MaxAnomalyScore = max(anomaly_score_d),\n    Severities = make_set(severity_s),\n    LogHashes = make_set(log_hash_s)\n  by AgentId = agent_id_s\n| extend\n    PolicyList = strcat_array(PolicyIds, \", \"),\n    ActionList = strcat_array(ActionTypes, \", \"),\n    ResourceList = strcat_array(ResourceTypes, \", \")\n| where ViolationCount >= 1\n",
+        "tactics": [
+          "Impact",
+          "DefenseEvasion"
+        ],
+        "suppressionDuration": "15m",
+        "queryFrequency": "15m",
+        "queryPeriod": "1h",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AgentId",
+                "identifier": "Name"
+              }
+            ]
+          }
+        ],
+        "description": "Identifies AI agent actions explicitly blocked by a Vaikora policy. Repeated violations from the same agent may indicate prompt injection, policy circumvention, or a compromised workflow.\n",
+        "suppressionEnabled": false,
+        "status": "Available",
+        "name": "Vaikora - Agent policy violation",
+        "customDetails": {
+          "MaxAnomalyScore": "MaxAnomalyScore",
+          "ActionTypes": "ActionList",
+          "ViolationCount": "ViolationCount",
+          "PolicyIds": "PolicyList"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ],
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "1h"
+          },
+          "createIncident": true
+        }
+      }
+    }
+  ]
+}
