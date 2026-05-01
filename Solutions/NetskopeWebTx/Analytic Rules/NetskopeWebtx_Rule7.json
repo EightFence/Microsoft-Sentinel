@@ -14,38 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "User",
                 "identifier": "Name"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "CloudApplication",
             "fieldMappings": [
               {
                 "columnName": "NewRiskyApp",
                 "identifier": "Name"
               }
-            ],
-            "entityType": "CloudApplication"
+            ]
           }
         ],
+        "query": "let lookbackPeriod = 7d;\nlet currentPeriod = 1d;\nlet baseline = NetskopeWebTransactions_CL\n    | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))\n    | where isnotempty(CsUsername) and isnotempty(XCsApp)\n    | summarize BaselineApps = make_set(XCsApp) by CsUsername;\nlet current = NetskopeWebTransactions_CL\n    | where TimeGenerated > ago(currentPeriod)\n    | where isnotempty(CsUsername) and isnotempty(XCsApp)\n    | where XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low' or XCsAppCcl =~ 'medium' or XCsAppCci < 70\n    | summarize \n        CurrentApps = make_set(XCsApp),\n        arg_max(TimeGenerated, XCsAppCcl, XCsAppCci, XCsAppCategory)\n        by CsUsername, XCsApp;\ncurrent\n| join kind=leftouter baseline on CsUsername\n| extend BaselineApps = coalesce(BaselineApps, dynamic([]))\n| where not(set_has_element(BaselineApps, XCsApp))\n| where isnotempty(XCsApp)\n| where XCsAppCci < 70 or XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low'\n| project \n    TimeGenerated,\n    User = CsUsername,\n    NewRiskyApp = XCsApp,\n    AppCCL = XCsAppCcl,\n    AppCCI = XCsAppCci,\n    AppCategory = XCsAppCategory,\n    BaselineAppCount = array_length(BaselineApps)\n",
+        "triggerThreshold": 0,
         "description": "Compares today's accessed applications against a 7-day baseline and triggers alerts when users access new risky applications not seen before.\n",
-        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess",
           "Discovery"
         ],
         "status": "Available",
-        "queryPeriod": "8d",
-        "query": "let lookbackPeriod = 7d;\nlet currentPeriod = 1d;\nlet baseline = NetskopeWebTransactions_CL\n    | where TimeGenerated between (ago(lookbackPeriod) .. ago(currentPeriod))\n    | where isnotempty(CsUsername) and isnotempty(XCsApp)\n    | summarize BaselineApps = make_set(XCsApp) by CsUsername;\nlet current = NetskopeWebTransactions_CL\n    | where TimeGenerated > ago(currentPeriod)\n    | where isnotempty(CsUsername) and isnotempty(XCsApp)\n    | where XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low' or XCsAppCcl =~ 'medium' or XCsAppCci < 70\n    | summarize \n        CurrentApps = make_set(XCsApp),\n        arg_max(TimeGenerated, XCsAppCcl, XCsAppCci, XCsAppCategory)\n        by CsUsername, XCsApp;\ncurrent\n| join kind=leftouter baseline on CsUsername\n| extend BaselineApps = coalesce(BaselineApps, dynamic([]))\n| where not(set_has_element(BaselineApps, XCsApp))\n| where isnotempty(XCsApp)\n| where XCsAppCci < 70 or XCsAppCcl =~ 'poor' or XCsAppCcl =~ 'low'\n| project \n    TimeGenerated,\n    User = CsUsername,\n    NewRiskyApp = XCsApp,\n    AppCCL = XCsAppCcl,\n    AppCCI = XCsAppCci,\n    AppCategory = XCsAppCategory,\n    BaselineAppCount = array_length(BaselineApps)\n",
-        "queryFrequency": "1d",
         "name": "Netskope - New Risky App Access vs 7-Day Baseline",
+        "queryFrequency": "1d",
+        "queryPeriod": "8d",
         "severity": "Medium"
       }
     }
