@@ -14,39 +14,39 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Netskope - Anomalous User Behavior (High Volume from Unmanaged Device)",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
                 "columnName": "User"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "Device"
               }
-            ]
+            ],
+            "entityType": "Host"
           }
         ],
-        "query": "let highVolumeThresholdGB = 1;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername)\n| summarize \n    TotalBytes = sum(Bytes),\n    UploadBytes = sum(CsBytes),\n    DownloadBytes = sum(ScBytes),\n    UniqueApps = dcount(XCsApp),\n    Apps = make_set(XCsApp, 20),\n    UniqueHosts = dcount(CsHost),\n    Activities = make_set(XCsAppActivity),\n    Countries = make_set(XCCountry),\n    Devices = make_set(XCDevice),\n    AccessMethods = make_set(XCsAccessMethod),\n    EventCount = count()\n    by CsUsername, XCDevice, XCsAccessMethod\n| extend \n    TotalGB = round(TotalBytes / 1073741824.0, 3),\n    UploadGB = round(UploadBytes / 1073741824.0, 3),\n    DownloadGB = round(DownloadBytes / 1073741824.0, 3)\n| where TotalGB > highVolumeThresholdGB\n| extend IsUnmanagedDevice = XCDevice =~ 'unmanaged' or XCDevice =~ 'BYOD' or XCDevice =~ 'Personal' or XCDevice =~ 'Unknown' or XCsAccessMethod != 'Client'\n| where IsUnmanagedDevice or TotalGB > 5 or UniqueApps > 20\n| extend RiskIndicators = strcat_array(array_concat(\n    iff(IsUnmanagedDevice, dynamic(['Unmanaged Device']), dynamic([])),\n    iff(TotalGB > 5, dynamic(['High Data Volume']), dynamic([])),\n    iff(UniqueApps > 20, dynamic(['Many Apps Accessed']), dynamic([])),\n    iff(array_length(Countries) > 1, dynamic(['Multiple Countries']), dynamic([]))\n), ', ')\n| project \n    TimeGenerated = now(),\n    User = CsUsername,\n    Device = XCDevice,\n    AccessMethod = XCsAccessMethod,\n    TotalDataGB = TotalGB,\n    UploadGB,\n    DownloadGB,\n    UniqueApplications = UniqueApps,\n    Applications = Apps,\n    UniqueHosts,\n    Activities,\n    Countries,\n    EventCount,\n    IsUnmanagedDevice,\n    RiskIndicators\n",
-        "triggerThreshold": 0,
         "description": "Detects anomalous user behavior including high data volume transfers from unmanaged devices, unusual access patterns, and suspicious application usage.\n",
+        "name": "Netskope - Anomalous User Behavior (High Volume from Unmanaged Device)",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
         "severity": "Medium",
-        "status": "Available",
-        "queryPeriod": "1h",
+        "triggerThreshold": 0,
+        "query": "let highVolumeThresholdGB = 1;\nNetskopeWebTransactions_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(CsUsername)\n| summarize \n    TotalBytes = sum(Bytes),\n    UploadBytes = sum(CsBytes),\n    DownloadBytes = sum(ScBytes),\n    UniqueApps = dcount(XCsApp),\n    Apps = make_set(XCsApp, 20),\n    UniqueHosts = dcount(CsHost),\n    Activities = make_set(XCsAppActivity),\n    Countries = make_set(XCCountry),\n    Devices = make_set(XCDevice),\n    AccessMethods = make_set(XCsAccessMethod),\n    EventCount = count()\n    by CsUsername, XCDevice, XCsAccessMethod\n| extend \n    TotalGB = round(TotalBytes / 1073741824.0, 3),\n    UploadGB = round(UploadBytes / 1073741824.0, 3),\n    DownloadGB = round(DownloadBytes / 1073741824.0, 3)\n| where TotalGB > highVolumeThresholdGB\n| extend IsUnmanagedDevice = XCDevice =~ 'unmanaged' or XCDevice =~ 'BYOD' or XCDevice =~ 'Personal' or XCDevice =~ 'Unknown' or XCsAccessMethod != 'Client'\n| where IsUnmanagedDevice or TotalGB > 5 or UniqueApps > 20\n| extend RiskIndicators = strcat_array(array_concat(\n    iff(IsUnmanagedDevice, dynamic(['Unmanaged Device']), dynamic([])),\n    iff(TotalGB > 5, dynamic(['High Data Volume']), dynamic([])),\n    iff(UniqueApps > 20, dynamic(['Many Apps Accessed']), dynamic([])),\n    iff(array_length(Countries) > 1, dynamic(['Multiple Countries']), dynamic([]))\n), ', ')\n| project \n    TimeGenerated = now(),\n    User = CsUsername,\n    Device = XCDevice,\n    AccessMethod = XCsAccessMethod,\n    TotalDataGB = TotalGB,\n    UploadGB,\n    DownloadGB,\n    UniqueApplications = UniqueApps,\n    Applications = Apps,\n    UniqueHosts,\n    Activities,\n    Countries,\n    EventCount,\n    IsUnmanagedDevice,\n    RiskIndicators\n",
         "tactics": [
           "Exfiltration",
           "Collection"
         ],
-        "queryFrequency": "1h",
-        "triggerOperator": "gt"
+        "queryPeriod": "1h",
+        "status": "Available"
       }
     }
   ]
