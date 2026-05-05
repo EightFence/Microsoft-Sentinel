@@ -14,9 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Conditional Access - Dynamic Group Exclusion Changes",
+        "description": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)",
         "queryPeriod": "5m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "enabled": false,
+            "groupByEntities": [],
+            "groupByCustomDetails": [],
+            "groupByAlertDetails": []
+          },
+          "createIncident": true
+        },
         "suppressionDuration": "5h",
+        "query": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)\nlet monitoredGroups = dynamic([\"Group1\", \"Group2\"]);  // <-- Customize this list\nAuditLogs\n| where OperationName == \"Update group\"\n| where AdditionalDetails[0].value == \"DynamicMembership\"\n| extend DynamicGroupName = tostring(TargetResources[0].displayName)\n| where DynamicGroupName in (monitoredGroups)\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| extend oldRule = tostring(TargetResources[0].modifiedProperties[0].oldValue)\n| extend newRule = tostring(TargetResources[0].modifiedProperties[0].newValue)\n| where oldRule != newRule\n| project\n    TimeGenerated,\n    OperationName,\n    DynamicGroupName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    oldRule,\n    newRule\n| order by TimeGenerated desc",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "suppressionEnabled": false,
+        "name": "Conditional Access - Dynamic Group Exclusion Changes",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -32,31 +54,9 @@
             "entityType": "Account"
           }
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "groupByAlertDetails": [],
-            "groupByCustomDetails": [],
-            "lookbackDuration": "PT5H",
-            "enabled": false,
-            "groupByEntities": [],
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
         "queryFrequency": "5m",
         "triggerThreshold": 0,
-        "suppressionEnabled": false,
-        "query": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)\nlet monitoredGroups = dynamic([\"Group1\", \"Group2\"]);  // <-- Customize this list\nAuditLogs\n| where OperationName == \"Update group\"\n| where AdditionalDetails[0].value == \"DynamicMembership\"\n| extend DynamicGroupName = tostring(TargetResources[0].displayName)\n| where DynamicGroupName in (monitoredGroups)\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| extend oldRule = tostring(TargetResources[0].modifiedProperties[0].oldValue)\n| extend newRule = tostring(TargetResources[0].modifiedProperties[0].newValue)\n| where oldRule != newRule\n| project\n    TimeGenerated,\n    OperationName,\n    DynamicGroupName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    oldRule,\n    newRule\n| order by TimeGenerated desc",
-        "triggerOperator": "gt",
-        "description": "// Detects changes to Dynamic Membership Rules for specified groups (often used in CA exclusions)",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "severity": "High",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        "severity": "High"
       }
     }
   ]
