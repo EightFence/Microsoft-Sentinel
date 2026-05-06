@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c0984707-0855-430e-9c36-5e2d0d0ce56f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c0984707-0855-430e-9c36-5e2d0d0ce56f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "Discovery",
+          "LateralMovement",
+          "Collection",
+          "Exfiltration"
+        ],
+        "status": "Available",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIP"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "SourceHost"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserName"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Vaikora AI detected a threat on agent {{AgentId_s}} (ThreatDetected={{ThreatDetected_b}}). {{Description_s}}",
+          "alertDisplayNameFormat": "Vaikora Anomaly: {{Title_s}} (confidence: {{ConfidenceScore_d}})"
+        },
+        "name": "Vaikora - Anomaly detection",
+        "queryFrequency": "6h",
+        "triggerThreshold": 0,
+        "query": "Vaikora_SecurityAlerts_CL\n| where TimeGenerated >= ago(6h)\n| where IsAnomaly_b == true or ThreatDetected_b == true\n| where Severity_s !in (\"high\", \"critical\")\n| extend\n    AlertId       = AlertId_s,\n    AgentId       = AgentId_s,\n    ActionType    = ActionType_s,\n    Severity      = Severity_s,\n    Title         = Title_s,\n    Description   = Description_s,\n    SourceIP      = SourceIP,\n    DestinationIP = DestinationIP_s,\n    SourceHost    = SourceHost_s,\n    DestHost      = DestinationHost_s,\n    ProcessName   = ProcessName_s,\n    UserName      = UserName_s,\n    FilePath      = FilePath_s,\n    Confidence    = ConfidenceScore_d,\n    ThreatFlag    = ThreatDetected_b,\n    AnomalyFlag   = IsAnomaly_b\n| project\n    TimeGenerated, AlertId, AgentId, ActionType, Severity, Title, Description,\n    SourceIP, DestinationIP, SourceHost, DestHost, ProcessName, UserName, FilePath,\n    Confidence, ThreatFlag, AnomalyFlag\n| order by Confidence desc, TimeGenerated desc\n",
+        "queryPeriod": "6h",
+        "description": "Identifies actions flagged as anomalies or confirmed threats by Vaikora. Catches behavioral anomalies that fall below high/critical severity but still represent statistically unusual activity worth investigating.\n",
+        "severity": "Medium"
+      }
+    }
+  ]
+}
