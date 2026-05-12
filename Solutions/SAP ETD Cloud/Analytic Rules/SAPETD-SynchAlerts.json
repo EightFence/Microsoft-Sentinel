@@ -14,16 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "description": "Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)",
-        "customDetails": {
-          "SAP_User": "User",
-          "SAP_UserEmail": "UserEmail",
-          "ETD_AlertNumber": "AlertId"
-        },
-        "triggerThreshold": 0,
+        "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 7d;\nlet regex_sid = @\"^([A-Z0-9]{3})/\";\nlet regex_client = @'\\/(.{3})$';\nSAPETDAlerts_CL\n| mv-expand NormalizedTriggeringEvents\n| summarize arg_max(TimeGenerated, *) by AlertId\n| where Threshold >= minThreshold and Score >= minScore\n| extend\n  SystemId= extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n  ClienId= extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n  Host= NormalizedTriggeringEvents.NetworkHostnameInitiator,\n  Instance= NormalizedTriggeringEvents.NetworkHostnameActor,\n  User= NormalizedTriggeringEvents.UserAccountActing,\n  IP= NormalizedTriggeringEvents.NetworkIPAddressInitiator\n| mv-expand Users\n| extend\n  UserAccountName = tostring(Users.UserAccountName),\n  UserEmail = tostring(Users.EmailAddresses[0]);\n",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -79,18 +70,27 @@
             ]
           }
         ],
+        "customDetails": {
+          "SAP_UserEmail": "UserEmail",
+          "ETD_AlertNumber": "AlertId",
+          "SAP_User": "User"
+        },
+        "name": "SAP ETD - Synch alerts",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "description": "Synch alerts coming in from SAP Enterprise Threat Detection into Microsoft Sentinel (one way)",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryPeriod": "2d",
         "status": "Available",
+        "queryFrequency": "1h",
+        "tactics": [],
         "alertDetailsOverride": {
           "alertDescriptionFormat": "{{PatternDescription}}",
           "alertDisplayNameFormat": "SAP ETD - {{PatternName}} "
         },
-        "query": "let minThreshold= 1;\nlet minScore= 50;\nlet lookBack= 7d;\nlet regex_sid = @\"^([A-Z0-9]{3})/\";\nlet regex_client = @'\\/(.{3})$';\nSAPETDAlerts_CL\n| mv-expand NormalizedTriggeringEvents\n| summarize arg_max(TimeGenerated, *) by AlertId\n| where Threshold >= minThreshold and Score >= minScore\n| extend\n  SystemId= extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n  ClienId= extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n  Host= NormalizedTriggeringEvents.NetworkHostnameInitiator,\n  Instance= NormalizedTriggeringEvents.NetworkHostnameActor,\n  User= NormalizedTriggeringEvents.UserAccountActing,\n  IP= NormalizedTriggeringEvents.NetworkIPAddressInitiator\n| mv-expand Users\n| extend\n  UserAccountName = tostring(Users.UserAccountName),\n  UserEmail = tostring(Users.EmailAddresses[0]);\n",
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "name": "SAP ETD - Synch alerts",
-        "triggerOperator": "gt",
-        "tactics": [],
-        "queryPeriod": "2d"
+        "triggerOperator": "gt"
       }
     }
   ]
