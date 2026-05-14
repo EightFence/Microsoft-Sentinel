@@ -14,45 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}",
-          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}"
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "queryFrequency": "30m",
+        "triggerOperator": "gt",
+        "customDetails": {
+          "AssetName": "AssetName",
+          "AssetId": "AssetId",
+          "FindingId": "FindingId",
+          "OrganizationId": "OrganizationId",
+          "Severity": "Severity",
+          "FindingName": "FindingName",
+          "Mitigations": "Mitigations",
+          "State": "State",
+          "CreatedAt": "CreatedAt"
         },
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "lookbackDuration": "24h",
-            "groupByEntities": [],
-            "groupByCustomDetails": [
-              "FindingId"
-            ],
-            "reopenClosedIncident": false,
-            "groupByAlertDetails": [],
-            "enabled": true
-          },
-          "createIncident": true
+        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}",
+          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}"
         },
-        "status": "Available",
-        "customDetails": {
-          "AssetName": "AssetName",
-          "Severity": "Severity",
-          "OrganizationId": "OrganizationId",
-          "Mitigations": "Mitigations",
-          "FindingName": "FindingName",
-          "CreatedAt": "CreatedAt",
-          "FindingId": "FindingId",
-          "State": "State",
-          "AssetId": "AssetId"
-        },
-        "queryFrequency": "30m",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "name": "XbowCriticalHighFindings",
         "tactics": [
           "InitialAccess",
           "Execution",
@@ -60,19 +43,36 @@
           "DefenseEvasion",
           "Impact"
         ],
+        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "StartUrl",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
-        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
-        "severity": "High"
+        "name": "XbowCriticalHighFindings",
+        "severity": "High",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "Selected",
+            "groupByEntities": [],
+            "reopenClosedIncident": false,
+            "groupByCustomDetails": [
+              "FindingId"
+            ],
+            "groupByAlertDetails": [],
+            "lookbackDuration": "24h"
+          },
+          "createIncident": true
+        },
+        "queryPeriod": "1h",
+        "triggerThreshold": 0
       }
     }
   ]
