@@ -1,0 +1,77 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c3d4e5f6-a7b8-9012-cdef-123456789012')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c3d4e5f6-a7b8-9012-cdef-123456789012')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerThreshold": 0,
+        "name": "Red Sift - Login from previously unseen IP address",
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalLogins = RedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| summarize by UserEmail, SrcIp;\nRedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    HttpUserAgent = tostring(column_ifexists(\"HttpUserAgent\", \"\")),\n    ServiceName = tostring(column_ifexists(\"ServiceName\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\"))\n| where TimeGenerated >= ago(recentWindow)\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| join kind=leftanti (historicalLogins) on UserEmail, SrcIp\n| project\n    TimeGenerated,\n    UserEmail,\n    SrcIp,\n    HttpUserAgent,\n    ServiceName,\n    ActivityName,\n    Severity\n",
+        "customDetails": {
+          "ServiceName": "ServiceName",
+          "UserAgent": "HttpUserAgent"
+        },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UserEmail"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "RedSift - New IP Login for {{UserEmail}}",
+          "alertDescriptionFormat": "User {{UserEmail}} logged in from a previously unseen IP address {{SrcIp}}."
+        },
+        "triggerOperator": "gt",
+        "suppressionDuration": "PT1H",
+        "description": "'Detects a successful login from an IP address that has not been seen in the previous 14 days for that user, which may indicate compromised credentials or unauthorized access.'\n"
+      }
+    }
+  ]
+}
