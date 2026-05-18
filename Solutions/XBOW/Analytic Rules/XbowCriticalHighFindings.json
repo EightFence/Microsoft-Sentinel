@@ -14,18 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "FindingName": "FindingName",
-          "FindingId": "FindingId",
-          "State": "State",
-          "Mitigations": "Mitigations",
-          "OrganizationId": "OrganizationId",
-          "CreatedAt": "CreatedAt",
-          "Severity": "Severity",
-          "AssetId": "AssetId",
-          "AssetName": "AssetName"
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}",
+          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}"
         },
-        "queryFrequency": "30m",
+        "triggerOperator": "gt",
         "tactics": [
           "InitialAccess",
           "Execution",
@@ -34,44 +28,50 @@
           "Impact"
         ],
         "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}",
-          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}"
-        },
+        "queryPeriod": "1h",
         "status": "Available",
-        "name": "XbowCriticalHighFindings",
-        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Url",
-                "columnName": "StartUrl"
+                "columnName": "StartUrl",
+                "identifier": "Url"
               }
             ],
             "entityType": "URL"
           }
         ],
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryPeriod": "1h",
-        "severity": "High",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "groupByEntities": [],
+            "reopenClosedIncident": false,
+            "enabled": true,
             "groupByCustomDetails": [
               "FindingId"
             ],
-            "reopenClosedIncident": false,
-            "groupByEntities": [],
-            "enabled": true,
             "groupByAlertDetails": [],
-            "matchingMethod": "Selected",
             "lookbackDuration": "24h"
           }
+        },
+        "name": "XbowCriticalHighFindings",
+        "severity": "High",
+        "queryFrequency": "30m",
+        "customDetails": {
+          "CreatedAt": "CreatedAt",
+          "Severity": "Severity",
+          "FindingName": "FindingName",
+          "AssetId": "AssetId",
+          "OrganizationId": "OrganizationId",
+          "Mitigations": "Mitigations",
+          "State": "State",
+          "FindingId": "FindingId",
+          "AssetName": "AssetName"
         }
       }
     }
