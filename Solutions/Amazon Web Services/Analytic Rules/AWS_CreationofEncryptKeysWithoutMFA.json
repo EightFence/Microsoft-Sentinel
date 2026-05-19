@@ -14,20 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let check_actions = AWSCloudTrail\n| where (EventName == \"CreateKey\" or EventName == \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\\\\"','\"')).['Statement'])\n| mv-expand state\n| extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),\n         Principal=tostring(parse_json(state.['Principal']))\n| where (Action == \"kms:Encrypt\" or Action == \"kms:*\") and (Effect == 'Allow') and (Principal has \"*\")\n| distinct AwsEventId;\nAWSCloudTrail\n| where (EventName == \"CreateKey\" or EventName == \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| join kind=inner (check_actions) on AwsEventId\n| extend timestamp = TimeGenerated\n| project-away AwsEventId1\n",
-        "triggerOperator": "gt",
-        "tactics": [
-          "Impact"
-        ],
-        "description": "'Detection of KMS keys where action kms:Encrypt is accessible for everyone (also outside of your organization). This is an idicator that your account is compromised and the attacker uses the encryption key to compromise another company.'\n",
         "queryPeriod": "1d",
         "status": "Available",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "name": "Creating keys with encrypt policy without MFA",
-        "severity": "Medium",
         "queryFrequency": "1d",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "KMS key creation or policy update by {{AccountName}} without MFA resulted in permissive encrypt access. AwsEventId: {{AwsEventId}}",
+          "alertDisplayNameFormat": "AWS KMS key creation or policy update by {{AccountName}} without MFA"
+        },
+        "severity": "Medium",
+        "description": "Identifies AWS KMS key creation or policy changes that allow `kms:Encrypt` or `kms:*` to any principal. This configuration can expose encryption capability outside approved boundaries and should be investigated as overly permissive or malicious.\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -41,19 +41,28 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ]
+        ],
+        "tactics": [
+          "Impact"
+        ],
+        "customDetails": {
+          "UserIdentityArn": "UserIdentityArn",
+          "AwsEventId": "AwsEventId",
+          "EventName": "EventName"
+        },
+        "query": "let check_actions = AWSCloudTrail\n| where EventName in (\"CreateKey\", \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend state=parse_json(parse_json(replace_string(tostring(parse_json(RequestParameters)['policy']),'\\\\\"','\"')).['Statement'])\n| mv-expand state\n| extend Action= tostring(parse_json(state.['Action'][0])), Effect=tostring(parse_json(state.['Effect'])),\n         Principal=tostring(parse_json(state.['Principal']))\n| where Action in (\"kms:Encrypt\", \"kms:*\") and (Effect == 'Allow') and (Principal has \"*\")\n| distinct AwsEventId;\nAWSCloudTrail\n| where EventName in (\"CreateKey\", \"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| join kind=inner (check_actions) on AwsEventId\n| extend timestamp = TimeGenerated\n| project-away AwsEventId1\n",
+        "name": "AWSCloudTrail - Creating keys with encrypt policy without MFA"
       }
     }
   ]

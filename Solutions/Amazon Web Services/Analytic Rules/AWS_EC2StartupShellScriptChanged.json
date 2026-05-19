@@ -14,20 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "AWSCloudTrail\n| where EventName == \"ModifyInstanceAttribute\" or EventName == \"CreateLaunchTemplate\"\n| where RequestParameters contains \"userData\"\n| extend userData_ = tostring(parse_json(RequestParameters).userData)\n| extend instanceId_ = tostring(parse_json(RequestParameters).instanceId)\n| project-away  SourceSystem,Category,Type,TenantId,EventVersion,SessionIssuerAccountId\n| extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, \":\") + 1)\n| extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]\n",
-        "triggerOperator": "gt",
-        "tactics": [
-          "Execution"
-        ],
-        "description": "'Detects changes to the EC2 startup script. The shell script will be executed as root/SYSTEM every time the specific instances are booted up. ref : https://github.com/RhinoSecurityLabs/pacu/blob/master/pacu/modules/ec2__startup_shell_script/main.py'\n",
         "queryPeriod": "15m",
         "status": "Available",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "name": "EC2 Startup Shell Script Changed",
-        "severity": "Medium",
         "queryFrequency": "15m",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "EC2 startup script changed on {{instanceId_}} by {{UserName}} in {{AWSRegion}}.",
+          "alertDisplayNameFormat": "EC2 startup script changed on {{instanceId_}} by {{UserName}}"
+        },
+        "severity": "Medium",
+        "description": "Identifies changes to the EC2 startup script. The shell script will be executed as root/SYSTEM every time the specific instances are booted up. ref : https://github.com/RhinoSecurityLabs/pacu/blob/master/pacu/modules/ec2__startup_shell_script/main.py\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "Name",
@@ -37,19 +37,30 @@
                 "columnName": "UpnSuffix",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ]
+        ],
+        "tactics": [
+          "Execution"
+        ],
+        "customDetails": {
+          "InstanceId": "instanceId_",
+          "AWSRegion": "AWSRegion",
+          "EventType": "EventTypeName",
+          "EventSource": "EventSource",
+          "EventName": "EventName"
+        },
+        "query": "AWSCloudTrail\n| where EventName in~ (\"ModifyInstanceAttribute\", \"CreateLaunchTemplate\")\n| extend RequestParametersJson = parse_json(RequestParameters)\n| where tostring(RequestParametersJson.userData) != \"\"\n| extend userData_ = tostring(RequestParametersJson.userData)\n| extend instanceId_ = tostring(RequestParametersJson.instanceId)\n| project-away SourceSystem, Category, Type, TenantId, EventVersion, SessionIssuerAccountId\n| extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, \":\") + 1)\n| extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]\n| project TimeGenerated, EventName, UserName, Name, UpnSuffix, instanceId_, AWSRegion, SourceIpAddress, EventSource, UserIdentityArn, EventTypeName\n",
+        "name": "AWSCloudTrail - EC2 Startup Shell Script Changed"
       }
     }
   ]
