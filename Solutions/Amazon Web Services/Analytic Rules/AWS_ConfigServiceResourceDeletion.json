@@ -15,54 +15,54 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "Identifies AWS API calls that attempt to reduce logging or visibility in an account by stopping logging, deleting trails, deleting flow logs, or deleting event buses. This behavior can indicate defense evasion or the deliberate suppression of telemetry used to monitor security posture.\n",
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
+        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
         "severity": "Low",
-        "status": "Available",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "name": "AWSCloudTrail - Config Service Resource Deletion Attempts",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              },
+              {
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "queryFrequency": "1d",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "EventSource": "EventSource",
+          "EventTypeName": "EventTypeName",
+          "AWSRegion": "AWSRegion",
+          "EventName": "EventName"
+        },
         "tactics": [
           "DefenseEvasion"
         ],
-        "name": "AWSCloudTrail - Config Service Resource Deletion Attempts",
-        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
-              },
-              {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
+        "status": "Available",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS Config Service Resource Deletion Attempts: {{EventName}} by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} in {{AWSRegion}} affecting account {{RecipientAccountId}}."
-        },
-        "customDetails": {
-          "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource",
-          "EventName": "EventName",
-          "EventTypeName": "EventTypeName"
         }
       }
     }
