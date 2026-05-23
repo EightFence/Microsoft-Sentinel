@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
         "triggerOperator": "gt",
         "query": "let kmsActions = dynamic([\"kms:Encrypt\", \"kms:*\"]); //Add other overly permissive APIs to this list.\nAWSCloudTrail\n| where EventName in (\"CreateKey\",\"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement\n| mvexpand Statement\n| extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))\n| where Effect =~ \"Allow\" and Action has_any (kmsActions) and Principal == \"*\" \n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "queryFrequency": "1d",
-        "tactics": [
-          "Impact"
-        ],
-        "severity": "High",
-        "description": "Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.\nOverly permissive key policies can be abused for malicious encryption operations and indicate potential account\ncompromise or risky misconfiguration.\n",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              },
-              {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "name": "AWSCloudTrail - Suspicious overly permissive KMS key policy created",
-        "status": "Available",
-        "queryPeriod": "1d",
+        "triggerThreshold": 0,
         "customDetails": {
           "UserIdentityArn": "UserIdentityArn",
-          "EventName": "EventName",
           "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource"
+          "EventSource": "EventSource",
+          "EventName": "EventName"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS overly permissive KMS key policy change by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} creating a broadly permissive KMS policy in account {{RecipientAccountId}}."
-        }
+        },
+        "tactics": [
+          "Impact"
+        ],
+        "status": "Available",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
+              },
+              {
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
+              }
+            ]
+          }
+        ],
+        "name": "AWSCloudTrail - Suspicious overly permissive KMS key policy created",
+        "description": "Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.\nOverly permissive key policies can be abused for malicious encryption operations and indicate potential account\ncompromise or risky misconfiguration.\n",
+        "severity": "High"
       }
     }
   ]
