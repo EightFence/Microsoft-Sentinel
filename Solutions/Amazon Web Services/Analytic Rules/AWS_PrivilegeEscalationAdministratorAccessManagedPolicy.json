@@ -14,31 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "customDetails": {
+          "EventName": "EventName",
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn",
+          "EventSource": "EventSource"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS AdministratorAccess policy attachment by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching AdministratorAccess in account {{RecipientAccountId}}."
+        },
         "severity": "Medium",
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements, RecipientAccountId, AccountName, AccountUPNSuffix\n",
+        "triggerOperator": "gt",
         "description": "Detects successful attachment of the AWS managed AdministratorAccess policy to users, roles, or groups.\nThis action can immediately grant full administrative permissions and is a high-risk privilege escalation pattern\nthat should be validated against approved administrative activity.\n",
         "queryFrequency": "1d",
+        "status": "Available",
+        "name": "AWSCloudTrail - Privilege escalation with AdministratorAccess managed policy",
+        "queryPeriod": "1d",
         "tactics": [
           "PrivilegeEscalation",
           "Persistence"
         ],
-        "triggerOperator": "gt",
-        "customDetails": {
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn",
-          "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource"
-        },
-        "name": "AWSCloudTrail - Privilege escalation with AdministratorAccess managed policy",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching AdministratorAccess in account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS AdministratorAccess policy attachment by {{AccountName}}"
-        },
-        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements, RecipientAccountId, AccountName, AccountUPNSuffix\n",
-        "queryPeriod": "1d",
-        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -52,17 +53,16 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ]
       }

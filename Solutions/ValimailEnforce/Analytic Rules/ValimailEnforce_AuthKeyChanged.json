@@ -14,36 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "{{EventCategory}} key deleted on {{EventCount}} domain(s) by {{User}}",
+          "alertDescriptionFormat": "User '{{User}}' deleted one or more {{EventCategory}} records affecting\ndomains: {{AffectedDomains}}. This may weaken email authentication posture.\n"
+        },
         "severity": "Medium",
+        "triggerThreshold": 0,
+        "query": "ValimailEnforceEvents_CL\n| where EventSeverity == \"Medium\"\n| where EventCategory in (\"SPFConfiguration\", \"DKIMConfiguration\")\n| where IsHighValueEvent == true\n| summarize\n    EventCount = count(),\n    FirstSeen = min(PerformedAt),\n    LastSeen = max(PerformedAt),\n    AffectedDomains = make_set(Subject),\n    Actions = make_set(EventType)\n  by User, EventCategory\n| extend\n    AccountName = tostring(split(User, \"@\")[0]),\n    AccountDomain = tostring(split(User, \"@\")[1]),\n    DomainName = tostring(AffectedDomains[0])\n",
+        "triggerOperator": "gt",
         "description": "This query searches for deletion of SPF delegations or DKIM keys, which are medium-severity events\nthat could degrade email authentication posture for a domain.\n",
         "queryFrequency": "1h",
+        "status": "Available",
+        "name": "Valimail Enforce - Email Authentication Key Deleted",
+        "queryPeriod": "1h",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "1d",
             "enabled": true,
             "groupByEntities": [
               "Account"
             ],
-            "lookbackDuration": "1d",
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false
+            "matchingMethod": "Selected"
           }
         },
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerOperator": "gt",
-        "name": "Valimail Enforce - Email Authentication Key Deleted",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "User '{{User}}' deleted one or more {{EventCategory}} records affecting\ndomains: {{AffectedDomains}}. This may weaken email authentication posture.\n",
-          "alertDisplayNameFormat": "{{EventCategory}} key deleted on {{EventCount}} domain(s) by {{User}}"
-        },
-        "query": "ValimailEnforceEvents_CL\n| where EventSeverity == \"Medium\"\n| where EventCategory in (\"SPFConfiguration\", \"DKIMConfiguration\")\n| where IsHighValueEvent == true\n| summarize\n    EventCount = count(),\n    FirstSeen = min(PerformedAt),\n    LastSeen = max(PerformedAt),\n    AffectedDomains = make_set(Subject),\n    Actions = make_set(EventType)\n  by User, EventCategory\n| extend\n    AccountName = tostring(split(User, \"@\")[0]),\n    AccountDomain = tostring(split(User, \"@\")[1]),\n    DomainName = tostring(AffectedDomains[0])\n",
-        "queryPeriod": "1h",
-        "status": "Available",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -53,17 +54,16 @@
                 "columnName": "AccountDomain",
                 "identifier": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "DNS",
             "fieldMappings": [
               {
                 "columnName": "DomainName",
                 "identifier": "DomainName"
               }
-            ],
-            "entityType": "DNS"
+            ]
           }
         ]
       }
