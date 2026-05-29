@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/73c803aa-1188-45dd-8379-62a3319d3d9f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/73c803aa-1188-45dd-8379-62a3319d3d9f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "Medium",
+        "query": "ASimAlertEventBitdefenderGravityZone(pack=true)\n  | extend IncidentType = case(\n      AdditionalFields.Module == \"new-incident\", \"EDR Incident\",\n      AdditionalFields.Module == \"new-extended-incident\", \"XDR Incident\",\n      AdditionalFields.Module == \"ransomware-mitigation\", \"Ransomware Mitigation\",\n      AdditionalFields.Module == \"network-sandboxing\", \"Sandbox Analyzer Detection\",\n      AdditionalFields.Module == \"exchange-malware\", \"Exchange Malware Detection\",\n      \"Incident\"   // fallback value if null or unmatched\n    ),\n    Tactics = AdditionalFields.AttackTypes\n  | project EventUid, EventSeverity, EventStartTime, IncidentType, Tactics, EventVendor, EventProduct, DvcId, DvcIpAddr, DvcHostname, DvcAction, DvcFQDN\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DvcHostname"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "DvcIpAddr"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "status": "Available",
+        "description": "The query identifies incident-level events received from the GravityZone Data Connector",
+        "tactics": [
+          "LateralMovement"
+        ],
+        "alertDetailsOverride": {
+          "alertDynamicProperties": [
+            {
+              "alertProperty": "ProductName",
+              "value": "EventProduct"
+            },
+            {
+              "alertProperty": "ProviderName",
+              "value": "EventVendor"
+            }
+          ],
+          "alertDisplayNameFormat": "GravityZone: {{IncidentType}}",
+          "alertDescriptionFormat": "Alert generated on {{EventStartTime}} in Bitdefender GravityZone.\\n\\nGravityZone Incident ID / Alert GUID: {{EventUid}}\\n\\nPlease check the source for more information and investigate further.\n",
+          "alertSeverityColumnName": "EventSeverity",
+          "alertTacticsColumnName": "Tactics"
+        },
+        "name": "NRT GravityZone Incident Alerts",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        }
+      }
+    }
+  ]
+}
