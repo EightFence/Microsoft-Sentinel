@@ -14,43 +14,41 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Red Sift - New email with URL from previously unseen sender",
-        "queryPeriod": "14d",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "tactics": [
+          "InitialAccess"
+        ],
         "triggerThreshold": 0,
-        "suppressionEnabled": false,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Email from previously unseen sender {{EmailFrom}} contains {{UrlCount}} URL(s).",
-          "alertDisplayNameFormat": "RedSift - New URL-bearing sender {{EmailFrom}}"
-        },
+        "queryFrequency": "1h",
+        "severity": "Medium",
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
             "reopenClosedIncident": false,
             "enabled": true,
+            "groupByCustomDetails": [
+              "EmailSubject"
+            ],
+            "matchingMethod": "Selected",
             "groupByEntities": [
               "Account"
             ],
-            "matchingMethod": "Selected",
-            "lookbackDuration": "P1D",
-            "groupByCustomDetails": [
-              "EmailSubject"
-            ]
-          }
+            "lookbackDuration": "P1D"
+          },
+          "createIncident": true
         },
-        "queryFrequency": "1h",
-        "suppressionDuration": "PT1H",
         "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSenders = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom)\n| summarize by EmailFrom;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", \"[]\"))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSenders) on EmailFrom\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
+        "queryPeriod": "14d",
+        "suppressionEnabled": false,
+        "description": "'Detects email forensics events that contain one or more URLs where the sender in the from field has not been seen in the previous 14 days, which may indicate phishing activity or a newly observed sender.'\n",
+        "triggerOperator": "gt",
+        "name": "Red Sift - New email with URL from previously unseen sender",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "EmailFrom",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "EmailFrom"
               }
             ]
           },
@@ -58,8 +56,8 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SrcIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIp"
               }
             ]
           },
@@ -67,25 +65,27 @@
             "entityType": "DNS",
             "fieldMappings": [
               {
-                "columnName": "DstHostname",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "DstHostname"
               }
             ]
           }
         ],
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Email from previously unseen sender {{EmailFrom}} contains {{UrlCount}} URL(s).",
+          "alertDisplayNameFormat": "RedSift - New URL-bearing sender {{EmailFrom}}"
+        },
         "customDetails": {
           "EmailSubject": "EmailSubject",
           "ReturnPath": "EmailReturnPath",
-          "UrlCount": "UrlCount",
+          "CorrelationUid": "CorrelationUid",
           "UrlList": "UrlList",
-          "CorrelationUid": "CorrelationUid"
-        },
-        "tactics": [
-          "InitialAccess"
-        ],
-        "triggerOperator": "gt",
-        "status": "Available",
-        "description": "'Detects email forensics events that contain one or more URLs where the sender in the from field has not been seen in the previous 14 days, which may indicate phishing activity or a newly observed sender.'\n"
+          "UrlCount": "UrlCount"
+        }
       }
     }
   ]
