@@ -14,32 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:CreateFunction\" and Action contains \"lambda:InvokeFunction\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:Create*\" and Action contains \"lambda:Invoke*\")) or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:*\" and Action contains \"dynamodb:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:CreateFunction\" and Action contains \"lambda:CreateEventSourceMapping\" and Action contains \"dynamodb:PutItem\" and Action contains \"dynamodb:CreateTable\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:Create*\" and Action contains \"dynamodb:Put*\" and Action contains \"dynamodb:Create*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "queryPeriod": "1d",
-        "description": "Detects inline IAM policy updates that grant broad AWS Lambda permissions, including combinations that can\nlink Lambda with other services such as DynamoDB. These permissions can provide execution control and support\nprivilege escalation paths in the cloud environment.\n",
-        "triggerOperator": "gt",
         "name": "AWSCloudTrail - Privilege escalation via Lambda policy",
+        "customDetails": {
+          "UserIdentityArn": "UserIdentityArn",
+          "RecipientAccountId": "RecipientAccountId",
+          "PolicyName": "PolicyName",
+          "EventName": "EventName"
+        },
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -47,23 +44,26 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "status": "Available",
+        "description": "Detects inline IAM policy updates that grant broad AWS Lambda permissions, including combinations that can\nlink Lambda with other services such as DynamoDB. These permissions can provide execution control and support\nprivilege escalation paths in the cloud environment.\n",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "queryFrequency": "1d",
+        "severity": "Medium",
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:CreateFunction\" and Action contains \"lambda:InvokeFunction\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:Create*\" and Action contains \"lambda:Invoke*\")) or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:*\" and Action contains \"dynamodb:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:CreateFunction\" and Action contains \"lambda:CreateEventSourceMapping\" and Action contains \"dynamodb:PutItem\" and Action contains \"dynamodb:CreateTable\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"lambda:Create*\" and Action contains \"dynamodb:Put*\" and Action contains \"dynamodb:Create*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline Lambda escalation policy {{PolicyName}} in account {{RecipientAccountId}}.",
           "alertDisplayNameFormat": "AWS Lambda privilege escalation policy update by {{AccountName}}"
         },
-        "customDetails": {
-          "UserIdentityArn": "UserIdentityArn",
-          "EventName": "EventName",
-          "RecipientAccountId": "RecipientAccountId",
-          "PolicyName": "PolicyName"
-        }
+        "triggerThreshold": 0
       }
     }
   ]
