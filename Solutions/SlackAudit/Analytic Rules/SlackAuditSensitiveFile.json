@@ -14,38 +14,50 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "SlackAudit - Public link created for file which can contain sensitive information.",
-        "status": "Available",
+        "queryFrequency": "1h",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountCustomEntity",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountCustomEntity"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPCustomEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPCustomEntity"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "description": "'Detects public links for files which potentialy may contain sensitive data such as passwords, authentication tokens, secret keys.'\n",
+        "severity": "Medium",
+        "status": "Available",
+        "description": "'Detects public links created for files that may contain sensitive data such as passwords, authentication tokens,\nsecret keys, or private configuration files. Tune exclusions using the SlackAuditSensitiveFile_Allowlist_File and SlackAuditSensitiveFile_Allowlist_Account\nwatchlists when known benign files or accounts generate expected public-link activity.'\n",
         "triggerOperator": "gt",
+        "customDetails": {
+          "SourceUser": "SrcUserName",
+          "ActorEntity": "AccountCustomEntity",
+          "FileName": "EntityFileName",
+          "IpEntity": "IPCustomEntity",
+          "SourceIP": "SrcIpAddr",
+          "Action": "Action"
+        },
+        "triggerThreshold": 0,
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Public link created for {{EntityFileName}} by {{SrcUserName}} from {{SrcIpAddr}}",
+          "alertDisplayNameFormat": "Slack public link created for sensitive file {{EntityFileName}} by {{SrcUserName}}"
+        },
+        "name": "SlackAudit - Public link created for file which can contain sensitive information.",
         "queryPeriod": "1h",
         "tactics": [
           "Exfiltration"
         ],
-        "queryFrequency": "1h",
-        "severity": "Medium",
-        "query": "SlackAudit\n| where Action =~ 'file_public_link_created'\n| where EntityFileName == 'id_rsa' or EntityFileName contains 'password' or EntityFileName contains 'key' or EntityFileName contains '_key' or EntityFileName contains '.ssh' or EntityFileName endswith '.npmrc' or EntityFileName endswith '.muttrc' or EntityFileName contains 'config.json' or EntityFileName contains '.gitconfig' or EntityFileName endswith '.netrc' or EntityFileName endswith 'package.json' or EntityFileName endswith 'Gemfile' or EntityFileName endswith 'bower.json' or EntityFileName endswith 'config.gypi' or EntityFileName endswith 'travis.yml'\n| extend AccountCustomEntity = SrcUserName\n| extend IPCustomEntity = SrcIpAddr\n",
-        "triggerThreshold": 0
+        "query": "let AllowedFiles = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_File') | summarize make_set(tostring(SearchKey)));\nlet AllowedUsers = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_Account') | summarize make_set(tostring(SearchKey)));\nSlackAudit\n| where Action =~ 'file_public_link_created'\n| extend FileNameLower = tolower(EntityFileName), UserLower = tolower(SrcUserName)\n| where EntityFileName in~ ('id_rsa')\n    or FileNameLower has_any ('password', 'secret', 'token', 'credential', 'private key', 'api key')\n    or FileNameLower has_any ('.ssh', '.npmrc', '.muttrc', '.gitconfig', '.netrc', 'package.json', 'Gemfile', 'bower.json', 'config.gypi', 'travis.yml', 'config.json')\n| where isempty(AllowedFiles) or EntityFileName !in~ (AllowedFiles)\n| where isempty(AllowedUsers) or UserLower !in~ (AllowedUsers)\n| extend AccountCustomEntity = SrcUserName\n| extend IPCustomEntity = SrcIpAddr\n"
       }
     }
   ]

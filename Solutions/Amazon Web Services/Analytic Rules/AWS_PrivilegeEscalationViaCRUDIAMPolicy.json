@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "AWSCloudTrail - Privilege escalation via CRUD IAM policy",
-        "customDetails": {
-          "UserIdentityArn": "UserIdentityArn",
-          "RecipientAccountId": "RecipientAccountId",
-          "PolicyName": "PolicyName",
-          "EventName": "EventName"
-        },
-        "status": "Available",
+        "queryFrequency": "1d",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "severity": "Medium",
+        "status": "Available",
         "description": "Detects creation of inline IAM policies that grant broad IAM create, read, update, and delete capabilities.\nThis behavior can establish or expand privileged control paths in the account and should be reviewed as potential\nprivilege escalation.\n",
         "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "queryFrequency": "1d",
-        "severity": "Medium",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (Action contains \"iam:Create\" and (Action contains \"iam:Get\" or Action contains \"iam:List\")  and Action contains \"iam:Update\" and Action contains \"iam:Delete\") and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "customDetails": {
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId",
+          "PolicyName": "PolicyName",
+          "UserIdentityArn": "UserIdentityArn"
+        },
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline IAM escalation policy {{PolicyName}} in account {{RecipientAccountId}}.",
           "alertDisplayNameFormat": "AWS IAM privilege escalation policy update by {{AccountName}}"
         },
-        "triggerThreshold": 0
+        "name": "AWSCloudTrail - Privilege escalation via CRUD IAM policy",
+        "queryPeriod": "1d",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (Action contains \"iam:Create\" and (Action contains \"iam:Get\" or Action contains \"iam:List\")  and Action contains \"iam:Update\" and Action contains \"iam:Delete\") and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n"
       }
     }
   ]
