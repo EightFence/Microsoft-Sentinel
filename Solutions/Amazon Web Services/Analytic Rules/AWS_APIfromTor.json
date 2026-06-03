@@ -14,7 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
+        "severity": "High",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,27 +45,25 @@
             "entityType": "IP"
           }
         ],
-        "severity": "High",
         "status": "Available",
-        "description": "Identifies successful AWS CloudTrail API activity originating from an IP address identified as a TOR exit node in\nthe external TOR list hosted at https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip. The rule alerts\nonly when CloudTrail indicates the request completed successfully with no ErrorCode and no ErrorMessage, and the source\nIP is present in the TOR exit node list.\n",
-        "triggerOperator": "gt",
-        "customDetails": {
-          "EventName": "EventName",
-          "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "triggerThreshold": 0,
+        "queryFrequency": "1d",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "A successful AWS API call was observed from TOR exit node IP {{SourceIpAddress}} for account {{AccountName}}.",
-          "alertDisplayNameFormat": "Successful AWS API call from TOR exit node: {{AccountName}} from {{SourceIpAddress}}"
+          "alertDisplayNameFormat": "Successful AWS API call from TOR exit node: {{AccountName}} from {{SourceIpAddress}}",
+          "alertDescriptionFormat": "A successful AWS API call was observed from TOR exit node IP {{SourceIpAddress}} for account {{AccountName}}."
+        },
+        "customDetails": {
+          "EventSource": "EventSource",
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn",
+          "EventName": "EventName"
         },
         "name": "AWSCloudTrail - Successful API executed from a Tor exit node",
-        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "query": "let TorNodes = (\nexternaldata (TorIP:string)\n[h@'https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip']\nwith (ignoreFirstRecord=true));\nAWSCloudTrail\n| where SourceIpAddress in (TorNodes) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, SourceIpAddress, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName, UserIdentityPrincipalid, EventName, EventSource, AWSRegion, RecipientAccountId\n",
         "tactics": [
           "Execution"
         ],
-        "query": "let TorNodes = (\nexternaldata (TorIP:string)\n[h@'https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip']\nwith (ignoreFirstRecord=true));\nAWSCloudTrail\n| where SourceIpAddress in (TorNodes) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, SourceIpAddress, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName, UserIdentityPrincipalid, EventName, EventSource, AWSRegion, RecipientAccountId\n"
+        "description": "Identifies successful AWS CloudTrail API activity originating from an IP address identified as a TOR exit node in\nthe external TOR list hosted at https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip. The rule alerts\nonly when CloudTrail indicates the request completed successfully with no ErrorCode and no ErrorMessage, and the source\nIP is present in the TOR exit node list.\n"
       }
     }
   ]

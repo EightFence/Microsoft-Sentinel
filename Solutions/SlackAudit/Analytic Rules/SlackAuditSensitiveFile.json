@@ -14,7 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
+        "severity": "Medium",
+        "queryPeriod": "1h",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -35,29 +37,27 @@
             "entityType": "IP"
           }
         ],
-        "severity": "Medium",
         "status": "Available",
-        "description": "'Detects public links created for files that may contain sensitive data such as passwords, authentication tokens,\nsecret keys, or private configuration files. Tune exclusions using the SlackAuditSensitiveFile_Allowlist_File and SlackAuditSensitiveFile_Allowlist_Account\nwatchlists when known benign files or accounts generate expected public-link activity.'\n",
-        "triggerOperator": "gt",
-        "customDetails": {
-          "SourceUser": "SrcUserName",
-          "ActorEntity": "AccountCustomEntity",
-          "FileName": "EntityFileName",
-          "IpEntity": "IPCustomEntity",
-          "SourceIP": "SrcIpAddr",
-          "Action": "Action"
-        },
-        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "Public link created for {{EntityFileName}} by {{SrcUserName}} from {{SrcIpAddr}}",
-          "alertDisplayNameFormat": "Slack public link created for sensitive file {{EntityFileName}} by {{SrcUserName}}"
+          "alertDisplayNameFormat": "Slack public link created for sensitive file {{EntityFileName}} by {{SrcUserName}}",
+          "alertDescriptionFormat": "Public link created for {{EntityFileName}} by {{SrcUserName}} from {{SrcIpAddr}}"
+        },
+        "customDetails": {
+          "Action": "Action",
+          "ActorEntity": "AccountCustomEntity",
+          "SourceIP": "SrcIpAddr",
+          "IpEntity": "IPCustomEntity",
+          "FileName": "EntityFileName",
+          "SourceUser": "SrcUserName"
         },
         "name": "SlackAudit - Public link created for file which can contain sensitive information.",
-        "queryPeriod": "1h",
+        "triggerThreshold": 0,
+        "query": "let AllowedFiles = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_File') | summarize make_set(tostring(SearchKey)));\nlet AllowedUsers = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_Account') | summarize make_set(tostring(SearchKey)));\nSlackAudit\n| where Action =~ 'file_public_link_created'\n| extend FileNameLower = tolower(EntityFileName), UserLower = tolower(SrcUserName)\n| where EntityFileName in~ ('id_rsa')\n    or FileNameLower has_any ('password', 'secret', 'token', 'credential', 'private key', 'api key')\n    or FileNameLower has_any ('.ssh', '.npmrc', '.muttrc', '.gitconfig', '.netrc', 'package.json', 'Gemfile', 'bower.json', 'config.gypi', 'travis.yml', 'config.json')\n| where isempty(AllowedFiles) or EntityFileName !in~ (AllowedFiles)\n| where isempty(AllowedUsers) or UserLower !in~ (AllowedUsers)\n| extend AccountCustomEntity = SrcUserName\n| extend IPCustomEntity = SrcIpAddr\n",
         "tactics": [
           "Exfiltration"
         ],
-        "query": "let AllowedFiles = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_File') | summarize make_set(tostring(SearchKey)));\nlet AllowedUsers = toscalar(_GetWatchlist('SlackAuditSensitiveFile_Allowlist_Account') | summarize make_set(tostring(SearchKey)));\nSlackAudit\n| where Action =~ 'file_public_link_created'\n| extend FileNameLower = tolower(EntityFileName), UserLower = tolower(SrcUserName)\n| where EntityFileName in~ ('id_rsa')\n    or FileNameLower has_any ('password', 'secret', 'token', 'credential', 'private key', 'api key')\n    or FileNameLower has_any ('.ssh', '.npmrc', '.muttrc', '.gitconfig', '.netrc', 'package.json', 'Gemfile', 'bower.json', 'config.gypi', 'travis.yml', 'config.json')\n| where isempty(AllowedFiles) or EntityFileName !in~ (AllowedFiles)\n| where isempty(AllowedUsers) or UserLower !in~ (AllowedUsers)\n| extend AccountCustomEntity = SrcUserName\n| extend IPCustomEntity = SrcIpAddr\n"
+        "description": "'Detects public links created for files that may contain sensitive data such as passwords, authentication tokens,\nsecret keys, or private configuration files. Tune exclusions using the SlackAuditSensitiveFile_Allowlist_File and SlackAuditSensitiveFile_Allowlist_Account\nwatchlists when known benign files or accounts generate expected public-link activity.'\n"
       }
     }
   ]

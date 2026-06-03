@@ -14,7 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
+        "severity": "Low",
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,30 +45,28 @@
             "entityType": "IP"
           }
         ],
-        "severity": "Low",
         "status": "Available",
-        "description": "Identifies AWS CloudTrail events associated with changes to Amazon RDS database security groups and database\nsecurity group ingress rules, which may indicate unauthorized modification of internet-facing RDS access. Validate whether\nthe change was authorized and consistent with change control policy.\nRDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html\n",
-        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS RDS database security change by {{AccountName}} in {{AWSRegion}}",
+          "alertDescriptionFormat": "Event {{EventName}} change in RDS security settings by {{AccountName}} from {{SourceIpAddress}}."
+        },
         "customDetails": {
-          "EventName": "EventName",
-          "EventType": "EventTypeName",
+          "EventSource": "EventSource",
           "AWSRegion": "AWSRegion",
           "UserAgent": "UserAgent",
-          "EventSource": "EventSource"
-        },
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Event {{EventName}} change in RDS security settings by {{AccountName}} from {{SourceIpAddress}}.",
-          "alertDisplayNameFormat": "AWS RDS database security change by {{AccountName}} in {{AWSRegion}}"
+          "EventType": "EventTypeName",
+          "EventName": "EventName"
         },
         "name": "AWSCloudTrail - Changes to internet facing AWS RDS Database instances",
-        "queryPeriod": "1d",
+        "triggerThreshold": 0,
+        "query": "let EventNameList = dynamic([\"AuthorizeDBSecurityGroupIngress\",\"CreateDBSecurityGroup\",\"DeleteDBSecurityGroup\",\"RevokeDBSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n",
         "tactics": [
           "Persistence",
           "PrivilegeEscalation",
           "DefenseEvasion"
         ],
-        "query": "let EventNameList = dynamic([\"AuthorizeDBSecurityGroupIngress\",\"CreateDBSecurityGroup\",\"DeleteDBSecurityGroup\",\"RevokeDBSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n"
+        "description": "Identifies AWS CloudTrail events associated with changes to Amazon RDS database security groups and database\nsecurity group ingress rules, which may indicate unauthorized modification of internet-facing RDS access. Validate whether\nthe change was authorized and consistent with change control policy.\nRDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html\n"
       }
     }
   ]
