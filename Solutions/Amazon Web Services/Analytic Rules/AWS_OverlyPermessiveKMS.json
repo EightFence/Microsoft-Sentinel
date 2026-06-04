@@ -14,11 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "High",
-        "queryPeriod": "1d",
         "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "severity": "High",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -32,38 +33,37 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "status": "Available",
+        "queryPeriod": "1d",
         "queryFrequency": "1d",
+        "query": "let kmsActions = dynamic([\"kms:Encrypt\", \"kms:*\"]); //Add other overly permissive APIs to this list.\nAWSCloudTrail\n| where EventName in (\"CreateKey\",\"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement\n| mvexpand Statement\n| extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))\n| where Effect =~ \"Allow\" and Action has_any (kmsActions) and Principal == \"*\" \n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
+        "status": "Available",
+        "tactics": [
+          "Impact"
+        ],
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS overly permissive KMS key policy change by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} creating a broadly permissive KMS policy in account {{RecipientAccountId}}."
         },
+        "description": "Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.\nOverly permissive key policies can be abused for malicious encryption operations and indicate potential account\ncompromise or risky misconfiguration.\n",
         "customDetails": {
           "EventSource": "EventSource",
-          "AWSRegion": "AWSRegion",
           "UserIdentityArn": "UserIdentityArn",
-          "EventName": "EventName"
+          "EventName": "EventName",
+          "AWSRegion": "AWSRegion"
         },
-        "name": "AWSCloudTrail - Suspicious overly permissive KMS key policy created",
-        "triggerThreshold": 0,
-        "query": "let kmsActions = dynamic([\"kms:Encrypt\", \"kms:*\"]); //Add other overly permissive APIs to this list.\nAWSCloudTrail\n| where EventName in (\"CreateKey\",\"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement\n| mvexpand Statement\n| extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))\n| where Effect =~ \"Allow\" and Action has_any (kmsActions) and Principal == \"*\" \n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "tactics": [
-          "Impact"
-        ],
-        "description": "Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.\nOverly permissive key policies can be abused for malicious encryption operations and indicate potential account\ncompromise or risky misconfiguration.\n"
+        "name": "AWSCloudTrail - Suspicious overly permissive KMS key policy created"
       }
     }
   ]

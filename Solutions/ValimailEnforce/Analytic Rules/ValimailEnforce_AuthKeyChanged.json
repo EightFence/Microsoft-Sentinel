@@ -14,11 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "queryPeriod": "1h",
         "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -28,44 +29,43 @@
                 "identifier": "UPNSuffix",
                 "columnName": "AccountDomain"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "DNS",
             "fieldMappings": [
               {
                 "identifier": "DomainName",
                 "columnName": "DomainName"
               }
-            ],
-            "entityType": "DNS"
+            ]
           }
         ],
-        "status": "Available",
+        "queryPeriod": "1h",
         "queryFrequency": "1h",
+        "query": "ValimailEnforceEvents_CL\n| where EventSeverity == \"Medium\"\n| where EventCategory in (\"SPFConfiguration\", \"DKIMConfiguration\")\n| where IsHighValueEvent == true\n| summarize\n    EventCount = count(),\n    FirstSeen = min(PerformedAt),\n    LastSeen = max(PerformedAt),\n    AffectedDomains = make_set(Subject),\n    Actions = make_set(EventType)\n  by User, EventCategory\n| extend\n    AccountName = tostring(split(User, \"@\")[0]),\n    AccountDomain = tostring(split(User, \"@\")[1]),\n    DomainName = tostring(AffectedDomains[0])\n",
+        "status": "Available",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "groupByEntities": [
+              "Account"
+            ],
+            "lookbackDuration": "1d",
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected"
+          }
+        },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "{{EventCategory}} key deleted on {{EventCount}} domain(s) by {{User}}",
           "alertDescriptionFormat": "User '{{User}}' deleted one or more {{EventCategory}} records affecting\ndomains: {{AffectedDomains}}. This may weaken email authentication posture.\n"
         },
-        "name": "Valimail Enforce - Email Authentication Key Deleted",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "lookbackDuration": "1d",
-            "enabled": true,
-            "reopenClosedIncident": false
-          }
-        },
-        "triggerThreshold": 0,
-        "query": "ValimailEnforceEvents_CL\n| where EventSeverity == \"Medium\"\n| where EventCategory in (\"SPFConfiguration\", \"DKIMConfiguration\")\n| where IsHighValueEvent == true\n| summarize\n    EventCount = count(),\n    FirstSeen = min(PerformedAt),\n    LastSeen = max(PerformedAt),\n    AffectedDomains = make_set(Subject),\n    Actions = make_set(EventType)\n  by User, EventCategory\n| extend\n    AccountName = tostring(split(User, \"@\")[0]),\n    AccountDomain = tostring(split(User, \"@\")[1]),\n    DomainName = tostring(AffectedDomains[0])\n",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "description": "This query searches for deletion of SPF delegations or DKIM keys, which are medium-severity events\nthat could degrade email authentication posture for a domain.\n"
+        "description": "This query searches for deletion of SPF delegations or DKIM keys, which are medium-severity events\nthat could degrade email authentication posture for a domain.\n",
+        "name": "Valimail Enforce - Email Authentication Key Deleted"
       }
     }
   ]
