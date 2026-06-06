@@ -14,60 +14,60 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "status": "Available",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "AccountDomain",
-                "identifier": "UPNSuffix"
-              }
+        "triggerOperator": "gt",
+        "name": "Valimail Enforce - Unusual Rate of Configuration Changes or User Additions",
+        "queryFrequency": "1h",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "groupByEntities": [
+              "Account"
             ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "DomainName",
-                "identifier": "DomainName"
-              }
-            ],
-            "entityType": "DNS"
+            "matchingMethod": "Selected",
+            "lookbackDuration": "1d",
+            "reopenClosedIncident": false
           }
-        ],
+        },
+        "queryPeriod": "1h",
+        "description": "This query searches for a single user performing more than 3 configuration changes or user\nadditions within a 1-hour window on any domain. An unusual burst of changes may\nindicate a compromised admin account, unauthorized automation, or insider threat.\n",
         "query": "let threshold = 3;\nlet timeWindow = 1h;\nValimailEnforceEvents_CL\n| where EventCategory in (\n    \"DMARCPolicy\",\n    \"SPFConfiguration\",\n    \"DKIMConfiguration\",\n    \"DomainManagement\",\n    \"UserManagement\"\n  )\n| summarize\n    ChangeCount       = count(),\n    HighValueCount    = countif(IsHighValueEvent == true),\n    Domains           = make_set(Subject),\n    DomainCount       = dcount(Subject),\n    Actions           = make_set(EventType),\n    Categories        = make_set(EventCategory),\n    FirstSeen         = min(PerformedAt),\n    LastSeen          = max(PerformedAt)\n  by User, bin(PerformedAt, timeWindow)\n| where ChangeCount > threshold\n| extend\n    AccountName   = tostring(split(User, \"@\")[0]),\n    AccountDomain = tostring(split(User, \"@\")[1]),\n    DomainName    = tostring(Domains[0]),\n    ChangesPerMin = round(todouble(ChangeCount) / 60.0, 2)\n",
         "severity": "Medium",
+        "status": "Available",
         "tactics": [
           "Impact",
           "DefenseEvasion",
           "PrivilegeEscalation"
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "1d",
-            "groupByEntities": [
-              "Account"
-            ],
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected",
-            "enabled": true
-          },
-          "createIncident": true
-        },
-        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Unusual change rate by {{User}}, {{ChangeCount}} changes in 1h across {{DomainCount}} domain(s)",
           "alertDescriptionFormat": "User '{{User}}' made {{ChangeCount}} configuration changes across {{DomainCount}} domain(s) within one hour.\n"
         },
-        "queryFrequency": "1h",
-        "description": "This query searches for a single user performing more than 3 configuration changes or user\nadditions within a 1-hour window on any domain. An unusual burst of changes may\nindicate a compromised admin account, unauthorized automation, or insider threat.\n",
-        "name": "Valimail Enforce - Unusual Rate of Configuration Changes or User Additions",
-        "triggerOperator": "gt"
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "AccountDomain"
+              }
+            ]
+          },
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "DomainName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0
       }
     }
   ]
