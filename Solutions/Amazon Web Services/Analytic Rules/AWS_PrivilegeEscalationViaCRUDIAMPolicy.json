@@ -14,42 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "name": "AWSCloudTrail - Privilege escalation via CRUD IAM policy",
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "customDetails": {
-          "RecipientAccountId": "RecipientAccountId",
-          "PolicyName": "PolicyName",
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "description": "Detects creation of inline IAM policies that grant broad IAM create, read, update, and delete capabilities.\nThis behavior can establish or expand privileged control paths in the account and should be reviewed as potential\nprivilege escalation.\n",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (Action contains \"iam:Create\" and (Action contains \"iam:Get\" or Action contains \"iam:List\")  and Action contains \"iam:Update\" and Action contains \"iam:Delete\") and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "severity": "Medium",
         "status": "Available",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS IAM privilege escalation policy update by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline IAM escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
+        "description": "Detects creation of inline IAM policies that grant broad IAM create, read, update, and delete capabilities.\nThis behavior can establish or expand privileged control paths in the account and should be reviewed as potential\nprivilege escalation.\n",
+        "customDetails": {
+          "UserIdentityArn": "UserIdentityArn",
+          "EventName": "EventName",
+          "PolicyName": "PolicyName",
+          "RecipientAccountId": "RecipientAccountId"
         },
+        "queryFrequency": "1d",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -57,13 +45,25 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "triggerThreshold": 0
+        "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS IAM privilege escalation policy update by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline IAM escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
+        },
+        "name": "AWSCloudTrail - Privilege escalation via CRUD IAM policy",
+        "triggerOperator": "gt",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (Action contains \"iam:Create\" and (Action contains \"iam:Get\" or Action contains \"iam:List\")  and Action contains \"iam:Update\" and Action contains \"iam:Delete\") and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "severity": "Medium"
       }
     }
   ]
