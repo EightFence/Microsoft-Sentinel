@@ -15,15 +15,8 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'Google Threat Intelligence hash correlation.'\n",
-        "queryFrequency": "30m",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerThreshold": 0,
-        "queryPeriod": "1d",
         "entityMappings": [
           {
-            "entityType": "FileHash",
             "fieldMappings": [
               {
                 "columnName": "Hash",
@@ -33,29 +26,36 @@
                 "columnName": "HashType",
                 "identifier": "Algorithm"
               }
-            ]
+            ],
+            "entityType": "FileHash"
           }
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "1h",
-            "enabled": true
-          },
-          "createIncident": true
-        },
+        "name": "Google Threat Intelligence - Threat Hunting Hash",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Google Threat Intelligence Match",
           "alertDescriptionFormat": "Correlation found from the {{Type}} table."
         },
-        "name": "Google Threat Intelligence - Threat Hunting Hash",
-        "triggerOperator": "gt",
+        "queryFrequency": "30m",
+        "queryPeriod": "1d",
         "tactics": [
           "Execution"
         ],
+        "triggerOperator": "gt",
         "query": "let ioc_lookBack = 1d;\n_Im_FileEvent\n| where isnotempty(Hash)\n| extend lowerHash=tolower(Hash)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey contains 'file:hashes'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n| extend lowerHash=tolower(ObservableValue)\n) on lowerHash\n| project Hash=ObservableValue, HashType=extract(\"file:hashes.('[^']*')\", 1, ObservableKey), Description=Data.description, Type, TimeGenerated\n",
-        "severity": "Medium"
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "1h"
+          },
+          "createIncident": true
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerThreshold": 0
       }
     }
   ]
