@@ -16,10 +16,20 @@
       "properties": {
         "customDetails": {
           "AWSRegion": "AWSRegion",
-          "RecipientAccountId": "RecipientAccountId",
           "EventSource": "EventSource",
-          "EventName": "EventName"
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId"
         },
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "AWSCloudTrail - Changes to Amazon VPC settings",
+        "severity": "Low",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Event {{EventName}} executed by {{AccountName}} from {{SourceIpAddress}}.",
+          "alertDisplayNameFormat": "AWS VPC change by {{AccountName}} in {{AWSRegion}}"
+        },
+        "triggerThreshold": 0,
+        "query": "let EventNameList = dynamic([\"CreateNetworkAclEntry\",\"CreateRoute\",\"CreateRouteTable\",\"CreateInternetGateway\",\"CreateNatGateway\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| where EventSource != \"apigateway.amazonaws.com\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n",
         "description": "Identifies changes to Amazon VPC(Virtual Private Cloud) settings that can alter network exposure, routing, or access controls.\nThis rule identifies changes to Amazon VPC (Virtual Private Cloud) settings such as new ACL entries, routes, routetable or Gateways. \nAWS VPC API Docs: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/OperationList-query-vpc.html'\n",
         "entityMappings": [
           {
@@ -49,22 +59,12 @@
             "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - Changes to Amazon VPC settings",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS VPC change by {{AccountName}} in {{AWSRegion}}",
-          "alertDescriptionFormat": "Event {{EventName}} executed by {{AccountName}} from {{SourceIpAddress}}."
-        },
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
+        "status": "Available",
         "tactics": [
           "PrivilegeEscalation",
           "DefenseEvasion"
         ],
-        "triggerOperator": "gt",
-        "query": "let EventNameList = dynamic([\"CreateNetworkAclEntry\",\"CreateRoute\",\"CreateRouteTable\",\"CreateInternetGateway\",\"CreateNatGateway\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| where EventSource != \"apigateway.amazonaws.com\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n",
-        "severity": "Low",
-        "triggerThreshold": 0,
-        "status": "Available"
+        "triggerOperator": "gt"
       }
     }
   ]

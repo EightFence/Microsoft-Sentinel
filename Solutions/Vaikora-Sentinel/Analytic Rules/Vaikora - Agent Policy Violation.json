@@ -16,12 +16,14 @@
       "properties": {
         "customDetails": {
           "ViolationCount": "ViolationCount",
-          "PolicyIds": "PolicyList",
+          "ActionTypes": "ActionList",
           "MaxAnomalyScore": "MaxAnomalyScore",
-          "ActionTypes": "ActionList"
+          "PolicyIds": "PolicyList"
         },
-        "suppressionDuration": "15m",
-        "description": "Identifies AI agent actions explicitly blocked by a Vaikora policy. Repeated violations from the same agent may indicate prompt injection, policy circumvention, or a compromised workflow.\n",
+        "queryFrequency": "15m",
+        "queryPeriod": "1h",
+        "name": "Vaikora - Agent policy violation",
+        "severity": "Medium",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -33,34 +35,32 @@
             "entityType": "Account"
           }
         ],
-        "name": "Vaikora - Agent policy violation",
+        "triggerThreshold": 0,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ],
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false,
+            "enabled": true
+          }
+        },
+        "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where policy_decision_s == \"block\"\n| summarize\n    ViolationCount = count(),\n    PolicyIds = make_set(policy_id_s),\n    ActionTypes = make_set(action_type_s),\n    ResourceTypes = make_set(resource_type_s),\n    MaxAnomalyScore = max(anomaly_score_d),\n    Severities = make_set(severity_s),\n    LogHashes = make_set(log_hash_s)\n  by AgentId = agent_id_s\n| extend\n    PolicyList = strcat_array(PolicyIds, \", \"),\n    ActionList = strcat_array(ActionTypes, \", \"),\n    ResourceList = strcat_array(ResourceTypes, \", \")\n| where ViolationCount >= 1\n",
+        "description": "Identifies AI agent actions explicitly blocked by a Vaikora policy. Repeated violations from the same agent may indicate prompt injection, policy circumvention, or a compromised workflow.\n",
         "suppressionEnabled": false,
-        "queryFrequency": "15m",
-        "queryPeriod": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "suppressionDuration": "15m",
+        "status": "Available",
         "tactics": [
           "Impact",
           "DefenseEvasion"
         ],
-        "triggerOperator": "GreaterThan",
-        "query": "Vaikora_AgentSignals_CL\n| where TimeGenerated > ago(1h)\n| where policy_decision_s == \"block\"\n| summarize\n    ViolationCount = count(),\n    PolicyIds = make_set(policy_id_s),\n    ActionTypes = make_set(action_type_s),\n    ResourceTypes = make_set(resource_type_s),\n    MaxAnomalyScore = max(anomaly_score_d),\n    Severities = make_set(severity_s),\n    LogHashes = make_set(log_hash_s)\n  by AgentId = agent_id_s\n| extend\n    PolicyList = strcat_array(PolicyIds, \", \"),\n    ActionList = strcat_array(ActionTypes, \", \"),\n    ResourceList = strcat_array(ResourceTypes, \", \")\n| where ViolationCount >= 1\n",
-        "severity": "Medium",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "groupByEntities": [
-              "Account"
-            ],
-            "lookbackDuration": "1h"
-          },
-          "createIncident": true
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerThreshold": 0,
-        "status": "Available"
+        "triggerOperator": "GreaterThan"
       }
     }
   ]

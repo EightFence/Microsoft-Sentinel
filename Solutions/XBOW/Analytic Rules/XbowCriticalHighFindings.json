@@ -15,16 +15,38 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "customDetails": {
-          "FindingName": "FindingName",
-          "AssetID": "AssetId",
-          "Mitigations": "Mitigations",
-          "CreatedAt": "CreatedAt",
-          "AssetName": "AssetName",
           "OrganizationID": "OrganizationId",
-          "Severity": "Severity",
+          "AssetID": "AssetId",
+          "AssetName": "AssetName",
+          "CreatedAt": "CreatedAt",
+          "FindingName": "FindingName",
           "FindingID": "FindingId",
-          "State": "State"
+          "Mitigations": "Mitigations",
+          "State": "State",
+          "Severity": "Severity"
         },
+        "queryFrequency": "30m",
+        "queryPeriod": "1h",
+        "name": "XbowCriticalHighFindings",
+        "severity": "High",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}",
+          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}"
+        },
+        "triggerThreshold": 0,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "groupByCustomDetails": [
+              "FindingID"
+            ],
+            "lookbackDuration": "24h",
+            "reopenClosedIncident": false,
+            "enabled": true
+          }
+        },
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
         "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
         "entityMappings": [
           {
@@ -37,13 +59,10 @@
             "entityType": "URL"
           }
         ],
-        "name": "XbowCriticalHighFindings",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}",
-          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
-        "queryFrequency": "30m",
-        "queryPeriod": "1h",
+        "status": "Available",
         "tactics": [
           "InitialAccess",
           "Execution",
@@ -51,26 +70,7 @@
           "DefenseEvasion",
           "Impact"
         ],
-        "triggerOperator": "gt",
-        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
-        "severity": "High",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "lookbackDuration": "24h",
-            "groupByCustomDetails": [
-              "FindingID"
-            ]
-          },
-          "createIncident": true
-        },
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerThreshold": 0,
-        "status": "Available"
+        "triggerOperator": "gt"
       }
     }
   ]

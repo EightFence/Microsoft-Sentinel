@@ -15,11 +15,21 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "customDetails": {
+          "Repository": "repoName",
           "HighFindings": "High",
-          "CriticalFindings": "Critical",
           "ImageDigest": "imageId",
-          "Repository": "repoName"
+          "CriticalFindings": "Critical"
         },
+        "queryFrequency": "1d",
+        "queryPeriod": "1d",
+        "name": "AWSCloudTrail - ECR image scan findings high or critical",
+        "severity": "High",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "ECR image {{imageId}} in repository {{repoName}} returned critical and high findings.",
+          "alertDisplayNameFormat": "AWS ECR image scan findings with high or critical Vulnerabilities in {{repoName}}"
+        },
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where EventName == \"DescribeImageScanFindings\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend repoName = tostring(parse_json(ResponseElements).repositoryName)\n| extend imageId = tostring(parse_json(ResponseElements).imageId.imageDigest)\n| extend Critical = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.CRITICAL)\n| extend High = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.HIGH)\n| where Critical > 0 or High > 0\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "description": "Identifies Amazon ECR image scan findings that report high or critical severity vulnerabilities. These findings indicate container images that should be reviewed and remediated before deployment or continued use.\n",
         "entityMappings": [
           {
@@ -49,21 +59,11 @@
             "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - ECR image scan findings high or critical",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS ECR image scan findings with high or critical Vulnerabilities in {{repoName}}",
-          "alertDescriptionFormat": "ECR image {{imageId}} in repository {{repoName}} returned critical and high findings."
-        },
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
+        "status": "Available",
         "tactics": [
           "Discovery"
         ],
-        "triggerOperator": "gt",
-        "query": "AWSCloudTrail\n| where EventName == \"DescribeImageScanFindings\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend repoName = tostring(parse_json(ResponseElements).repositoryName)\n| extend imageId = tostring(parse_json(ResponseElements).imageId.imageDigest)\n| extend Critical = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.CRITICAL)\n| extend High = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.HIGH)\n| where Critical > 0 or High > 0\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "severity": "High",
-        "triggerThreshold": 0,
-        "status": "Available"
+        "triggerOperator": "gt"
       }
     }
   ]

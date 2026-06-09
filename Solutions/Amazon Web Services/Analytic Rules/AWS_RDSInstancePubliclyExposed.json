@@ -15,11 +15,21 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "customDetails": {
-          "AWSRegion": "AWSRegion",
-          "RecipientAccountId": "RecipientAccountId",
           "UserIdentityArn": "UserIdentityArn",
-          "EventName": "EventName"
+          "AWSRegion": "AWSRegion",
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId"
         },
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "name": "AWSCloudTrail - RDS instance publicly exposed",
+        "severity": "Medium",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} setting RDS publicly accessible in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS RDS instance publicly exposed by {{AccountName}}"
+        },
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where  EventName in (\"CreateDBInstance\", \"ModifyDBInstance\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).publiclyAccessible) == \"true\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "description": "Detects RDS instance creation or modification events where the database is configured as publicly accessible.\nPublic exposure of database instances can increase the risk of unauthorized access and data leakage.\n",
         "entityMappings": [
           {
@@ -49,21 +59,11 @@
             "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - RDS instance publicly exposed",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS RDS instance publicly exposed by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} setting RDS publicly accessible in account {{RecipientAccountId}}."
-        },
-        "queryFrequency": "1h",
-        "queryPeriod": "1h",
+        "status": "Available",
         "tactics": [
           "Exfiltration"
         ],
-        "triggerOperator": "gt",
-        "query": "AWSCloudTrail\n| where  EventName in (\"CreateDBInstance\", \"ModifyDBInstance\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).publiclyAccessible) == \"true\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "status": "Available"
+        "triggerOperator": "gt"
       }
     }
   ]
