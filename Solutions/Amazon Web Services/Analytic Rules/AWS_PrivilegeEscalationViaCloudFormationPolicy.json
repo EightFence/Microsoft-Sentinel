@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "EventName": "EventName",
-          "PolicyName": "PolicyName",
-          "RecipientAccountId": "RecipientAccountId",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "name": "AWSCloudTrail - Privilege escalation via CloudFormation policy",
-        "severity": "Medium",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline CloudFormation escalation policy {{PolicyName}} in account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS CloudFormation privilege escalation policy update by {{AccountName}}"
-        },
         "triggerThreshold": 0,
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"cloudformation:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action contains \"cloudformation:DescribeStacks\" and Action contains \"cloudformation:CreateStack\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"cloudformation:Describe*\" and Action contains \"cloudformation:Create*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "description": "Detects creation of inline IAM policies with CloudFormation and IAM permissions associated with privilege\nescalation pathways, including iam:PassRole plus stack creation capabilities. This pattern can enable indirect\nelevation and should be investigated for unauthorized policy changes.\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "status": "Available",
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"cloudformation:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action contains \"cloudformation:DescribeStacks\" and Action contains \"cloudformation:CreateStack\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"cloudformation:Describe*\" and Action contains \"cloudformation:Create*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS CloudFormation privilege escalation policy update by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline CloudFormation escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
+        },
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "triggerOperator": "gt"
+        "queryPeriod": "1d",
+        "triggerOperator": "gt",
+        "name": "AWSCloudTrail - Privilege escalation via CloudFormation policy",
+        "description": "Detects creation of inline IAM policies with CloudFormation and IAM permissions associated with privilege\nescalation pathways, including iam:PassRole plus stack creation capabilities. This pattern can enable indirect\nelevation and should be investigated for unauthorized policy changes.\n",
+        "customDetails": {
+          "EventName": "EventName",
+          "UserIdentityArn": "UserIdentityArn",
+          "PolicyName": "PolicyName",
+          "RecipientAccountId": "RecipientAccountId"
+        },
+        "queryFrequency": "1d",
+        "status": "Available",
+        "severity": "Medium"
       }
     }
   ]
