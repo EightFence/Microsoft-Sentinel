@@ -15,6 +15,8 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "Identifies Amazon ECR image scanning being disabled. This change can reduce visibility into vulnerable container images and may indicate defense evasion or weakening of container security controls.\n",
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n| where EventName == \"PutImageScanningConfiguration\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend scanOnPush = parse_json(tostring((parse_json(RequestParameters).imageScanningConfiguration))).scanOnPush\n| where scanOnPush == false\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, RecipientAccountId, AccountName, AccountUPNSuffix\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,27 +45,25 @@
             "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - Amazon ECR image scanning disabled",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Amazon ECR image scanning was disabled by {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}",
-          "alertDisplayNameFormat": "Amazon ECR image scanning disabled by {{AccountName}} from {{SourceIpAddress}}"
-        },
-        "query": "AWSCloudTrail\n| where EventName == \"PutImageScanningConfiguration\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend scanOnPush = parse_json(tostring((parse_json(RequestParameters).imageScanningConfiguration))).scanOnPush\n| where scanOnPush == false\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, RecipientAccountId, AccountName, AccountUPNSuffix\n",
-        "customDetails": {
-          "RecipientAccountId": "RecipientAccountId",
-          "UserIdentityUserName": "UserIdentityUserName",
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "triggerOperator": "gt",
         "tactics": [
           "DefenseEvasion"
         ],
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
+        "name": "AWSCloudTrail - Amazon ECR image scanning disabled",
+        "triggerOperator": "gt",
         "status": "Available",
-        "queryFrequency": "1d"
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "customDetails": {
+          "RecipientAccountId": "RecipientAccountId",
+          "EventName": "EventName",
+          "UserIdentityArn": "UserIdentityArn",
+          "UserIdentityUserName": "UserIdentityUserName"
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Amazon ECR image scanning disabled by {{AccountName}} from {{SourceIpAddress}}",
+          "alertDescriptionFormat": "Amazon ECR image scanning was disabled by {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}"
+        },
+        "queryPeriod": "1d"
       }
     }
   ]
