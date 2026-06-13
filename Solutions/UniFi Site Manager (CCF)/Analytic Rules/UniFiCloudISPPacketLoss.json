@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6f2d71d6-e6c4-0da4-91da-e8192dc5b12c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6f2d71d6-e6c4-0da4-91da-e8192dc5b12c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when WAN packet loss occurs. Even small loss percentages can significantly degrade VoIP calls and video conferencing quality.\n",
+        "subTechniques": [
+          "T1498.001",
+          "T1499.002"
+        ],
+        "queryFrequency": "15m",
+        "name": "UniFi Site Manager: ISP Packet Loss",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SiteId",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ISPName",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "// UniFi ISP Packet Loss Detection\nlet PacketLossThreshold = 5;\nlet MinTotalPacketLoss = 10;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    packetLoss = toint(period.data.wan.packetLoss),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn),\n    avgLatency = toint(period.data.wan.avgLatency)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, packetLoss, avgLatency, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where packetLoss >= PacketLossThreshold\n| summarize\n    TotalPacketLoss = sum(packetLoss),\n    EventCount = count(),\n    AvgLatency = avg(avgLatency),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where TotalPacketLoss >= MinTotalPacketLoss\n| extend TimeGenerated = now()\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    TotalPacketLoss,\n    EventCount,\n    AvgLatencyMs = round(AvgLatency, 1),\n    FirstSeen,\n    LastSeen\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT4H"
+          }
+        },
+        "queryPeriod": "30m"
+      }
+    }
+  ]
+}

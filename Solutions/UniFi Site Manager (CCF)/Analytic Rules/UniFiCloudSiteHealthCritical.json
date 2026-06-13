@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c8875ebb-cc6e-14e4-4216-d8b06fd92c90')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c8875ebb-cc6e-14e4-4216-d8b06fd92c90')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when a site has multiple offline devices, indicating significant site-level issues such as a power outage, network failure, or infrastructure problem.\n",
+        "subTechniques": [
+          "T1499.002"
+        ],
+        "queryFrequency": "15m",
+        "name": "UniFi Site Manager: Site Health Critical",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SiteId",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "SiteName",
+                "identifier": "DnsDomain"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "// UniFi Site Health Critical Detection\nlet OfflineThreshold = 3;\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(30m)\n| summarize arg_max(TimeGenerated, *) by SiteId\n| where OfflineDevices >= OfflineThreshold\n| extend\n    AvailabilityPct = round(100.0 * (TotalDevices - OfflineDevices) / TotalDevices, 1),\n    TotalClients = WifiClients + WiredClients\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    SiteName = SiteName,\n    TotalDevices = TotalDevices,\n    OfflineDevices = OfflineDevices,\n    OnlineDevices = TotalDevices - OfflineDevices,\n    AvailabilityPct,\n    TotalClients,\n    WiFiClients = WifiClients,\n    WiredClients = WiredClients,\n    Timezone = Timezone\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": true,
+            "lookbackDuration": "PT4H"
+          }
+        },
+        "queryPeriod": "30m"
+      }
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1fb5c195-9bff-e18b-3e8f-5123f46bff9d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1fb5c195-9bff-e18b-3e8f-5123f46bff9d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when UniFi Site Manager data connectors stop sending data, ensuring visibility into the UniFi estate is maintained.\n",
+        "subTechniques": [
+          "T1562.006"
+        ],
+        "queryFrequency": "15m",
+        "name": "UniFi Site Manager: Data Connector Health",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "TableDisplay",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "query": "// UniFi Data Connector Health Monitoring\nlet StaleThreshold = 30;\nlet DevicesHealth = Unifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"Unifi_SiteManager_Devices_CL\", TableDisplay = \"Devices\";\nlet HostsHealth = Unifi_SiteManager_Hosts_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"Unifi_SiteManager_Hosts_CL\", TableDisplay = \"Hosts\";\nlet SitesHealth = Unifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"Unifi_SiteManager_Sites_CL\", TableDisplay = \"Sites\";\nlet ISPHealth = Unifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"Unifi_SiteManager_ISPMetrics_CL\", TableDisplay = \"ISP Metrics\";\nunion DevicesHealth, HostsHealth, SitesHealth, ISPHealth\n| extend \n    MinutesSinceData = datetime_diff('minute', now(), LastReceived),\n    Status = case(\n        datetime_diff('minute', now(), LastReceived) <= 15, \"Healthy\",\n        datetime_diff('minute', now(), LastReceived) <= 30, \"Delayed\",\n        datetime_diff('minute', now(), LastReceived) <= 60, \"Stale\",\n        \"Critical\"\n    )\n| where MinutesSinceData >= StaleThreshold\n| extend TimeGenerated = now()\n| project\n    TimeGenerated,\n    TableName,\n    TableDisplay,\n    LastReceived,\n    MinutesSinceData,\n    Status\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT4H"
+          }
+        },
+        "queryPeriod": "2h"
+      }
+    }
+  ]
+}

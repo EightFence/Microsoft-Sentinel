@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9283b576-5350-fca1-3979-dacb6acd1d16')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9283b576-5350-fca1-3979-dacb6acd1d16')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when multiple UniFi devices go offline simultaneously, typically signaling a power outage, upstream connectivity failure, or infrastructure issue requiring investigation.\n",
+        "subTechniques": [
+          "T1499.002"
+        ],
+        "queryFrequency": "15m",
+        "name": "UniFi Site Manager: Multiple Devices Offline",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "AffectedProductLines",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "let prev_offline_ids = Unifi_SiteManager_Devices_CL\n    | where TimeGenerated between (ago(45m) .. ago(15m))\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where Status == \"offline\"\n    | distinct Id;\nUnifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(15m)\n| summarize arg_max(TimeGenerated, *) by Id\n| where Status == \"offline\"\n| extend IsNew = Id !in (prev_offline_ids)\n| summarize\n    OfflineDeviceCount = count(),\n    NewlyOfflineCount = countif(IsNew),\n    OfflineDevices = make_list(coalesce(Name, Id)),\n    NewlyOfflineDevices = make_list_if(coalesce(Name, Id), IsNew),\n    ProductLines = make_set(ProductLine)\n| where OfflineDeviceCount >= 3\n| where NewlyOfflineCount > 0\n| extend\n    TimeGenerated = now(),\n    OfflineDeviceList = strcat_array(OfflineDevices, \", \"),\n    NewlyOfflineList = strcat_array(NewlyOfflineDevices, \", \"),\n    AffectedProductLines = strcat_array(ProductLines, \", \")\n| extend Activity = strcat(NewlyOfflineCount, ' device(s) newly offline (', OfflineDeviceCount, ' total offline): ', NewlyOfflineList)\n| project\n    TimeGenerated,\n    OfflineDeviceCount,\n    NewlyOfflineCount,\n    OfflineDeviceList,\n    NewlyOfflineList,\n    AffectedProductLines,\n    Activity\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": true,
+            "lookbackDuration": "PT4H"
+          }
+        },
+        "queryPeriod": "30m"
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b54123ef-cfa7-769e-a959-f437404a1192')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b54123ef-cfa7-769e-a959-f437404a1192')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when the ISP connection experiences downtime, impacting business operations and requiring documentation for SLA purposes.\n",
+        "subTechniques": [
+          "T1499.002"
+        ],
+        "queryFrequency": "15m",
+        "name": "UniFi Site Manager: ISP Downtime",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SiteId",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ISPName",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "// UniFi ISP Downtime Detection\nlet MinDowntimeSeconds = 60;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    downtime = toint(period.data.wan.downtime),\n    uptime = todouble(period.data.wan.uptime),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, downtime, uptime, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where downtime > 0\n| summarize\n    TotalDowntimeSeconds = sum(downtime),\n    EventCount = count(),\n    AvgUptime = round(avg(uptime), 2),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where TotalDowntimeSeconds >= MinDowntimeSeconds\n| extend\n    TimeGenerated = now(),\n    DowntimeMinutes = round(TotalDowntimeSeconds / 60.0, 2)\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    TotalDowntimeSeconds,\n    DowntimeMinutes,\n    AvgUptimePct = AvgUptime,\n    EventCount,\n    FirstSeen,\n    LastSeen\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": true,
+            "lookbackDuration": "PT4H"
+          }
+        },
+        "queryPeriod": "30m"
+      }
+    }
+  ]
+}

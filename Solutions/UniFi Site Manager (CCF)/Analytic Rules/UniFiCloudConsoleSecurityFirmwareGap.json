@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4f7b9e6c-5d1a-4392-8c2b-3e4f5a6b7c8d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4f7b9e6c-5d1a-4392-8c2b-3e4f5a6b7c8d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies UniFi console / gateway devices (UDM, Cloud Key, USG, UXG, gateway) running firmware behind a major or minor version of the available release. Major/minor firmware jumps on consoles routinely include security advisory fixes (e.g. UniFi Security Advisory Bulletins). Patch-level updates are excluded since those are typically minor non-security bug fixes covered by the lower-severity FirmwareUpdateAvailable rule.\n",
+        "subTechniques": [],
+        "queryFrequency": "6h",
+        "name": "UniFi Site Manager: Console firmware likely security-relevant",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DeviceName",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "DeviceId",
+                "identifier": "NetBiosName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "query": "// Detects consoles/gateways with a major-or-minor firmware Version gap vs the available release.\n// Patch-level gaps (e.g. 5.1.11 -> 5.1.12) are excluded - covered by FirmwareUpdateAvailable at Low severity.\nUnifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(6h)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsConsole == true\n| where FirmwareStatus == \"updateAvailable\"\n| where isnotempty(Version) and isnotempty(UpdateAvailable)\n| extend\n    currentMajor = toint(extract(@\"^(\\d+)\\.\", 1, Version)),\n    currentMinor = toint(extract(@\"^\\d+\\.(\\d+)\", 1, Version)),\n    availableMajor = toint(extract(@\"^(\\d+)\\.\", 1, UpdateAvailable)),\n    availableMinor = toint(extract(@\"^\\d+\\.(\\d+)\", 1, UpdateAvailable))\n| where isnotnull(currentMajor) and isnotnull(availableMajor)\n| where (availableMajor > currentMajor) or (availableMajor == currentMajor and availableMinor > currentMinor)\n| extend GapType = iff(availableMajor > currentMajor, \"major\", \"minor\")\n| extend\n    TimeGenerated = now(),\n    Activity = strcat('Console ', Name, ' running ', Version, ' - likely security-relevant ', GapType, ' update available to ', UpdateAvailable)\n| project\n    TimeGenerated,\n    DeviceId = Id,\n    DeviceName = Name,\n    Model = Model,\n    ProductLine = ProductLine,\n    CurrentVersion = Version,\n    AvailableVersion = UpdateAvailable,\n    GapType,\n    Activity\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D"
+          }
+        },
+        "queryPeriod": "6h"
+      }
+    }
+  ]
+}

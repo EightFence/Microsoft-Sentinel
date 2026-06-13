@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2bb29f25-833a-5544-4a8e-9bf6c4d8da56')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2bb29f25-833a-5544-4a8e-9bf6c4d8da56')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when site WAN uptime falls below 99 percent, an SLA-grade availability problem. Combine with the ISP Downtime rule for root-cause attribution.\n",
+        "subTechniques": [
+          "T1499.002"
+        ],
+        "queryFrequency": "1h",
+        "name": "UniFi Site Manager: WAN uptime below 99%",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SiteId",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "SiteName",
+                "identifier": "DnsDomain"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(1h)\n| extend wanUptime = WanUptimePct\n      | where isnotnull(wanUptime) and wanUptime < 99.0\n      | summarize arg_max(TimeGenerated, *) by SiteId, SiteName\n      | extend Activity = strcat('WAN uptime ', round(wanUptime, 2), '% (below 99% SLA threshold)')\n      | project TimeGenerated, SiteId, SiteName, Activity, WanUptimePct = round(wanUptime, 2)\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "queryPeriod": "1h"
+      }
+    }
+  ]
+}

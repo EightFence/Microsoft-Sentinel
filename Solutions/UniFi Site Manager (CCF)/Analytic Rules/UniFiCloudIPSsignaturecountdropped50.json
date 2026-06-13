@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/aa188a24-783a-76a1-cd11-3bcac0e97de9')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/aa188a24-783a-76a1-cd11-3bcac0e97de9')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when the IPS signature ruleset count drops by more than half versus the 7-day maximum, indicating broken threat-intel feeds or rollback.\n",
+        "subTechniques": [
+          "T1562.001"
+        ],
+        "queryFrequency": "6h",
+        "name": "UniFi Site Manager: IPS signature count dropped >50%",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SiteId",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "SiteName",
+                "identifier": "DnsDomain"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(7d)\n| extend rulesCount = toint(SiteStatistics.gateway.ipsSignature.rulesCount)\n      | where isnotnull(rulesCount)\n      | summarize MaxCount = max(rulesCount), arg_max(TimeGenerated, rulesCount) by SiteId, SiteName\n      | where MaxCount > 100 and toreal(rulesCount) / MaxCount < 0.5\n      | extend DropPct = round(100.0 * (1 - toreal(rulesCount) / MaxCount), 1)\n      | extend Activity = strcat('IPS rules dropped to ', rulesCount, ' (from ', MaxCount, ', -', DropPct, '%)')\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentRules = rulesCount, PeakRules = MaxCount, DropPct\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT12H"
+          }
+        },
+        "queryPeriod": "7d"
+      }
+    }
+  ]
+}

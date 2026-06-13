@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ef1a293a-9e2b-b087-7816-2610814ed2d4')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ef1a293a-9e2b-b087-7816-2610814ed2d4')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "Identifies when a site reports more than one distinct WAN external IP within an hour, which may indicate ISP DHCP refresh, WAN reconfiguration, or routing hijack.\n",
+        "subTechniques": [
+          "T1590.005"
+        ],
+        "queryFrequency": "1h",
+        "name": "UniFi Site Manager: External WAN IP changed",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "CurrentIp",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SiteName",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "triggerOperator": "gt",
+        "tactics": [
+          "Reconnaissance"
+        ],
+        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(1h)\n      | extend SiteName = tostring(Meta.name),\n               currentIp = tostring(SiteStatistics.wans.WAN.externalIp)\n      | where isnotempty(currentIp)\n      | summarize DistinctIps = make_set(currentIp), arg_max(TimeGenerated, currentIp) by SiteId, SiteName\n      | where array_length(DistinctIps) > 1\n      | extend Activity = strcat('WAN IP changed; observed: ', tostring(DistinctIps))\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentIp = currentIp, ObservedIps = DistinctIps\n",
+        "status": "Available",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "queryPeriod": "1h"
+      }
+    }
+  ]
+}
