@@ -14,23 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Detects RDS instance creation or modification events where the database is configured as publicly accessible.\nPublic exposure of database instances can increase the risk of unauthorized access and data leakage.\n",
-        "customDetails": {
-          "RecipientAccountId": "RecipientAccountId",
-          "AWSRegion": "AWSRegion",
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "queryFrequency": "1h",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS RDS instance publicly exposed by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} setting RDS publicly accessible in account {{RecipientAccountId}}."
+          "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} setting RDS publicly accessible in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS RDS instance publicly exposed by {{AccountName}}"
         },
-        "name": "AWSCloudTrail - RDS instance publicly exposed",
-        "triggerThreshold": 0,
-        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -44,26 +34,36 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "triggerOperator": "gt",
+        "severity": "Medium",
+        "name": "AWSCloudTrail - RDS instance publicly exposed",
+        "description": "Detects RDS instance creation or modification events where the database is configured as publicly accessible.\nPublic exposure of database instances can increase the risk of unauthorized access and data leakage.\n",
+        "queryPeriod": "1h",
+        "customDetails": {
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId",
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn"
+        },
+        "query": "AWSCloudTrail\n| where  EventName in (\"CreateDBInstance\", \"ModifyDBInstance\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).publiclyAccessible) == \"true\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "tactics": [
           "Exfiltration"
         ],
-        "query": "AWSCloudTrail\n| where  EventName in (\"CreateDBInstance\", \"ModifyDBInstance\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).publiclyAccessible) == \"true\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "status": "Available",
-        "queryPeriod": "1h"
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "status": "Available"
       }
     }
   ]

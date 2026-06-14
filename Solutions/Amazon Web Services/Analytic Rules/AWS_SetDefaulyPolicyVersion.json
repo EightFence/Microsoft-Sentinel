@@ -14,23 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Detects SetDefaultPolicyVersion activity that makes a different IAM policy version active.\nAttackers can use this to activate previously created permissive versions and escalate access.\n",
-        "customDetails": {
-          "EventSource": "EventSource",
-          "AWSRegion": "AWSRegion",
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "queryFrequency": "1h",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS IAM default policy version changed by {{AccountName}}",
-          "alertDescriptionFormat": "Detected SetDefaultPolicyVersion from {{SourceIpAddress}} in account {{RecipientAccountId}}."
+          "alertDescriptionFormat": "Detected SetDefaultPolicyVersion from {{SourceIpAddress}} in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS IAM default policy version changed by {{AccountName}}"
         },
-        "name": "AWSCloudTrail - Policy version set to default",
-        "triggerThreshold": 0,
-        "severity": "Medium",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -44,26 +34,36 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "triggerOperator": "gt",
+        "severity": "Medium",
+        "name": "AWSCloudTrail - Policy version set to default",
+        "description": "Detects SetDefaultPolicyVersion activity that makes a different IAM policy version active.\nAttackers can use this to activate previously created permissive versions and escalate access.\n",
+        "queryPeriod": "1h",
+        "customDetails": {
+          "EventSource": "EventSource",
+          "EventName": "EventName",
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn"
+        },
+        "query": "AWSCloudTrail\n| where EventName == \"SetDefaultPolicyVersion\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "query": "AWSCloudTrail\n| where EventName == \"SetDefaultPolicyVersion\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "status": "Available",
-        "queryPeriod": "1h"
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "status": "Available"
       }
     }
   ]
