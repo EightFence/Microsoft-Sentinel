@@ -14,80 +14,80 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "Email from {{EmailFrom}} contains {{NewDomainCount}} previously unseen URL domain(s): {{NewUrlDomainList}}.",
           "alertDisplayNameFormat": "RedSift - URL to new domain in email from {{EmailFrom}}"
         },
-        "suppressionDuration": "PT1H",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "EmailFrom",
-                "identifier": "FullName"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "SrcIp",
-                "identifier": "Address"
-              }
-            ]
-          },
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "columnName": "RepresentativeUrlDomain",
-                "identifier": "DomainName"
-              }
-            ]
-          }
-        ],
-        "severity": "Medium",
-        "name": "Red Sift - Email with URL to previously unseen domain",
-        "description": "'Detects email forensics events containing one or more URLs whose domain has not been seen in the previous 14 days, which may indicate newly observed phishing infrastructure or suspicious delivery patterns.'\n",
-        "queryPeriod": "14d",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "groupByCustomDetails": [
-              "EmailSubject"
-            ],
-            "lookbackDuration": "P1D",
-            "groupByEntities": [
-              "Account",
-              "DNS"
-            ],
-            "reopenClosedIncident": false
-          }
-        },
-        "customDetails": {
-          "NewUrlDomainList": "NewUrlDomainList",
-          "NewUrlList": "NewUrlList",
-          "CorrelationUid": "CorrelationUid",
-          "EmailSubject": "EmailSubject",
-          "ReturnPath": "EmailReturnPath",
-          "NewDomainCount": "NewDomainCount"
-        },
-        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalDomains = RedSiftEmailForensics_CL\n| extend EmailUrls = todynamic(EmailUrls)\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailUrls) and array_length(EmailUrls) > 0\n| mv-expand Url = EmailUrls\n| extend UrlString = tostring(Url.url_string)\n| where isnotempty(UrlString)\n| extend UrlDomain = tostring(parse_url(UrlString).Host)\n| where isnotempty(UrlDomain)\n| summarize by UrlDomain;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(EmailUrls)\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailUrls) and array_length(EmailUrls) > 0\n| mv-expand Url = EmailUrls\n| extend UrlString = tostring(Url.url_string)\n| where isnotempty(UrlString)\n| extend UrlDomain = tostring(parse_url(UrlString).Host)\n| where isnotempty(UrlDomain)\n| join kind=leftanti (historicalDomains) on UrlDomain\n| summarize\n    NewUrlDomains = make_set(UrlDomain, 50),\n    NewUrls = make_set(UrlString, 50),\n    NewDomainCount = dcount(UrlDomain),\n    UrlCount = dcount(UrlString),\n    RepresentativeUrlDomain = take_any(UrlDomain)\n    by TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    Severity,\n    Message,\n    CorrelationUid\n| extend\n    NewUrlDomainList = strcat_array(NewUrlDomains, \", \"),\n    NewUrlList = strcat_array(NewUrls, \", \")\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    RepresentativeUrlDomain,\n    NewDomainCount,\n    UrlCount,\n    NewUrlDomainList,\n    NewUrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
+        "suppressionEnabled": false,
+        "status": "Available",
         "tactics": [
           "InitialAccess"
         ],
         "triggerThreshold": 0,
-        "suppressionEnabled": false,
-        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "P1D",
+            "groupByCustomDetails": [
+              "EmailSubject"
+            ],
+            "groupByEntities": [
+              "Account",
+              "DNS"
+            ]
+          }
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "EmailFrom"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIp"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "RepresentativeUrlDomain"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ],
+        "suppressionDuration": "PT1H",
+        "customDetails": {
+          "EmailSubject": "EmailSubject",
+          "ReturnPath": "EmailReturnPath",
+          "NewUrlDomainList": "NewUrlDomainList",
+          "NewUrlList": "NewUrlList",
+          "CorrelationUid": "CorrelationUid",
+          "NewDomainCount": "NewDomainCount"
+        },
+        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalDomains = RedSiftEmailForensics_CL\n| extend EmailUrls = todynamic(EmailUrls)\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailUrls) and array_length(EmailUrls) > 0\n| mv-expand Url = EmailUrls\n| extend UrlString = tostring(Url.url_string)\n| where isnotempty(UrlString)\n| extend UrlDomain = tostring(parse_url(UrlString).Host)\n| where isnotempty(UrlDomain)\n| summarize by UrlDomain;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(EmailUrls)\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailUrls) and array_length(EmailUrls) > 0\n| mv-expand Url = EmailUrls\n| extend UrlString = tostring(Url.url_string)\n| where isnotempty(UrlString)\n| extend UrlDomain = tostring(parse_url(UrlString).Host)\n| where isnotempty(UrlDomain)\n| join kind=leftanti (historicalDomains) on UrlDomain\n| summarize\n    NewUrlDomains = make_set(UrlDomain, 50),\n    NewUrls = make_set(UrlString, 50),\n    NewDomainCount = dcount(UrlDomain),\n    UrlCount = dcount(UrlString),\n    RepresentativeUrlDomain = take_any(UrlDomain)\n    by TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    Severity,\n    Message,\n    CorrelationUid\n| extend\n    NewUrlDomainList = strcat_array(NewUrlDomains, \", \"),\n    NewUrlList = strcat_array(NewUrls, \", \")\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    RepresentativeUrlDomain,\n    NewDomainCount,\n    UrlCount,\n    NewUrlDomainList,\n    NewUrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "description": "'Detects email forensics events containing one or more URLs whose domain has not been seen in the previous 14 days, which may indicate newly observed phishing infrastructure or suspicious delivery patterns.'\n",
         "queryFrequency": "1h",
-        "status": "Available"
+        "name": "Red Sift - Email with URL to previously unseen domain",
+        "severity": "Medium"
       }
     }
   ]

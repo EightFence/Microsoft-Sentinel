@@ -14,45 +14,45 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "columnName": "SiteId",
-                "identifier": "HostName"
-              },
-              {
-                "columnName": "SiteName",
-                "identifier": "DnsDomain"
-              }
-            ]
-          }
-        ],
-        "subTechniques": [
-          "T1498.001"
-        ],
-        "severity": "Medium",
-        "name": "UniFi Site Manager: New WAN issue index recorded",
-        "description": "Identifies a newly-recorded UniFi WAN issue index. May indicate ISP problems, hardware fault, or active denial-of-service pressure on the gateway.\n",
+        "triggerOperator": "gt",
         "queryPeriod": "45m",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H"
-          }
-        },
-        "query": "// UniFi reports a monotonically-rising wanIssues.count rather than discrete events.\n// Detect a NEW occurrence by checking whether the per-site max(count) has grown\n// in the most recent 15-min window vs the prior 15-min window.\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(45m)\n| extend siteId_s = tostring(SiteId)\n| where isnotempty(tostring(SiteStatistics.wans.WAN))\n| mv-expand issue = todynamic(tostring(SiteStatistics.wans.WAN.wanIssues))\n| extend issueCount = tolong(issue.count), idx = tolong(issue.index)\n| summarize\n    PrevMaxCount = maxif(issueCount, TimeGenerated < ago(15m)),\n    CurrentMaxCount = maxif(issueCount, TimeGenerated >= ago(15m)),\n    LatestIndex = maxif(idx, TimeGenerated >= ago(15m))\n    by siteId_s, SiteName\n| extend PrevMaxCount = coalesce(PrevMaxCount, tolong(0))\n| where CurrentMaxCount > PrevMaxCount\n| extend\n    TimeGenerated = now(),\n    Delta = CurrentMaxCount - PrevMaxCount,\n    Activity = strcat('New WAN issue: count rose from ', PrevMaxCount, ' to ', CurrentMaxCount)\n| project TimeGenerated, SiteId = siteId_s, SiteName, Activity, IssueIndex = LatestIndex, PrevMaxCount, CurrentMaxCount, Delta\n",
+        "status": "Available",
         "tactics": [
           "Impact"
         ],
         "triggerThreshold": 0,
-        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT5H",
+            "enabled": true
+          }
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "SiteId"
+              },
+              {
+                "identifier": "DnsDomain",
+                "columnName": "SiteName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "query": "// UniFi reports a monotonically-rising wanIssues.count rather than discrete events.\n// Detect a NEW occurrence by checking whether the per-site max(count) has grown\n// in the most recent 15-min window vs the prior 15-min window.\nUnifi_SiteManager_Sites_CL\n| where TimeGenerated > ago(45m)\n| extend siteId_s = tostring(SiteId)\n| where isnotempty(tostring(SiteStatistics.wans.WAN))\n| mv-expand issue = todynamic(tostring(SiteStatistics.wans.WAN.wanIssues))\n| extend issueCount = tolong(issue.count), idx = tolong(issue.index)\n| summarize\n    PrevMaxCount = maxif(issueCount, TimeGenerated < ago(15m)),\n    CurrentMaxCount = maxif(issueCount, TimeGenerated >= ago(15m)),\n    LatestIndex = maxif(idx, TimeGenerated >= ago(15m))\n    by siteId_s, SiteName\n| extend PrevMaxCount = coalesce(PrevMaxCount, tolong(0))\n| where CurrentMaxCount > PrevMaxCount\n| extend\n    TimeGenerated = now(),\n    Delta = CurrentMaxCount - PrevMaxCount,\n    Activity = strcat('New WAN issue: count rose from ', PrevMaxCount, ' to ', CurrentMaxCount)\n| project TimeGenerated, SiteId = siteId_s, SiteName, Activity, IssueIndex = LatestIndex, PrevMaxCount, CurrentMaxCount, Delta\n",
+        "subTechniques": [
+          "T1498.001"
+        ],
+        "description": "Identifies a newly-recorded UniFi WAN issue index. May indicate ISP problems, hardware fault, or active denial-of-service pressure on the gateway.\n",
         "queryFrequency": "15m",
-        "status": "Available"
+        "name": "UniFi Site Manager: New WAN issue index recorded",
+        "severity": "Medium"
       }
     }
   ]
