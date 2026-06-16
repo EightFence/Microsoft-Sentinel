@@ -14,50 +14,50 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "UniFi Site Manager: ISP Downtime",
         "triggerOperator": "gt",
         "queryPeriod": "30m",
-        "status": "Available",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SiteId",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "columnName": "ISPName",
+                "identifier": "Name"
+              }
+            ]
+          }
+        ],
         "tactics": [
           "Impact"
         ],
-        "triggerThreshold": 0,
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
-            "reopenClosedIncident": true,
+            "enabled": true,
             "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT4H",
-            "enabled": true
+            "reopenClosedIncident": true,
+            "lookbackDuration": "PT4H"
           }
         },
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "SiteId"
-              }
-            ],
-            "entityType": "Host"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "ISPName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          }
-        ],
+        "queryFrequency": "15m",
         "query": "// UniFi ISP Downtime Detection\nlet MinDowntimeSeconds = 60;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    downtime = toint(period.data.wan.downtime),\n    uptime = todouble(period.data.wan.uptime),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, downtime, uptime, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where downtime > 0\n| summarize\n    TotalDowntimeSeconds = sum(downtime),\n    EventCount = count(),\n    AvgUptime = round(avg(uptime), 2),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where TotalDowntimeSeconds >= MinDowntimeSeconds\n| extend\n    TimeGenerated = now(),\n    DowntimeMinutes = round(TotalDowntimeSeconds / 60.0, 2)\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    TotalDowntimeSeconds,\n    DowntimeMinutes,\n    AvgUptimePct = AvgUptime,\n    EventCount,\n    FirstSeen,\n    LastSeen\n",
+        "description": "Identifies when the ISP connection experiences downtime, impacting business operations and requiring documentation for SLA purposes.\n",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "severity": "High",
         "subTechniques": [
           "T1499.002"
-        ],
-        "description": "Identifies when the ISP connection experiences downtime, impacting business operations and requiring documentation for SLA purposes.\n",
-        "queryFrequency": "15m",
-        "name": "UniFi Site Manager: ISP Downtime",
-        "severity": "High"
+        ]
       }
     }
   ]

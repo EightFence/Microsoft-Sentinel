@@ -1,0 +1,92 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/05de0eaf-01bc-4615-99fc-2ec769864b34')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/05de0eaf-01bc-4615-99fc-2ec769864b34')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "Darktrace Incident Event",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5M"
+          }
+        },
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "deviceIp",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "deviceHostname",
+                "identifier": "HostName"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "InitialAccess",
+          "Execution",
+          "LateralMovement",
+          "CommandAndControl"
+        ],
+        "query": "DarktraceIncidents_CL\n| where TimeGenerated >= ago(5m)\n| extend SentinelSeverity = case(groupCategory == \"suspicious\", \"Medium\",\ngroupCategory == \"critical\", \"High\", \"Informational\")\n| extend ProviderName = \"Darktrace\"\n",
+        "description": "This query searches for Darktrace incident events and creates a Microsoft Sentinel incident for each matching result.",
+        "alertDetailsOverride": {
+          "alertDynamicProperties": [
+            {
+              "value": "url",
+              "alertProperty": "AlertLink"
+            },
+            {
+              "value": "darktraceProduct",
+              "alertProperty": "ProductName"
+            },
+            {
+              "value": "ProviderName",
+              "alertProperty": "ProviderName"
+            }
+          ],
+          "alertDisplayNameFormat": "Darktrace Incident Event: {{incidentEventTitle}} ",
+          "alertSeverityColumnName": "SentinelSeverity",
+          "alertDescriptionFormat": "{{summary}}"
+        },
+        "severity": "High",
+        "customDetails": {
+          "EndTime": "endTime",
+          "IncidentEventScore": "aiaScore",
+          "CustomLabel": "customLabel",
+          "AssetDetails": "devices",
+          "CurrentGroup": "currentGroup",
+          "Asset": "bestAssetName",
+          "PreviousGroups": "groupPreviousGroups",
+          "StartTime": "startTime",
+          "IncidentScore": "groupScore"
+        }
+      }
+    }
+  ]
+}
