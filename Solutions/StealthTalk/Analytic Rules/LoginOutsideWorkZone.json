@@ -14,76 +14,76 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "15m",
         "name": "StealthTalk - Login outside work zone",
-        "suppressionEnabled": false,
-        "triggerOperator": "gt",
         "queryPeriod": "1h",
+        "customDetails": {
+          "LoginCity": "LoginCity",
+          "LoginCountry": "LoginCountry",
+          "AppVersion": "AppVersion",
+          "EventReference": "RawEventId",
+          "AssignedCity": "AssignedCity",
+          "CityMismatch": "CityMismatch",
+          "CountryMismatch": "CountryMismatch",
+          "AssignedCountry": "AssignedCountry"
+        },
+        "suppressionEnabled": false,
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserId",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "UserId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceId",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "DeviceId"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "query": "let LookbackPeriod = 1h;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"GeoAnomalyLogin\"\n| where LoginCountry != AssignedCountry\n     or LoginCity    != AssignedCity\n| extend\n    CountryMismatch = LoginCountry != AssignedCountry,\n    CityMismatch    = LoginCity    != AssignedCity,\n    AlertName       = \"LoginOutsideWorkZone\",\n    AlertDetails    = strcat(\n        \"User \", UserId,\n        \" logged in from \", LoginCity, \" (\", LoginCountry, \")\",\n        \" - assigned zone: \", AssignedCity, \" (\", AssignedCountry, \").\",\n        \" Source IP: \", IpAddress, \".\",\n        \" Country mismatch: \", tostring(LoginCountry != AssignedCountry), \".\",\n        \" City mismatch: \", tostring(LoginCity != AssignedCity), \".\"\n    )\n| project\n    TimeGenerated, UserId, DeviceId,\n    LoginCountry, LoginCity, AssignedCountry, AssignedCity,\n    CountryMismatch, CityMismatch, IpAddress,\n    AppVersion, RawEventId, AlertName, AlertDetails\n",
+        "status": "Available",
+        "severity": "High",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "Identifies a single StealthTalk authentication originating from a country or city that does\nnot match the user's assigned (expected) geographic zone. Each individual mismatch is\ntreated as an incident - there is no aggregation threshold, since a single login from an\nunexpected country is high-confidence evidence of a credential issue.\n\nAn incident fires when LoginCountry differs from AssignedCountry OR LoginCity differs\nfrom AssignedCity. Source IPv4, raw event ID, and both the observed and expected\ngeo-locations are surfaced as entities and custom details for the SOC analyst.\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "Account"
+            ],
+            "lookbackDuration": "5h",
+            "enabled": true
+          },
+          "createIncident": true
+        },
         "tactics": [
           "InitialAccess",
           "DefenseEvasion",
           "CredentialAccess"
         ],
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "5h",
-            "groupByEntities": [
-              "Account"
-            ]
-          }
-        },
-        "queryFrequency": "15m",
         "suppressionDuration": "1h",
-        "query": "let LookbackPeriod = 1h;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"GeoAnomalyLogin\"\n| where LoginCountry != AssignedCountry\n     or LoginCity    != AssignedCity\n| extend\n    CountryMismatch = LoginCountry != AssignedCountry,\n    CityMismatch    = LoginCity    != AssignedCity,\n    AlertName       = \"LoginOutsideWorkZone\",\n    AlertDetails    = strcat(\n        \"User \", UserId,\n        \" logged in from \", LoginCity, \" (\", LoginCountry, \")\",\n        \" - assigned zone: \", AssignedCity, \" (\", AssignedCountry, \").\",\n        \" Source IP: \", IpAddress, \".\",\n        \" Country mismatch: \", tostring(LoginCountry != AssignedCountry), \".\",\n        \" City mismatch: \", tostring(LoginCity != AssignedCity), \".\"\n    )\n| project\n    TimeGenerated, UserId, DeviceId,\n    LoginCountry, LoginCity, AssignedCountry, AssignedCity,\n    CountryMismatch, CityMismatch, IpAddress,\n    AppVersion, RawEventId, AlertName, AlertDetails\n",
-        "description": "Identifies a single StealthTalk authentication originating from a country or city that does\nnot match the user's assigned (expected) geographic zone. Each individual mismatch is\ntreated as an incident - there is no aggregation threshold, since a single login from an\nunexpected country is high-confidence evidence of a credential issue.\n\nAn incident fires when LoginCountry differs from AssignedCountry OR LoginCity differs\nfrom AssignedCity. Source IPv4, raw event ID, and both the observed and expected\ngeo-locations are surfaced as entities and custom details for the SOC analyst.\n",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "{{AlertDetails}}",
           "alertDisplayNameFormat": "StealthTalk: Login Outside Work Zone - {{UserId}} from {{LoginCity}} ({{LoginCountry}})"
-        },
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "customDetails": {
-          "EventReference": "RawEventId",
-          "CountryMismatch": "CountryMismatch",
-          "CityMismatch": "CityMismatch",
-          "AssignedCountry": "AssignedCountry",
-          "LoginCity": "LoginCity",
-          "AssignedCity": "AssignedCity",
-          "LoginCountry": "LoginCountry",
-          "AppVersion": "AppVersion"
         }
       }
     }

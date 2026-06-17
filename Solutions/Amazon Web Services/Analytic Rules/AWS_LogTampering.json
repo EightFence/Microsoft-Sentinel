@@ -14,55 +14,55 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryFrequency": "1d",
         "name": "AWSCloudTrail - Tampering to AWS CloudTrail logs",
-        "triggerOperator": "gt",
         "queryPeriod": "1d",
+        "customDetails": {
+          "AWSRegion": "AWSRegion",
+          "EventTypeName": "EventTypeName",
+          "EventSource": "EventSource",
+          "EventName": "EventName"
+        },
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\",\"DeleteLogGroup\"]);\nAWSCloudTrail\n| where (EventName in~ (EventNameList) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and isempty(ErrorMessage) and isempty(ErrorCode)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, \nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
+        "status": "Available",
+        "severity": "High",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "description": "Detects successful attempts to disable, delete, or weaken AWS logging telemetry, including CloudTrail,\nCloudWatch/EventBridge, and VPC flow logs. This behavior can indicate defense evasion and deliberate reduction\nof incident visibility by an attacker.\n",
         "tactics": [
           "DefenseEvasion"
         ],
-        "queryFrequency": "1d",
-        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\",\"DeleteLogGroup\"]);\nAWSCloudTrail\n| where (EventName in~ (EventNameList) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and isempty(ErrorMessage) and isempty(ErrorCode)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, \nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
-        "description": "Detects successful attempts to disable, delete, or weaken AWS logging telemetry, including CloudTrail,\nCloudWatch/EventBridge, and VPC flow logs. This behavior can indicate defense evasion and deliberate reduction\nof incident visibility by an attacker.\n",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "Detected {{EventName}} in {{AWSRegion}} affecting account {{RecipientAccountId}} logging telemetry.",
           "alertDisplayNameFormat": "AWS log tampering attempt: {{EventName}} by {{AccountName}}"
-        },
-        "status": "Available",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "customDetails": {
-          "EventTypeName": "EventTypeName",
-          "EventSource": "EventSource",
-          "EventName": "EventName",
-          "AWSRegion": "AWSRegion"
         }
       }
     }
