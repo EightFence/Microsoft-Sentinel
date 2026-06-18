@@ -14,15 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "name": "AWSCloudTrail - Config Service Resource Deletion Attempts",
+        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
+        "triggerOperator": "gt",
         "queryPeriod": "1d",
-        "customDetails": {
-          "AWSRegion": "AWSRegion",
-          "EventTypeName": "EventTypeName",
-          "EventSource": "EventSource",
-          "EventName": "EventName"
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS Config Service Resource Deletion Attempts: {{EventName}} by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} in {{AWSRegion}} affecting account {{RecipientAccountId}}."
         },
+        "severity": "Low",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "status": "Available",
+        "description": "Identifies AWS API calls that attempt to reduce logging or visibility in an account by stopping logging, deleting trails, deleting flow logs, or deleting event buses. This behavior can indicate defense evasion or the deliberate suppression of telemetry used to monitor security posture.\n",
+        "name": "AWSCloudTrail - Config Service Resource Deletion Attempts",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "entityMappings": [
           {
             "fieldMappings": [
@@ -51,18 +58,11 @@
             "entityType": "IP"
           }
         ],
-        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
-        "status": "Available",
-        "severity": "Low",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "description": "Identifies AWS API calls that attempt to reduce logging or visibility in an account by stopping logging, deleting trails, deleting flow logs, or deleting event buses. This behavior can indicate defense evasion or the deliberate suppression of telemetry used to monitor security posture.\n",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Detected {{EventName}} in {{AWSRegion}} affecting account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS Config Service Resource Deletion Attempts: {{EventName}} by {{AccountName}}"
+        "customDetails": {
+          "EventName": "EventName",
+          "EventSource": "EventSource",
+          "AWSRegion": "AWSRegion",
+          "EventTypeName": "EventTypeName"
         }
       }
     }
