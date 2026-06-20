@@ -14,17 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
         "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS S3 bucket ACL exposure change by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} applying public or broad ACL on S3 bucket in account {{RecipientAccountId}}."
-        },
-        "severity": "Medium",
-        "tactics": [
-          "Exfiltration"
-        ],
-        "status": "Available",
-        "query": "AWSCloudTrail\n| where EventName == \"PutBucketAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n| mvexpand Grant\n| extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n| extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n| where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n  or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -53,17 +44,26 @@
             "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - S3 bucket exposed via ACL",
-        "triggerOperator": "gt",
-        "queryPeriod": "1h",
         "triggerThreshold": 0,
-        "customDetails": {
-          "xamzacl": "xamzacl",
-          "EventName": "EventName",
-          "RecipientAccountId": "RecipientAccountId",
-          "URI": "URI"
+        "queryPeriod": "1h",
+        "query": "AWSCloudTrail\n| where EventName == \"PutBucketAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n| mvexpand Grant\n| extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n| extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n| where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n  or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n",
+        "name": "AWSCloudTrail - S3 bucket exposed via ACL",
+        "severity": "Medium",
+        "status": "Available",
+        "description": "Detects S3 bucket ACL changes that grant public or broadly authenticated access. Overly permissive ACL\nassignments can expose bucket contents to unauthorized users.\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS S3 bucket ACL exposure change by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} applying public or broad ACL on S3 bucket in account {{RecipientAccountId}}."
         },
-        "description": "Detects S3 bucket ACL changes that grant public or broadly authenticated access. Overly permissive ACL\nassignments can expose bucket contents to unauthorized users.\n"
+        "customDetails": {
+          "EventName": "EventName",
+          "URI": "URI",
+          "RecipientAccountId": "RecipientAccountId",
+          "xamzacl": "xamzacl"
+        },
+        "tactics": [
+          "Exfiltration"
+        ]
       }
     }
   ]

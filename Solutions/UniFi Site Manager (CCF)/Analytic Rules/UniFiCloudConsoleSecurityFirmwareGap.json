@@ -14,23 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "6h",
-        "subTechniques": [],
-        "severity": "High",
+        "triggerOperator": "gt",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
             "enabled": true,
-            "lookbackDuration": "P1D"
-          },
-          "createIncident": true
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
         },
-        "tactics": [
-          "InitialAccess"
-        ],
-        "status": "Available",
-        "query": "// Detects consoles/gateways with a major-or-minor firmware Version gap vs the available release.\n// Patch-level gaps (e.g. 5.1.11 -> 5.1.12) are excluded - covered by FirmwareUpdateAvailable at Low severity.\nUnifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(6h)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsConsole == true\n| where FirmwareStatus == \"updateAvailable\"\n| where isnotempty(Version) and isnotempty(UpdateAvailable)\n| extend\n    currentMajor = toint(extract(@\"^(\\d+)\\.\", 1, Version)),\n    currentMinor = toint(extract(@\"^\\d+\\.(\\d+)\", 1, Version)),\n    availableMajor = toint(extract(@\"^(\\d+)\\.\", 1, UpdateAvailable)),\n    availableMinor = toint(extract(@\"^\\d+\\.(\\d+)\", 1, UpdateAvailable))\n| where isnotnull(currentMajor) and isnotnull(availableMajor)\n| where (availableMajor > currentMajor) or (availableMajor == currentMajor and availableMinor > currentMinor)\n| extend GapType = iff(availableMajor > currentMajor, \"major\", \"minor\")\n| extend\n    TimeGenerated = now(),\n    Activity = strcat('Console ', Name, ' running ', Version, ' - likely security-relevant ', GapType, ' update available to ', UpdateAvailable)\n| project\n    TimeGenerated,\n    DeviceId = Id,\n    DeviceName = Name,\n    Model = Model,\n    ProductLine = ProductLine,\n    CurrentVersion = Version,\n    AvailableVersion = UpdateAvailable,\n    GapType,\n    Activity\n",
+        "queryFrequency": "6h",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -46,11 +40,17 @@
             "entityType": "Host"
           }
         ],
-        "name": "UniFi Site Manager: Console firmware likely security-relevant",
-        "triggerOperator": "gt",
-        "queryPeriod": "6h",
         "triggerThreshold": 0,
-        "description": "Identifies UniFi console / gateway devices (UDM, Cloud Key, USG, UXG, gateway) running firmware behind a major or minor version of the available release. Major/minor firmware jumps on consoles routinely include security advisory fixes (e.g. UniFi Security Advisory Bulletins). Patch-level updates are excluded since those are typically minor non-security bug fixes covered by the lower-severity FirmwareUpdateAvailable rule.\n"
+        "queryPeriod": "6h",
+        "query": "// Detects consoles/gateways with a major-or-minor firmware Version gap vs the available release.\n// Patch-level gaps (e.g. 5.1.11 -> 5.1.12) are excluded - covered by FirmwareUpdateAvailable at Low severity.\nUnifi_SiteManager_Devices_CL\n| where TimeGenerated > ago(6h)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsConsole == true\n| where FirmwareStatus == \"updateAvailable\"\n| where isnotempty(Version) and isnotempty(UpdateAvailable)\n| extend\n    currentMajor = toint(extract(@\"^(\\d+)\\.\", 1, Version)),\n    currentMinor = toint(extract(@\"^\\d+\\.(\\d+)\", 1, Version)),\n    availableMajor = toint(extract(@\"^(\\d+)\\.\", 1, UpdateAvailable)),\n    availableMinor = toint(extract(@\"^\\d+\\.(\\d+)\", 1, UpdateAvailable))\n| where isnotnull(currentMajor) and isnotnull(availableMajor)\n| where (availableMajor > currentMajor) or (availableMajor == currentMajor and availableMinor > currentMinor)\n| extend GapType = iff(availableMajor > currentMajor, \"major\", \"minor\")\n| extend\n    TimeGenerated = now(),\n    Activity = strcat('Console ', Name, ' running ', Version, ' - likely security-relevant ', GapType, ' update available to ', UpdateAvailable)\n| project\n    TimeGenerated,\n    DeviceId = Id,\n    DeviceName = Name,\n    Model = Model,\n    ProductLine = ProductLine,\n    CurrentVersion = Version,\n    AvailableVersion = UpdateAvailable,\n    GapType,\n    Activity\n",
+        "name": "UniFi Site Manager: Console firmware likely security-relevant",
+        "subTechniques": [],
+        "severity": "High",
+        "status": "Available",
+        "description": "Identifies UniFi console / gateway devices (UDM, Cloud Key, USG, UXG, gateway) running firmware behind a major or minor version of the available release. Major/minor firmware jumps on consoles routinely include security advisory fixes (e.g. UniFi Security Advisory Bulletins). Patch-level updates are excluded since those are typically minor non-security bug fixes covered by the lower-severity FirmwareUpdateAvailable rule.\n",
+        "tactics": [
+          "InitialAccess"
+        ]
       }
     }
   ]
