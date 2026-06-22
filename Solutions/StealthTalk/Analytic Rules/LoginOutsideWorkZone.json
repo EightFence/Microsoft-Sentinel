@@ -14,54 +14,42 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "queryPeriod": "1h",
+        "triggerThreshold": 0,
+        "queryFrequency": "15m",
         "suppressionEnabled": false,
-        "tactics": [
-          "InitialAccess",
-          "DefenseEvasion",
-          "CredentialAccess"
-        ],
-        "name": "StealthTalk - Login outside work zone",
+        "customDetails": {
+          "LoginCity": "LoginCity",
+          "AppVersion": "AppVersion",
+          "EventReference": "RawEventId",
+          "AssignedCity": "AssignedCity",
+          "CityMismatch": "CityMismatch",
+          "LoginCountry": "LoginCountry",
+          "CountryMismatch": "CountryMismatch",
+          "AssignedCountry": "AssignedCountry"
+        },
         "incidentConfiguration": {
           "groupingConfiguration": {
             "lookbackDuration": "5h",
+            "enabled": true,
+            "matchingMethod": "Selected",
             "groupByEntities": [
               "Account"
             ],
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected",
-            "enabled": true
+            "reopenClosedIncident": false
           },
           "createIncident": true
         },
-        "description": "Identifies a single StealthTalk authentication originating from a country or city that does\nnot match the user's assigned (expected) geographic zone. Each individual mismatch is\ntreated as an incident - there is no aggregation threshold, since a single login from an\nunexpected country is high-confidence evidence of a credential issue.\n\nAn incident fires when LoginCountry differs from AssignedCountry OR LoginCity differs\nfrom AssignedCity. Source IPv4, raw event ID, and both the observed and expected\ngeo-locations are surfaced as entities and custom details for the SOC analyst.\n",
-        "triggerThreshold": 0,
-        "customDetails": {
-          "LoginCountry": "LoginCountry",
-          "CountryMismatch": "CountryMismatch",
-          "AssignedCity": "AssignedCity",
-          "AssignedCountry": "AssignedCountry",
-          "AppVersion": "AppVersion",
-          "LoginCity": "LoginCity",
-          "EventReference": "RawEventId",
-          "CityMismatch": "CityMismatch"
-        },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "StealthTalk: Login Outside Work Zone - {{UserId}} from {{LoginCity}} ({{LoginCountry}})",
-          "alertDescriptionFormat": "{{AlertDetails}}"
-        },
-        "queryFrequency": "15m",
-        "severity": "High",
-        "triggerOperator": "gt",
         "suppressionDuration": "1h",
+        "description": "Identifies a single StealthTalk authentication originating from a country or city that does\nnot match the user's assigned (expected) geographic zone. Each individual mismatch is\ntreated as an incident - there is no aggregation threshold, since a single login from an\nunexpected country is high-confidence evidence of a credential issue.\n\nAn incident fires when LoginCountry differs from AssignedCountry OR LoginCity differs\nfrom AssignedCity. Source IPv4, raw event ID, and both the observed and expected\ngeo-locations are surfaced as entities and custom details for the SOC analyst.\n",
+        "query": "let LookbackPeriod = 1h;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"GeoAnomalyLogin\"\n| where LoginCountry != AssignedCountry\n     or LoginCity    != AssignedCity\n| extend\n    CountryMismatch = LoginCountry != AssignedCountry,\n    CityMismatch    = LoginCity    != AssignedCity,\n    AlertName       = \"LoginOutsideWorkZone\",\n    AlertDetails    = strcat(\n        \"User \", UserId,\n        \" logged in from \", LoginCity, \" (\", LoginCountry, \")\",\n        \" - assigned zone: \", AssignedCity, \" (\", AssignedCountry, \").\",\n        \" Source IP: \", IpAddress, \".\",\n        \" Country mismatch: \", tostring(LoginCountry != AssignedCountry), \".\",\n        \" City mismatch: \", tostring(LoginCity != AssignedCity), \".\"\n    )\n| project\n    TimeGenerated, UserId, DeviceId,\n    LoginCountry, LoginCity, AssignedCountry, AssignedCity,\n    CountryMismatch, CityMismatch, IpAddress,\n    AppVersion, RawEventId, AlertName, AlertDetails\n",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserId",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "UserId"
               }
             ]
           },
@@ -69,8 +57,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "DeviceId",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "DeviceId"
               }
             ]
           },
@@ -78,13 +66,25 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IpAddress"
               }
             ]
           }
         ],
-        "query": "let LookbackPeriod = 1h;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"GeoAnomalyLogin\"\n| where LoginCountry != AssignedCountry\n     or LoginCity    != AssignedCity\n| extend\n    CountryMismatch = LoginCountry != AssignedCountry,\n    CityMismatch    = LoginCity    != AssignedCity,\n    AlertName       = \"LoginOutsideWorkZone\",\n    AlertDetails    = strcat(\n        \"User \", UserId,\n        \" logged in from \", LoginCity, \" (\", LoginCountry, \")\",\n        \" - assigned zone: \", AssignedCity, \" (\", AssignedCountry, \").\",\n        \" Source IP: \", IpAddress, \".\",\n        \" Country mismatch: \", tostring(LoginCountry != AssignedCountry), \".\",\n        \" City mismatch: \", tostring(LoginCity != AssignedCity), \".\"\n    )\n| project\n    TimeGenerated, UserId, DeviceId,\n    LoginCountry, LoginCity, AssignedCountry, AssignedCity,\n    CountryMismatch, CityMismatch, IpAddress,\n    AppVersion, RawEventId, AlertName, AlertDetails\n"
+        "severity": "High",
+        "tactics": [
+          "InitialAccess",
+          "DefenseEvasion",
+          "CredentialAccess"
+        ],
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "StealthTalk: Login Outside Work Zone - {{UserId}} from {{LoginCity}} ({{LoginCountry}})",
+          "alertDescriptionFormat": "{{AlertDetails}}"
+        },
+        "queryPeriod": "1h",
+        "name": "StealthTalk - Login outside work zone"
       }
     }
   ]

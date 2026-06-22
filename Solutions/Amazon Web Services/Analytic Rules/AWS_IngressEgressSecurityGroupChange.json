@@ -14,43 +14,34 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "queryPeriod": "1d",
-        "name": "AWSCloudTrail - Changes to AWS Security Group ingress and egress settings",
-        "tactics": [
-          "DefenseEvasion"
-        ],
         "triggerThreshold": 0,
+        "queryFrequency": "1d",
         "customDetails": {
           "UserAgent": "UserAgent",
-          "UserIdentityUserName": "UserIdentityUserName",
-          "AWSRegion": "AWSRegion",
-          "EventName": "EventName",
           "UserIdentityArn": "UserIdentityArn",
-          "UserIdentityType": "UserIdentityType"
+          "AWSRegion": "AWSRegion",
+          "UserIdentityUserName": "UserIdentityUserName",
+          "UserIdentityType": "UserIdentityType",
+          "EventName": "EventName"
         },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS Security Group ingress/egress change by {{AccountName}} from {{SourceIpAddress}}",
-          "alertDescriptionFormat": "AWS Security Group ingress/egress change activity {{EventName}} was detected for {{AccountName}} from {{SourceIpAddress}}."
-        },
-        "queryFrequency": "1d",
-        "severity": "Low",
-        "triggerOperator": "gt",
+        "description": "A Security Group acts as a virtual firewall for an AWS instance to control inbound and outbound traffic. This rule detects AWS CloudTrail events for changes to Security Group ingress and egress settings.\nInvestigate to validate the legitimacy of the activity and identify potential malicious activity.\n",
+        "query": "let EventNameList = dynamic([ \"AuthorizeSecurityGroupEgress\", \"AuthorizeSecurityGroupIngress\", \"RevokeSecurityGroupEgress\", \"RevokeSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)\nby EventSource, EventName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,\nAdditionalEventData, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements\n",
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
             ]
           },
@@ -58,14 +49,23 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ]
           }
         ],
-        "description": "A Security Group acts as a virtual firewall for an AWS instance to control inbound and outbound traffic. This rule detects AWS CloudTrail events for changes to Security Group ingress and egress settings.\nInvestigate to validate the legitimacy of the activity and identify potential malicious activity.\n",
-        "query": "let EventNameList = dynamic([ \"AuthorizeSecurityGroupEgress\", \"AuthorizeSecurityGroupIngress\", \"RevokeSecurityGroupEgress\", \"RevokeSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)\nby EventSource, EventName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,\nAdditionalEventData, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements\n"
+        "severity": "Low",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS Security Group ingress/egress change by {{AccountName}} from {{SourceIpAddress}}",
+          "alertDescriptionFormat": "AWS Security Group ingress/egress change activity {{EventName}} was detected for {{AccountName}} from {{SourceIpAddress}}."
+        },
+        "queryPeriod": "1d",
+        "name": "AWSCloudTrail - Changes to AWS Security Group ingress and egress settings"
       }
     }
   ]
