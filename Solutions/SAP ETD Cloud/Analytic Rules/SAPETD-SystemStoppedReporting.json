@@ -14,60 +14,60 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "triggerThreshold": 0,
-        "status": "Available",
-        "queryPeriod": "7d",
+        "query": "// ---- Configurable thresholds ----\nlet LookbackPeriod = 2h;\nlet BaselineLookback = 7d;\n// ---------------------------------\nlet regex_sid = @\"^([A-Z0-9]{3})/\";\nlet regex_client = @'\\/(.{3})$';\nSAPETDAlerts_CL\n| where TimeGenerated > ago(BaselineLookback)\n| mv-expand NormalizedTriggeringEvents\n| extend\n    SystemId = extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n    ClientId = extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n    Host     = tostring(NormalizedTriggeringEvents.NetworkHostnameInitiator),\n    Instance = tostring(NormalizedTriggeringEvents.NetworkHostnameActor)\n| where isnotempty(SystemId)\n| summarize\n    LastIngestionTime = max(TimeGenerated),\n    Host     = take_any(Host),\n    Instance = take_any(Instance),\n    ClientId = take_any(ClientId)\n    by SystemId\n| extend TimeSinceLastIngestion = now() - LastIngestionTime\n| where TimeSinceLastIngestion > LookbackPeriod\n| extend\n    LookbackPeriod = LookbackPeriod,\n    Reason = strcat(\"SAP system \", SystemId, \" has not reported any data to SAP ETD in the last \", tostring(LookbackPeriod), \" (last seen: \", tostring(LastIngestionTime), \").\")\n",
         "customDetails": {
-          "LookbackPeriod": "LookbackPeriod",
-          "SAP_Client": "ClientId",
-          "LastIngestionGap": "TimeSinceLastIngestion",
           "LastIngestion": "LastIngestionTime",
-          "SAP_SID": "SystemId"
+          "SAP_SID": "SystemId",
+          "LookbackPeriod": "LookbackPeriod",
+          "LastIngestionGap": "TimeSinceLastIngestion",
+          "SAP_Client": "ClientId"
         },
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "SystemId",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "ClientId",
-                "identifier": "AppId"
-              },
-              {
-                "columnName": "Instance",
-                "identifier": "InstanceName"
-              }
-            ],
-            "entityType": "CloudApplication"
-          },
-          {
-            "fieldMappings": [
-              {
-                "columnName": "Host",
-                "identifier": "FullName"
-              }
-            ],
-            "entityType": "Host"
-          }
-        ],
+        "status": "Available",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP ETD - SAP system {{SystemId}} stopped reporting data",
+          "alertDescriptionFormat": "{{Reason}}\n\nA selective silence of a single SAP SID may indicate that an adversary is tampering with the security telemetry pipeline for this specific system (for example by stopping the SAP ETD collector for that SID, disabling the relevant data connector path, or blocking network egress from that host) in order to hide malicious activity while leaving the rest of the SAP ETD feed intact. Treat the silence as suspicious until proven otherwise: validate the integrity and runtime state of the SAP system, the SAP ETD collector configuration for this SID, and the data connector between SAP ETD and Microsoft Sentinel, and review recent change / admin activity on those components before concluding the cause is a benign outage.\n"
+        },
+        "queryPeriod": "7d",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "severity": "High",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "name": "SAP ETD - SAP system stopped reporting data",
-        "query": "// ---- Configurable thresholds ----\nlet LookbackPeriod = 2h;\nlet BaselineLookback = 7d;\n// ---------------------------------\nlet regex_sid = @\"^([A-Z0-9]{3})/\";\nlet regex_client = @'\\/(.{3})$';\nSAPETDAlerts_CL\n| where TimeGenerated > ago(BaselineLookback)\n| mv-expand NormalizedTriggeringEvents\n| extend\n    SystemId = extract(regex_sid, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n    ClientId = extract(regex_client, 1, tostring(NormalizedTriggeringEvents.SystemIdActor)),\n    Host     = tostring(NormalizedTriggeringEvents.NetworkHostnameInitiator),\n    Instance = tostring(NormalizedTriggeringEvents.NetworkHostnameActor)\n| where isnotempty(SystemId)\n| summarize\n    LastIngestionTime = max(TimeGenerated),\n    Host     = take_any(Host),\n    Instance = take_any(Instance),\n    ClientId = take_any(ClientId)\n    by SystemId\n| extend TimeSinceLastIngestion = now() - LastIngestionTime\n| where TimeSinceLastIngestion > LookbackPeriod\n| extend\n    LookbackPeriod = LookbackPeriod,\n    Reason = strcat(\"SAP system \", SystemId, \" has not reported any data to SAP ETD in the last \", tostring(LookbackPeriod), \" (last seen: \", tostring(LastIngestionTime), \").\")\n",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{Reason}}\n\nA selective silence of a single SAP SID may indicate that an adversary is tampering with the security telemetry pipeline for this specific system (for example by stopping the SAP ETD collector for that SID, disabling the relevant data connector path, or blocking network egress from that host) in order to hide malicious activity while leaving the rest of the SAP ETD feed intact. Treat the silence as suspicious until proven otherwise: validate the integrity and runtime state of the SAP system, the SAP ETD collector configuration for this SID, and the data connector between SAP ETD and Microsoft Sentinel, and review recent change / admin activity on those components before concluding the cause is a benign outage.\n",
-          "alertDisplayNameFormat": "SAP ETD - SAP system {{SystemId}} stopped reporting data"
-        },
+        "severity": "High",
         "description": "Identifies a per-system silence when an individual SAP system (identified by its SID) that has recently been reporting to SAP Enterprise Threat Detection (ETD) stops producing new records in the SAPETDAlerts_CL table within the configured per-system grace period (default 2 hours). A targeted silence of a single SID may indicate that an adversary with access to the SAP system, the SAP ETD collector for that SID, or the data connector is selectively blocking security telemetry to hide follow-on activity while leaving the rest of the SAP ETD feed intact; benign causes such as connectivity issues, collector misconfiguration, or planned maintenance for that SID are also possible and should be ruled out during triage. The set of \"expected\" SIDs is derived from any system that has reported within the `BaselineLookback` period (default 7 days); systems silent for longer are considered decommissioned and are not alerted on. Tunable parameters at the top of the query: `LookbackPeriod` (silence threshold per SID; align with `queryFrequency`) and `BaselineLookback` (how far back to look to discover known SIDs; align with `queryPeriod`). This rule is complementary to the overall-feed rule \"SAP ETD - No new data received\".\n",
-        "queryFrequency": "1h"
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "SystemId"
+              },
+              {
+                "identifier": "AppId",
+                "columnName": "ClientId"
+              },
+              {
+                "identifier": "InstanceName",
+                "columnName": "Instance"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Host"
+              }
+            ]
+          }
+        ]
       }
     }
   ]
