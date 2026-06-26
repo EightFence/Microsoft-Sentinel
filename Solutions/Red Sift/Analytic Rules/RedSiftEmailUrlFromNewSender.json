@@ -15,6 +15,16 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "'Detects email forensics events that contain one or more URLs where the sender in the from field has not been seen in the previous 14 days, which may indicate phishing activity or a newly observed sender.'\n",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "RedSift - New URL-bearing sender {{EmailFrom}}",
+          "alertDescriptionFormat": "Email from previously unseen sender {{EmailFrom}} contains {{UrlCount}} URL(s)."
+        },
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
         "entityMappings": [
           {
@@ -48,43 +58,33 @@
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "queryFrequency": "1h",
+        "suppressionDuration": "PT1H",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
+            "lookbackDuration": "P1D",
             "enabled": true,
-            "groupByCustomDetails": [
-              "EmailSubject"
-            ],
             "groupByEntities": [
               "Account"
             ],
             "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "P1D"
+            "groupByCustomDetails": [
+              "EmailSubject"
+            ],
+            "reopenClosedIncident": false
           }
         },
-        "suppressionEnabled": false,
         "queryPeriod": "14d",
-        "suppressionDuration": "PT1H",
-        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSenders = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom)\n| summarize by EmailFrom;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", \"[]\"))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSenders) on EmailFrom\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Email from previously unseen sender {{EmailFrom}} contains {{UrlCount}} URL(s).",
-          "alertDisplayNameFormat": "RedSift - New URL-bearing sender {{EmailFrom}}"
-        },
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
         "customDetails": {
-          "CorrelationUid": "CorrelationUid",
-          "ReturnPath": "EmailReturnPath",
+          "EmailSubject": "EmailSubject",
           "UrlCount": "UrlCount",
-          "UrlList": "UrlList",
-          "EmailSubject": "EmailSubject"
+          "ReturnPath": "EmailReturnPath",
+          "CorrelationUid": "CorrelationUid",
+          "UrlList": "UrlList"
         },
-        "tactics": [
-          "InitialAccess"
-        ],
+        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSenders = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom)\n| summarize by EmailFrom;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", \"[]\"))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSenders) on EmailFrom\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
+        "severity": "Medium",
         "name": "Red Sift - New email with URL from previously unseen sender"
       }
     }

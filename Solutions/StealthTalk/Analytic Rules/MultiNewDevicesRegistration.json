@@ -15,6 +15,18 @@
       "apiVersion": "2021-03-01-preview",
       "properties": {
         "description": "Identifies a single StealthTalk user registering two or more previously-unseen devices within\na 24-hour window. Sudden registration of multiple new devices is a strong indicator of\naccount takeover (an attacker enrolling their own device after credential theft) or\ndevice-farm abuse.\n\nThe rule fires when a user produces two or more distinct NewDeviceId values within the\nlookback window, regardless of operating system. Look at the OSList custom detail to spot\ncross-platform patterns (e.g. an iOS-only user suddenly enrolling an Android device).\n",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "StealthTalk: Multi New Devices - {{UserId}} ({{NewDeviceCount}} new devices)",
+          "alertDescriptionFormat": "{{AlertDetails}}"
+        },
+        "suppressionEnabled": false,
+        "tactics": [
+          "Persistence",
+          "InitialAccess",
+          "DefenseEvasion"
+        ],
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
         "entityMappings": [
           {
@@ -27,42 +39,30 @@
             "entityType": "Account"
           }
         ],
+        "queryFrequency": "30m",
+        "suppressionDuration": "5h",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
+            "reopenClosedIncident": false,
             "groupByEntities": [
               "Account"
             ],
-            "reopenClosedIncident": false,
             "matchingMethod": "Selected",
-            "enabled": true,
-            "lookbackDuration": "5h"
+            "lookbackDuration": "5h",
+            "enabled": true
           }
         },
-        "suppressionEnabled": false,
         "queryPeriod": "1d",
-        "suppressionDuration": "5h",
-        "query": "let LookbackPeriod = 24h;\nlet MinNewDevices  = 2;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"NewDeviceLogin\"\n| summarize\n    NewDeviceCount  = dcount(NewDeviceId),\n    NewDevices      = make_set(NewDeviceId),\n    NewDeviceOSList = make_set(NewDeviceOS),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated),\n    AppVersions     = make_set(AppVersion)\n  by UserId\n| where NewDeviceCount >= MinNewDevices\n| extend\n    AlertName    = \"MultiNewDevicesRegistration\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" registered \", NewDeviceCount, \" new devices within 24 hours.\",\n        \" Device IDs: \", tostring(NewDevices), \".\",\n        \" Operating systems: \", tostring(NewDeviceOSList), \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, NewDeviceCount, NewDevices, NewDeviceOSList,\n    FirstSeen, LastSeen, AppVersions, AlertName, AlertDetails\n",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{AlertDetails}}",
-          "alertDisplayNameFormat": "StealthTalk: Multi New Devices - {{UserId}} ({{NewDeviceCount}} new devices)"
-        },
-        "severity": "Medium",
-        "queryFrequency": "30m",
-        "triggerThreshold": 0,
         "customDetails": {
-          "NewDevices": "NewDevices",
-          "LastSeen": "LastSeen",
           "NewDeviceCount": "NewDeviceCount",
-          "FirstSeen": "FirstSeen",
-          "NewDeviceOSList": "NewDeviceOSList"
+          "NewDeviceOSList": "NewDeviceOSList",
+          "LastSeen": "LastSeen",
+          "NewDevices": "NewDevices",
+          "FirstSeen": "FirstSeen"
         },
-        "tactics": [
-          "Persistence",
-          "InitialAccess",
-          "DefenseEvasion"
-        ],
+        "query": "let LookbackPeriod = 24h;\nlet MinNewDevices  = 2;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"NewDeviceLogin\"\n| summarize\n    NewDeviceCount  = dcount(NewDeviceId),\n    NewDevices      = make_set(NewDeviceId),\n    NewDeviceOSList = make_set(NewDeviceOS),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated),\n    AppVersions     = make_set(AppVersion)\n  by UserId\n| where NewDeviceCount >= MinNewDevices\n| extend\n    AlertName    = \"MultiNewDevicesRegistration\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" registered \", NewDeviceCount, \" new devices within 24 hours.\",\n        \" Device IDs: \", tostring(NewDevices), \".\",\n        \" Operating systems: \", tostring(NewDeviceOSList), \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, NewDeviceCount, NewDevices, NewDeviceOSList,\n    FirstSeen, LastSeen, AppVersions, AlertName, AlertDetails\n",
+        "severity": "Medium",
         "name": "StealthTalk - Multi new devices registration"
       }
     }
