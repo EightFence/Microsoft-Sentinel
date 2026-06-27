@@ -14,15 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies when a UniFi host transitions cloudSystemLogState from enabled to disabled. This defense-evasion signal may indicate an attacker silencing audit trails.\n",
-        "status": "Available",
-        "tactics": [
-          "DefenseEvasion"
+        "subTechniques": [
+          "T1562.006",
+          "T1562.008"
         ],
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
+        "queryPeriod": "45m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT12H",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "name": "UniFi Site Manager: System log shipping disabled",
+        "queryFrequency": "15m",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
@@ -32,28 +42,18 @@
                 "identifier": "DnsDomain",
                 "columnName": "SiteName"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ],
-        "queryFrequency": "15m",
-        "subTechniques": [
-          "T1562.006",
-          "T1562.008"
+        "description": "Identifies when a UniFi host transitions cloudSystemLogState from enabled to disabled. This defense-evasion signal may indicate an attacker silencing audit trails.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "status": "Available",
+        "tactics": [
+          "DefenseEvasion"
         ],
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT12H",
-            "enabled": true
-          }
-        },
-        "queryPeriod": "45m",
         "query": "let prev = Unifi_SiteManager_Hosts_CL\n          | where TimeGenerated between (ago(30m) .. ago(15m))\n          | summarize arg_max(TimeGenerated, *) by Id\n          | project id_s = Id, prevState = tostring(ReportedState.cloudSystemLogState);\n      Unifi_SiteManager_Hosts_CL\n      | where TimeGenerated > ago(15m)\n      | summarize arg_max(TimeGenerated, *) by Id\n      | extend id_s = Id,\n               SiteName = tostring(ReportedState.name),\n               currentState = tostring(ReportedState.cloudSystemLogState)\n      | join kind=inner prev on id_s\n      | where currentState == 'disabled' and prevState == 'enabled'\n      | extend Activity = strcat('Cloud system log shipping was disabled on host ', SiteName, ' (', prevState, ' -> ', currentState, ')')\n      | project TimeGenerated, Id, SiteName, Activity, prevState, currentState\n",
-        "severity": "High",
-        "name": "UniFi Site Manager: System log shipping disabled"
+        "severity": "High"
       }
     }
   ]

@@ -14,21 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies AWS CloudTrail events associated with changes to Amazon RDS database security groups and database\nsecurity group ingress rules, which may indicate unauthorized modification of internet-facing RDS access. Validate whether\nthe change was authorized and consistent with change control policy.\nRDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html\n",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS RDS database security change by {{AccountName}} in {{AWSRegion}}",
-          "alertDescriptionFormat": "Event {{EventName}} change in RDS security settings by {{AccountName}} from {{SourceIpAddress}}."
+        "queryPeriod": "1d",
+        "name": "AWSCloudTrail - Changes to internet facing AWS RDS Database instances",
+        "customDetails": {
+          "EventType": "EventTypeName",
+          "EventName": "EventName",
+          "EventSource": "EventSource",
+          "UserAgent": "UserAgent",
+          "AWSRegion": "AWSRegion"
         },
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation",
-          "DefenseEvasion"
-        ],
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
+        "queryFrequency": "1d",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -42,31 +40,33 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "customDetails": {
-          "AWSRegion": "AWSRegion",
-          "EventName": "EventName",
-          "EventType": "EventTypeName",
-          "UserAgent": "UserAgent",
-          "EventSource": "EventSource"
-        },
+        "description": "Identifies AWS CloudTrail events associated with changes to Amazon RDS database security groups and database\nsecurity group ingress rules, which may indicate unauthorized modification of internet-facing RDS access. Validate whether\nthe change was authorized and consistent with change control policy.\nRDS API Reference Docs: https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_Operations.html\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "status": "Available",
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation",
+          "DefenseEvasion"
+        ],
         "query": "let EventNameList = dynamic([\"AuthorizeDBSecurityGroupIngress\",\"CreateDBSecurityGroup\",\"DeleteDBSecurityGroup\",\"RevokeDBSecurityGroupIngress\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n",
         "severity": "Low",
-        "name": "AWSCloudTrail - Changes to internet facing AWS RDS Database instances"
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Event {{EventName}} change in RDS security settings by {{AccountName}} from {{SourceIpAddress}}.",
+          "alertDisplayNameFormat": "AWS RDS database security change by {{AccountName}} in {{AWSRegion}}"
+        }
       }
     }
   ]

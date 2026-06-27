@@ -14,42 +14,42 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies when a UniFi controller (Cloud Key, Dream Machine, etc.) experiences a connection state change, which may indicate a network outage, power loss, or device failure.\n",
-        "status": "Available",
-        "tactics": [
-          "Impact",
-          "CommandAndControl"
+        "subTechniques": [
+          "T1071.001"
         ],
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
+        "queryPeriod": "1h",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT4H",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "name": "UniFi Site Manager: Controller Connection State Change",
+        "queryFrequency": "15m",
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPAddress"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "queryFrequency": "15m",
-        "subTechniques": [
-          "T1071.001"
+        "description": "Identifies when a UniFi controller (Cloud Key, Dream Machine, etc.) experiences a connection state change, which may indicate a network outage, power loss, or device failure.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "status": "Available",
+        "tactics": [
+          "Impact",
+          "CommandAndControl"
         ],
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT4H",
-            "enabled": true
-          }
-        },
-        "queryPeriod": "1h",
         "query": "// UniFi Controller Connection State Change Detection\n// Only fire when LastConnectionStateChange has changed since the prior 15-min cycle\n// to avoid 4-5 alerts per actual state change (rule runs every 15m, change visible for 1h).\nlet prev = Unifi_SiteManager_Hosts_CL\n    | where TimeGenerated between (ago(30m) .. ago(15m))\n    | summarize arg_max(TimeGenerated, *) by Id\n    | project id_s = Id, prevChange = todatetime(LastConnectionStateChange);\nUnifi_SiteManager_Hosts_CL\n| where TimeGenerated > ago(15m)\n| where isnotempty(LastConnectionStateChange)\n| summarize arg_max(TimeGenerated, *) by Id\n| extend\n    ConnectionChange = todatetime(LastConnectionStateChange),\n    id_s = Id\n| join kind=leftouter prev on id_s\n| where ConnectionChange != prevChange or isnull(prevChange)\n| where ConnectionChange > ago(30m)\n| extend\n    HostTypeDisplay = case(\n        HostType == \"ucore\", \"UniFi OS Console\",\n        HostType == \"uck\", \"Cloud Key\",\n        HostType == \"uckp\", \"Cloud Key+\",\n        HostType == \"udm\", \"Dream Machine\",\n        HostType == \"udmpro\", \"Dream Machine Pro\",\n        HostType == \"udmse\", \"Dream Machine SE\",\n        HostType == \"self-hosted\", \"Self-Hosted\",\n        HostType\n    )\n| project\n    TimeGenerated,\n    ConnectionChangeTime = ConnectionChange,\n    PreviousChangeTime = prevChange,\n    HostId = Id,\n    HostType = HostType,\n    HostTypeDisplay,\n    IPAddress = IpAddress,\n    IsBlocked = IsBlocked,\n    IsOwner = Owner\n",
-        "severity": "Medium",
-        "name": "UniFi Site Manager: Controller Connection State Change"
+        "severity": "Medium"
       }
     }
   ]
