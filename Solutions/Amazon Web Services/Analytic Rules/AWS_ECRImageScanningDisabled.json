@@ -16,13 +16,26 @@
       "properties": {
         "queryPeriod": "1d",
         "name": "AWSCloudTrail - Amazon ECR image scanning disabled",
+        "query": "AWSCloudTrail\n| where EventName == \"PutImageScanningConfiguration\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend scanOnPush = parse_json(tostring((parse_json(RequestParameters).imageScanningConfiguration))).scanOnPush\n| where scanOnPush == false\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, RecipientAccountId, AccountName, AccountUPNSuffix\n",
+        "description": "Identifies Amazon ECR image scanning being disabled. This change can reduce visibility into vulnerable container images and may indicate defense evasion or weakening of container security controls.\n",
         "customDetails": {
-          "UserIdentityArn": "UserIdentityArn",
           "UserIdentityUserName": "UserIdentityUserName",
-          "RecipientAccountId": "RecipientAccountId",
-          "EventName": "EventName"
+          "UserIdentityArn": "UserIdentityArn",
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId"
         },
+        "triggerOperator": "gt",
+        "severity": "Medium",
         "queryFrequency": "1d",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Amazon ECR image scanning disabled by {{AccountName}} from {{SourceIpAddress}}",
+          "alertDescriptionFormat": "Amazon ECR image scanning was disabled by {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}"
+        },
+        "triggerThreshold": 0,
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -50,20 +63,7 @@
               }
             ]
           }
-        ],
-        "description": "Identifies Amazon ECR image scanning being disabled. This change can reduce visibility into vulnerable container images and may indicate defense evasion or weakening of container security controls.\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "status": "Available",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "query": "AWSCloudTrail\n| where EventName == \"PutImageScanningConfiguration\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend scanOnPush = parse_json(tostring((parse_json(RequestParameters).imageScanningConfiguration))).scanOnPush\n| where scanOnPush == false\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, UserIdentityArn, UserIdentityUserName, RecipientAccountId, AccountName, AccountUPNSuffix\n",
-        "severity": "Medium",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Amazon ECR image scanning was disabled by {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}",
-          "alertDisplayNameFormat": "Amazon ECR image scanning disabled by {{AccountName}} from {{SourceIpAddress}}"
-        }
+        ]
       }
     }
   ]

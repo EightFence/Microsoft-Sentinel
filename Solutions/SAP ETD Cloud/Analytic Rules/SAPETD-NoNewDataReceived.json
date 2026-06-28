@@ -14,20 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "severity": "High",
         "queryPeriod": "1h",
-        "tactics": [
-          "DefenseEvasion"
-        ],
         "name": "SAP ETD - No new data received",
+        "query": "// Configurable freshness threshold for the entire SAP ETD data feed.\n// When changing this value also update queryFrequency and queryPeriod accordingly.\nlet LookbackPeriod = 1h;\nSAPETDAlerts_CL\n| summarize\n    LastIngestionTime = max(TimeGenerated),\n    RecordsInWindow   = countif(TimeGenerated > ago(LookbackPeriod))\n| where RecordsInWindow == 0 or isnull(LastIngestionTime)\n| extend\n    LookbackPeriod = LookbackPeriod,\n    TimeSinceLastIngestion = now() - coalesce(LastIngestionTime, datetime(null)),\n    FeedName = \"SAPETD\",\n    Reason = iff(isnull(LastIngestionTime),\n        \"No SAPETDAlerts_CL records have ever been ingested.\",\n        strcat(\"No SAPETDAlerts_CL records ingested in the last \", tostring(LookbackPeriod), \" (last ingestion: \", tostring(LastIngestionTime), \").\"))\n",
         "customDetails": {
           "LookbackPeriod": "LookbackPeriod",
           "LastIngestion": "LastIngestionTime",
           "LastIngestionGap": "TimeSinceLastIngestion"
         },
+        "triggerOperator": "gt",
         "queryFrequency": "1h",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "eventGroupingSettings": {
           "aggregationKind": "SingleAlert"
         },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP ETD - No new data received in the last {{LookbackPeriod}}",
+          "alertDescriptionFormat": "{{Reason}}\n\nA complete gap in the SAP ETD feed may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) in order to hide malicious activity in the SAP landscape. Treat the silence as suspicious until proven otherwise: validate the integrity and runtime state of the SAP ETD data connector, the SAP ETD service, and the network path between them, and review recent change / admin activity on those components before concluding the cause is a benign outage.\n"
+        },
+        "triggerThreshold": 0,
+        "description": "Identifies a complete gap in the SAP Enterprise Threat Detection (ETD) feed when no records have been ingested into the SAPETDAlerts_CL table within the configured time window (default 1 hour). A full-feed blackout may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) to hide follow-on activity in the SAP landscape. Benign causes such as a service outage, connector failure, or maintenance window are also possible and should be ruled out during triage. This rule is complementary to the per-SAP-system rule \"SAP ETD - SAP system stopped reporting data\", which can help distinguish a targeted silencing of a single system from a full-feed blackout. To change the freshness threshold, update the `LookbackPeriod` variable in the query and align `queryFrequency` / `queryPeriod` accordingly.\n",
         "entityMappings": [
           {
             "entityType": "CloudApplication",
@@ -38,17 +48,7 @@
               }
             ]
           }
-        ],
-        "description": "Identifies a complete gap in the SAP Enterprise Threat Detection (ETD) feed when no records have been ingested into the SAPETDAlerts_CL table within the configured time window (default 1 hour). A full-feed blackout may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) to hide follow-on activity in the SAP landscape. Benign causes such as a service outage, connector failure, or maintenance window are also possible and should be ruled out during triage. This rule is complementary to the per-SAP-system rule \"SAP ETD - SAP system stopped reporting data\", which can help distinguish a targeted silencing of a single system from a full-feed blackout. To change the freshness threshold, update the `LookbackPeriod` variable in the query and align `queryFrequency` / `queryPeriod` accordingly.\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "status": "Available",
-        "query": "// Configurable freshness threshold for the entire SAP ETD data feed.\n// When changing this value also update queryFrequency and queryPeriod accordingly.\nlet LookbackPeriod = 1h;\nSAPETDAlerts_CL\n| summarize\n    LastIngestionTime = max(TimeGenerated),\n    RecordsInWindow   = countif(TimeGenerated > ago(LookbackPeriod))\n| where RecordsInWindow == 0 or isnull(LastIngestionTime)\n| extend\n    LookbackPeriod = LookbackPeriod,\n    TimeSinceLastIngestion = now() - coalesce(LastIngestionTime, datetime(null)),\n    FeedName = \"SAPETD\",\n    Reason = iff(isnull(LastIngestionTime),\n        \"No SAPETDAlerts_CL records have ever been ingested.\",\n        strcat(\"No SAPETDAlerts_CL records ingested in the last \", tostring(LookbackPeriod), \" (last ingestion: \", tostring(LastIngestionTime), \").\"))\n",
-        "severity": "High",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{Reason}}\n\nA complete gap in the SAP ETD feed may indicate that an adversary is tampering with the security telemetry pipeline (for example by stopping the SAP ETD collector, disabling the data connector, or blocking network egress to Microsoft Sentinel) in order to hide malicious activity in the SAP landscape. Treat the silence as suspicious until proven otherwise: validate the integrity and runtime state of the SAP ETD data connector, the SAP ETD service, and the network path between them, and review recent change / admin activity on those components before concluding the cause is a benign outage.\n",
-          "alertDisplayNameFormat": "SAP ETD - No new data received in the last {{LookbackPeriod}}"
-        }
+        ]
       }
     }
   ]

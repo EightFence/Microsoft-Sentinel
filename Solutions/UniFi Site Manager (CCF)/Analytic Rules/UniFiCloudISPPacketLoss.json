@@ -14,22 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "queryPeriod": "30m",
+        "name": "UniFi Site Manager: ISP Packet Loss",
         "subTechniques": [
           "T1498.001",
           "T1499.002"
         ],
-        "queryPeriod": "30m",
+        "description": "Identifies when WAN packet loss occurs. Even small loss percentages can significantly degrade VoIP calls and video conferencing quality.\n",
+        "query": "// UniFi ISP Packet Loss Detection\nlet PacketLossThreshold = 5;\nlet MinTotalPacketLoss = 10;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    packetLoss = toint(period.data.wan.packetLoss),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn),\n    avgLatency = toint(period.data.wan.avgLatency)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, packetLoss, avgLatency, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where packetLoss >= PacketLossThreshold\n| summarize\n    TotalPacketLoss = sum(packetLoss),\n    EventCount = count(),\n    AvgLatency = avg(avgLatency),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where TotalPacketLoss >= MinTotalPacketLoss\n| extend TimeGenerated = now()\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    TotalPacketLoss,\n    EventCount,\n    AvgLatencyMs = round(AvgLatency, 1),\n    FirstSeen,\n    LastSeen\n",
+        "triggerOperator": "gt",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "enabled": true,
             "matchingMethod": "AllEntities",
             "lookbackDuration": "PT4H",
+            "enabled": true,
             "reopenClosedIncident": false
-          },
-          "createIncident": true
+          }
         },
-        "name": "UniFi Site Manager: ISP Packet Loss",
+        "severity": "Medium",
         "queryFrequency": "15m",
+        "tactics": [
+          "Impact"
+        ],
+        "triggerThreshold": 0,
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Host",
@@ -49,16 +58,7 @@
               }
             ]
           }
-        ],
-        "description": "Identifies when WAN packet loss occurs. Even small loss percentages can significantly degrade VoIP calls and video conferencing quality.\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "status": "Available",
-        "tactics": [
-          "Impact"
-        ],
-        "query": "// UniFi ISP Packet Loss Detection\nlet PacketLossThreshold = 5;\nlet MinTotalPacketLoss = 10;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    packetLoss = toint(period.data.wan.packetLoss),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn),\n    avgLatency = toint(period.data.wan.avgLatency)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, packetLoss, avgLatency, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where packetLoss >= PacketLossThreshold\n| summarize\n    TotalPacketLoss = sum(packetLoss),\n    EventCount = count(),\n    AvgLatency = avg(avgLatency),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where TotalPacketLoss >= MinTotalPacketLoss\n| extend TimeGenerated = now()\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    TotalPacketLoss,\n    EventCount,\n    AvgLatencyMs = round(AvgLatency, 1),\n    FirstSeen,\n    LastSeen\n",
-        "severity": "Medium"
+        ]
       }
     }
   ]
