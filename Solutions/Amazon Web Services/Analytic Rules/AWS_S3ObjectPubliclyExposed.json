@@ -14,43 +14,26 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
-        "name": "AWSCloudTrail - S3 object publicly exposed",
-        "query": "AWSCloudTrail\n  | where EventName == \"PutObjectAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n  | mvexpand Grant\n  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n  | where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n    or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "description": "Detects S3 object ACL changes that expose objects to public or broadly authenticated users.\nThis can result in unintended data disclosure from object-level permissions.\n",
-        "customDetails": {
-          "xamzacl": "xamzacl",
-          "URI": "URI",
-          "EventName": "EventName",
-          "RecipientAccountId": "RecipientAccountId"
-        },
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "queryFrequency": "1h",
+        "status": "Available",
         "tactics": [
           "Exfiltration"
         ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS S3 object public ACL exposure by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} applying public object ACL settings in account {{RecipientAccountId}}."
-        },
-        "triggerThreshold": 0,
-        "status": "Available",
+        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -58,12 +41,29 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
-        ]
+        ],
+        "triggerThreshold": 0,
+        "query": "AWSCloudTrail\n  | where EventName == \"PutObjectAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n  | mvexpand Grant\n  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n  | where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n    or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
+        "customDetails": {
+          "RecipientAccountId": "RecipientAccountId",
+          "xamzacl": "xamzacl",
+          "EventName": "EventName",
+          "URI": "URI"
+        },
+        "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} applying public object ACL settings in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS S3 object public ACL exposure by {{AccountName}}"
+        },
+        "description": "Detects S3 object ACL changes that expose objects to public or broadly authenticated users.\nThis can result in unintended data disclosure from object-level permissions.\n",
+        "triggerOperator": "gt",
+        "name": "AWSCloudTrail - S3 object publicly exposed"
       }
     }
   ]
