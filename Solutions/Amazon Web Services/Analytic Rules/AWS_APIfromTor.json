@@ -14,26 +14,32 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "tactics": [
-          "Execution"
-        ],
-        "severity": "High",
+        "query": "let TorNodes = (\nexternaldata (TorIP:string)\n[h@'https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip']\nwith (ignoreFirstRecord=true));\nAWSCloudTrail\n| where SourceIpAddress in (TorNodes) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, SourceIpAddress, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName, UserIdentityPrincipalid, EventName, EventSource, AWSRegion, RecipientAccountId\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "description": "Identifies successful AWS CloudTrail API activity originating from an IP address identified as a TOR exit node in\nthe external TOR list hosted at https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip. The rule alerts\nonly when CloudTrail indicates the request completed successfully with no ErrorCode and no ErrorMessage, and the source\nIP is present in the TOR exit node list.\n",
+        "queryPeriod": "1d",
+        "customDetails": {
+          "EventName": "EventName",
+          "UserIdentityArn": "UserIdentityArn",
+          "AWSRegion": "AWSRegion",
+          "EventSource": "EventSource"
+        },
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
             ]
           },
@@ -41,29 +47,23 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "query": "let TorNodes = (\nexternaldata (TorIP:string)\n[h@'https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip']\nwith (ignoreFirstRecord=true));\nAWSCloudTrail\n| where SourceIpAddress in (TorNodes) and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, SourceIpAddress, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName, UserIdentityPrincipalid, EventName, EventSource, AWSRegion, RecipientAccountId\n",
-        "customDetails": {
-          "EventSource": "EventSource",
-          "UserIdentityArn": "UserIdentityArn",
-          "AWSRegion": "AWSRegion",
-          "EventName": "EventName"
-        },
-        "queryPeriod": "1d",
-        "queryFrequency": "1d",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "A successful AWS API call was observed from TOR exit node IP {{SourceIpAddress}} for account {{AccountName}}.",
-          "alertDisplayNameFormat": "Successful AWS API call from TOR exit node: {{AccountName}} from {{SourceIpAddress}}"
-        },
-        "description": "Identifies successful AWS CloudTrail API activity originating from an IP address identified as a TOR exit node in\nthe external TOR list hosted at https://firewalliplists.gypthecat.com/lists/kusto/kusto-tor-exit.csv.zip. The rule alerts\nonly when CloudTrail indicates the request completed successfully with no ErrorCode and no ErrorMessage, and the source\nIP is present in the TOR exit node list.\n",
+        "name": "AWSCloudTrail - Successful API executed from a Tor exit node",
+        "tactics": [
+          "Execution"
+        ],
+        "status": "Available",
         "triggerOperator": "gt",
-        "name": "AWSCloudTrail - Successful API executed from a Tor exit node"
+        "severity": "High",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Successful AWS API call from TOR exit node: {{AccountName}} from {{SourceIpAddress}}",
+          "alertDescriptionFormat": "A successful AWS API call was observed from TOR exit node IP {{SourceIpAddress}} for account {{AccountName}}."
+        }
       }
     }
   ]

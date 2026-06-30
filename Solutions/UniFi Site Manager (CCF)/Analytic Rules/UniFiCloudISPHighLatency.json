@@ -14,27 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "// UniFi ISP High Latency Detection\nlet AvgLatencyThreshold = 200;\nlet MaxLatencyThreshold = 1000;\nlet SustainedPeriodCount = 2;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    avgLatency = toint(period.data.wan.avgLatency),\n    maxLatency = toint(period.data.wan.maxLatency),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, avgLatency, maxLatency, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where avgLatency > AvgLatencyThreshold or maxLatency > MaxLatencyThreshold\n| summarize\n    EventCount = count(),\n    AvgLatency = avg(avgLatency),\n    MaxLatency = max(maxLatency),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where EventCount >= SustainedPeriodCount\n| extend \n    TimeGenerated = now(),\n    AvgLatencyRounded = round(AvgLatency, 1)\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    AvgLatencyMs = AvgLatencyRounded,\n    MaxLatencyMs = MaxLatency,\n    EventCount,\n    FirstSeen,\n    LastSeen\n",
+        "triggerThreshold": 0,
+        "subTechniques": [
+          "T1498.001",
+          "T1499.002"
+        ],
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
             "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
+            "enabled": true,
             "lookbackDuration": "PT4H",
-            "enabled": true
-          }
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
         },
-        "status": "Available",
-        "tactics": [
-          "Impact"
-        ],
-        "severity": "Medium",
+        "queryFrequency": "15m",
+        "description": "Identifies when ISP latency exceeds acceptable thresholds, impacting VoIP quality, video conferencing, and overall application performance.\n",
+        "queryPeriod": "30m",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SiteId",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SiteId"
               }
             ]
           },
@@ -42,23 +46,19 @@
             "entityType": "CloudApplication",
             "fieldMappings": [
               {
-                "columnName": "ISPName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "ISPName"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "query": "// UniFi ISP High Latency Detection\nlet AvgLatencyThreshold = 200;\nlet MaxLatencyThreshold = 1000;\nlet SustainedPeriodCount = 2;\nUnifi_SiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = Periods\n| extend\n    metricTime = todatetime(period.metricTime),\n    avgLatency = toint(period.data.wan.avgLatency),\n    maxLatency = toint(period.data.wan.maxLatency),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n// De-duplicate Periods: each poll returns the same hour buckets, so collapse to latest value per metricTime\n| summarize arg_max(TimeGenerated, avgLatency, maxLatency, ispAsn) by tostring(SiteId), ispName, metricTime\n| where metricTime > ago(30m)\n| where avgLatency > AvgLatencyThreshold or maxLatency > MaxLatencyThreshold\n| summarize\n    EventCount = count(),\n    AvgLatency = avg(avgLatency),\n    MaxLatency = max(maxLatency),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by SiteId, ispName, ispAsn\n| where EventCount >= SustainedPeriodCount\n| extend \n    TimeGenerated = now(),\n    AvgLatencyRounded = round(AvgLatency, 1)\n| project\n    TimeGenerated,\n    SiteId = SiteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    AvgLatencyMs = AvgLatencyRounded,\n    MaxLatencyMs = MaxLatency,\n    EventCount,\n    FirstSeen,\n    LastSeen\n",
-        "subTechniques": [
-          "T1498.001",
-          "T1499.002"
+        "name": "UniFi Site Manager: ISP High Latency",
+        "tactics": [
+          "Impact"
         ],
-        "queryPeriod": "30m",
-        "queryFrequency": "15m",
-        "description": "Identifies when ISP latency exceeds acceptable thresholds, impacting VoIP quality, video conferencing, and overall application performance.\n",
+        "status": "Available",
         "triggerOperator": "gt",
-        "name": "UniFi Site Manager: ISP High Latency"
+        "severity": "Medium"
       }
     }
   ]
