@@ -14,19 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "AWSCloudTrail\n| where EventName == \"PutAccessPointPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).PutAccessPointPolicyRequest.Policy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "description": "Detects S3 access point policy changes that allow public principals. Public exposure through access point\nconfiguration can lead to unauthorized data access and potential information disclosure.\n",
         "queryPeriod": "1h",
-        "customDetails": {
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn",
-          "RecipientAccountId": "RecipientAccountId"
-        },
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -40,28 +30,38 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - S3 bucket access point publicly exposed",
+        "query": "AWSCloudTrail\n| where EventName == \"PutAccessPointPolicy\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).PutAccessPointPolicyRequest.Policy))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition), Principal_aws = tostring(parse_json(Statement).Principal.AWS), Principal = tostring(parse_json(Statement).Principal)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Principal_aws == \"*\" or Principal == \"*\") and isempty(Condition)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "description": "Detects S3 access point policy changes that allow public principals. Public exposure through access point\nconfiguration can lead to unauthorized data access and potential information disclosure.\n",
         "tactics": [
           "Exfiltration"
         ],
-        "status": "Available",
         "triggerOperator": "gt",
-        "severity": "Medium",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS S3 access point publicly exposed by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} creating public S3 access point exposure in account {{RecipientAccountId}}."
+        },
+        "status": "Available",
+        "name": "AWSCloudTrail - S3 bucket access point publicly exposed",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId",
+          "UserIdentityArn": "UserIdentityArn"
         }
       }
     }

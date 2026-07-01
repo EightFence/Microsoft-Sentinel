@@ -14,20 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"s3:Create\" and Action contains \"s3:Get\" and Action contains \"s3:Put\" and Action contains \"s3:Delete\") and Resource == \"*\" and Condition == \"\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
-        "description": "Detects inline IAM policy updates that grant broad Amazon S3 create, read, update, and delete permissions.\nThis type of policy expansion can be used to gain higher-impact access to cloud data and facilitate privilege\nescalation objectives.\n",
         "queryPeriod": "1d",
-        "customDetails": {
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn",
-          "RecipientAccountId": "RecipientAccountId",
-          "PolicyName": "PolicyName"
-        },
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -41,28 +30,39 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "name": "AWSCloudTrail - Privilege escalation via CRUD S3 policy",
+        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"s3:Create\" and Action contains \"s3:Get\" and Action contains \"s3:Put\" and Action contains \"s3:Delete\") and Resource == \"*\" and Condition == \"\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "description": "Detects inline IAM policy updates that grant broad Amazon S3 create, read, update, and delete permissions.\nThis type of policy expansion can be used to gain higher-impact access to cloud data and facilitate privilege\nescalation objectives.\n",
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "status": "Available",
         "triggerOperator": "gt",
-        "severity": "Medium",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS S3 privilege escalation policy update by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline S3 escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
+        },
+        "status": "Available",
+        "name": "AWSCloudTrail - Privilege escalation via CRUD S3 policy",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "EventName": "EventName",
+          "PolicyName": "PolicyName",
+          "RecipientAccountId": "RecipientAccountId",
+          "UserIdentityArn": "UserIdentityArn"
         }
       }
     }
