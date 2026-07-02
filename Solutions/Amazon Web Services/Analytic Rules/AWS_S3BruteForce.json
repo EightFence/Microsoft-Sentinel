@@ -14,7 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1h",
+        "customDetails": {
+          "failed_keys": "failed_keys",
+          "bucketName": "bucketName",
+          "success_keys": "success_keys",
+          "RecipientAccountId": "RecipientAccountId"
+        },
+        "name": "AWSCloudTrail - Successful brute force attack on S3 Bucket",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "description": "Detects repeated failed GetObject attempts against an S3 bucket followed by a successful access from the\nsame source, which can indicate brute-force-style object discovery or access attempts.\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -43,27 +52,18 @@
             "entityType": "IP"
           }
         ],
-        "query": "let timeframe = 1h;\nlet failed_attempts = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"GetObject\" and isnotempty(ErrorMessage) and isnotempty(ErrorCode)\n| where UserIdentityAccountId == \"ANONYMOUS_PRINCIPAL\" or UserIdentityAccessKeyId <> RecipientAccountId\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| summarize time_min_failed=arg_min(TimeGenerated, *), failed_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName\n| where failed_keys > 20;\nlet success_attempts = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"GetObject\" and isempty(ErrorMessage) and isempty(ErrorCode)\n| where UserIdentityAccountId == \"ANONYMOUS_PRINCIPAL\" or UserIdentityAccessKeyId <> RecipientAccountId\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| summarize time_min_success=arg_min(TimeGenerated, *), success_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName\n| where success_keys >= 1;\nfailed_attempts\n| join kind=inner success_attempts on SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, bucketName\n| where time_min_success > time_min_failed\n| project-away keyName\n",
-        "severity": "High",
+        "queryPeriod": "1h",
         "queryFrequency": "1h",
-        "description": "Detects repeated failed GetObject attempts against an S3 bucket followed by a successful access from the\nsame source, which can indicate brute-force-style object discovery or access attempts.\n",
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "triggerOperator": "gt",
+        "status": "Available",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS S3 brute force pattern detected from {{SourceIpAddress}}",
           "alertDescriptionFormat": "Detected repeated failed and then successful S3 GetObject access for bucket {{bucketName}} in account {{RecipientAccountId}}."
         },
-        "status": "Available",
-        "name": "AWSCloudTrail - Successful brute force attack on S3 Bucket",
-        "triggerThreshold": 0,
-        "customDetails": {
-          "RecipientAccountId": "RecipientAccountId",
-          "success_keys": "success_keys",
-          "bucketName": "bucketName",
-          "failed_keys": "failed_keys"
-        }
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "triggerOperator": "gt",
+        "query": "let timeframe = 1h;\nlet failed_attempts = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"GetObject\" and isnotempty(ErrorMessage) and isnotempty(ErrorCode)\n| where UserIdentityAccountId == \"ANONYMOUS_PRINCIPAL\" or UserIdentityAccessKeyId <> RecipientAccountId\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| summarize time_min_failed=arg_min(TimeGenerated, *), failed_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName\n| where failed_keys > 20;\nlet success_attempts = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"GetObject\" and isempty(ErrorMessage) and isempty(ErrorCode)\n| where UserIdentityAccountId == \"ANONYMOUS_PRINCIPAL\" or UserIdentityAccessKeyId <> RecipientAccountId\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| summarize time_min_success=arg_min(TimeGenerated, *), success_keys = dcount(keyName) by RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, SourceIpAddress, bucketName\n| where success_keys >= 1;\nfailed_attempts\n| join kind=inner success_attempts on SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, bucketName\n| where time_min_success > time_min_failed\n| project-away keyName\n"
       }
     }
   ]

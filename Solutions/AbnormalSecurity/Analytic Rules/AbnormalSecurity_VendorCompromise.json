@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b15ea4c9-58da-44d8-90e4-6591d947e7e3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b15ea4c9-58da-44d8-90e4-6591d947e7e3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "customDetails": {
+          "VendorCaseId": "CaseId",
+          "VendorDomain": "VendorDomain"
+        },
+        "name": "Abnormal Security - Vendor compromise case detected",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "suppressionEnabled": false,
+        "suppressionDuration": "PT5H",
+        "description": "'Creates an incident when Abnormal Security opens a vendor case indicating a\ncompromised or impersonated vendor domain (vendor email compromise). Surfaces the\nvendor domain and Abnormal insights so analysts can review related correspondence.'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "VendorDomain"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ],
+        "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Abnormal Security: vendor compromise case for {{VendorDomain}}",
+          "alertDescriptionFormat": "Abnormal Security opened vendor case {{CaseId}} for the domain {{VendorDomain}}. Review related correspondence for vendor email compromise."
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "ABNORMAL_SECURITY_VENDOR_CASE_CL\n| where isnotempty(abx_body_abx_body_vendorCaseId_g)\n// Collapse to one row per vendor case (earliest event in the window) so repeated\n// events for the same case do not raise duplicate alerts.\n| summarize arg_min(TimeGenerated, *) by CaseId = abx_body_abx_body_vendorCaseId_g\n| extend\n    VendorDomain = abx_body_abx_body_vendorDomain_s,\n    Insights = abx_body_abx_body_insights_s,\n    FirstObserved = abx_body_abx_body_firstObservedTime_t\n| project TimeGenerated, VendorDomain, CaseId, Insights, FirstObserved\n"
+      }
+    }
+  ]
+}

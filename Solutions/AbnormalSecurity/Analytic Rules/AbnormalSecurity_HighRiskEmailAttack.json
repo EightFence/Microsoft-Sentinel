@@ -1,0 +1,93 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8effd19a-abab-433a-9184-ae67ac51e6d0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8effd19a-abab-433a-9184-ae67ac51e6d0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "customDetails": {
+          "RemediationStatus": "RemediationStatus",
+          "AttackScore": "AttackScore",
+          "AbnormalPortalUrl": "PortalUrl",
+          "AttackType": "AttackType"
+        },
+        "name": "Abnormal Security - High-risk email attack detected",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "enabled": false,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "suppressionEnabled": false,
+        "suppressionDuration": "PT5H",
+        "description": "'Identifies email attacks detected by Abnormal Security whose attack type maps to a\nhigh-risk category (credential phishing, Business Email Compromise, invoice/payment\nfraud, malware, extortion, sensitive-data phishing, internal account-takeover attacks,\nor scams). Lower-risk categories such as Spam, Graymail, and Reconnaissance are\nintentionally excluded. Use this to triage targeted email threats that reached a mailbox.'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "RecipientEmail"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Recipient",
+                "columnName": "RecipientEmail"
+              },
+              {
+                "identifier": "Sender",
+                "columnName": "SenderEmail"
+              },
+              {
+                "identifier": "NetworkMessageId",
+                "columnName": "MessageId"
+              }
+            ],
+            "entityType": "MailMessage"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SenderIP"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Abnormal Security: {{AttackType}} email delivered to {{RecipientEmail}}",
+          "alertDescriptionFormat": "Abnormal Security detected a {{AttackType}} attack from {{SenderEmail}} to {{RecipientEmail}}. See attack score and remediation status in the custom details."
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "ABNORMAL_SECURITY_THREAT_LOG_CL\n| where abx_body_abx_body_attack_type_s in~ (\n    \"Phishing: Credential\",\n    \"Social Engineering (BEC)\",\n    \"Invoice/Payment Fraud (BEC)\",\n    \"Malware\",\n    \"Extortion\",\n    \"Phishing: Sensitive Data\",\n    \"Internal-to-Internal Attacks (Email Account Takeover)\",\n    \"Scam\")\n| extend\n    RecipientEmail = abx_body_abx_body_recipient_address_s,\n    SenderEmail = abx_body_abx_body_from_address_s,\n    SenderName = abx_body_abx_body_from_name_s,\n    SenderIP = abx_body_abx_body_sender_ip_address_s,\n    Subject = abx_body_abx_body_subject_s,\n    MessageId = abx_body_abx_body_internet_message_id_s,\n    AttackType = abx_body_abx_body_attack_type_s,\n    AttackScore = abx_body_abx_body_attack_score_d,\n    RemediationStatus = abx_body_abx_body_remediation_status_s,\n    PortalUrl = abx_body_abx_body_abx_portal_url_s\n| project TimeGenerated, RecipientEmail, SenderEmail, SenderName, SenderIP, Subject, MessageId, AttackType, AttackScore, RemediationStatus, PortalUrl\n"
+      }
+    }
+  ]
+}
