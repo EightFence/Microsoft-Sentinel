@@ -14,30 +14,21 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} creating a broadly permissive KMS policy in account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS overly permissive KMS key policy change by {{AccountName}}"
-        },
         "query": "let kmsActions = dynamic([\"kms:Encrypt\", \"kms:*\"]); //Add other overly permissive APIs to this list.\nAWSCloudTrail\n| where EventName in (\"CreateKey\",\"PutKeyPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policy))).Statement\n| mvexpand Statement\n| extend Action = tostring(parse_json(Statement).Action), Effect = tostring(parse_json(Statement).Effect), Principal = iff(isnotempty(tostring(parse_json(Statement).Principal.AWS)),tostring(parse_json(Statement).Principal.AWS), tostring(parse_json(Statement).Principal))\n| where Effect =~ \"Allow\" and Action has_any (kmsActions) and Principal == \"*\" \n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "name": "AWSCloudTrail - Suspicious overly permissive KMS key policy created",
+        "description": "Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.\nOverly permissive key policies can be abused for malicious encryption operations and indicate potential account\ncompromise or risky misconfiguration.\n",
         "customDetails": {
           "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn",
           "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn",
           "EventSource": "EventSource"
         },
-        "description": "Detects creation or update of KMS key policies that grant broad encryption permissions to all principals.\nOverly permissive key policies can be abused for malicious encryption operations and indicate potential account\ncompromise or risky misconfiguration.\n",
-        "queryFrequency": "1d",
-        "queryPeriod": "1d",
         "status": "Available",
-        "name": "AWSCloudTrail - Suspicious overly permissive KMS key policy created",
-        "tactics": [
-          "Impact"
-        ],
-        "severity": "High",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -51,19 +42,28 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ]
+        ],
+        "tactics": [
+          "Impact"
+        ],
+        "triggerOperator": "gt",
+        "severity": "High",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} creating a broadly permissive KMS policy in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS overly permissive KMS key policy change by {{AccountName}}"
+        },
+        "queryPeriod": "1d"
       }
     }
   ]

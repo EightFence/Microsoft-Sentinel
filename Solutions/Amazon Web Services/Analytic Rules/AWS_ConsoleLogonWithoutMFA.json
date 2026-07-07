@@ -14,34 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Successful ConsoleLogin without MFA for {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS Management Console sign-in without MFA: {{AccountName}} from {{SourceIpAddress}}"
-        },
         "query": "AWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),\":\")\n| where MFAUsed !~ \"Yes\" and LoginResult !~ \"Failure\"\n| where SessionIssuerUserName !contains \"AWSReservedSSO\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId\n",
-        "triggerOperator": "gt",
-        "customDetails": {
-          "EventName": "EventName",
-          "UserAgent": "UserAgent",
-          "MFAUsed": "MFAUsed",
-          "LoginResult": "LoginResult",
-          "AWSRegion": "AWSRegion"
-        },
-        "description": "Identifies successful AWS Management Console sign-ins where CloudTrail records a ConsoleLogin event without\nmulti-factor authentication. The rule looks for logins where MFAUsed is not Yes and the console response is not\nFailure, which can indicate credential misuse or weak account protection.\n",
         "queryFrequency": "1d",
-        "queryPeriod": "1d",
-        "status": "Available",
         "name": "AWSCloudTrail - Login to AWS Management Console without MFA",
-        "tactics": [
-          "DefenseEvasion",
-          "PrivilegeEscalation",
-          "Persistence",
-          "InitialAccess"
-        ],
-        "severity": "Low",
+        "description": "Identifies successful AWS Management Console sign-ins where CloudTrail records a ConsoleLogin event without\nmulti-factor authentication. The rule looks for logins where MFAUsed is not Yes and the console response is not\nFailure, which can indicate credential misuse or weak account protection.\n",
+        "customDetails": {
+          "LoginResult": "LoginResult",
+          "EventName": "EventName",
+          "AWSRegion": "AWSRegion",
+          "UserAgent": "UserAgent",
+          "MFAUsed": "MFAUsed"
+        },
+        "status": "Available",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -55,19 +43,31 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
-        ]
+        ],
+        "tactics": [
+          "DefenseEvasion",
+          "PrivilegeEscalation",
+          "Persistence",
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "severity": "Low",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Successful ConsoleLogin without MFA for {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS Management Console sign-in without MFA: {{AccountName}} from {{SourceIpAddress}}"
+        },
+        "queryPeriod": "1d"
       }
     }
   ]
