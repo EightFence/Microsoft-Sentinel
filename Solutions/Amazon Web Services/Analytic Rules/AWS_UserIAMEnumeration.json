@@ -14,51 +14,51 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "IAM enumeration detected - {{count_}} API calls by {{UserIdentityPrincipalid}}",
-          "alertDescriptionFormat": "User {{UserIdentityPrincipalid}} performed {{count_}} IAM enumeration API calls within a 10-minute window from account {{UserIdentityAccountId}}."
-        },
+        "query": "let threshold = 50; \nAWSCloudTrail\n| where EventName in (\"ListAttachedRolePolicies\",\"ListRoles\",\"ListGroupsForUser\",\"ListAttachedUserPolicies\",\"ListAccessKeys\",\"ListUsers\")\n| summarize\n    count(),\n    make_set(AWSRegion),\n    make_set(UserAgent),\n    make_set(SourceIpAddress),\n    make_set(ErrorCode),\n    make_set(ErrorMessage),\n    make_set(EventName)\n    by bin(TimeGenerated, 10m), UserIdentityPrincipalid, UserIdentityArn, UserIdentityAccountId\n| where count_ > threshold\n| mv-expand set_SourceIpAddress\n| extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, \":\") + 1)\n| extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UpnSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "set_SourceIpAddress",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Discovery"
+        ],
+        "queryFrequency": "10m",
+        "status": "Available",
+        "severity": "Medium",
         "customDetails": {
           "AWSAccountId": "UserIdentityAccountId",
           "EventCount": "count_",
           "PrincipalId": "UserIdentityPrincipalid"
         },
-        "queryFrequency": "10m",
-        "tactics": [
-          "Discovery"
-        ],
-        "queryPeriod": "10m",
-        "description": "Detects enumeration of IAM account configuration via repeated API calls to list roles, users, groups, and policies within a short time period. The threshold can be adjusted to reduce false positives from authorized cloud scanners such as Wiz.\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "User {{UserIdentityPrincipalid}} performed {{count_}} IAM enumeration API calls within a 10-minute window from account {{UserIdentityAccountId}}.",
+          "alertDisplayNameFormat": "IAM enumeration detected - {{count_}} API calls by {{UserIdentityPrincipalid}}"
+        },
         "name": "AWSCloudTrail - User IAM Enumeration",
-        "triggerOperator": "gt",
-        "status": "Available",
-        "triggerThreshold": 0,
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "Name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UpnSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "set_SourceIpAddress"
-              }
-            ]
-          }
-        ],
-        "query": "let threshold = 50; \nAWSCloudTrail\n| where EventName in (\"ListAttachedRolePolicies\",\"ListRoles\",\"ListGroupsForUser\",\"ListAttachedUserPolicies\",\"ListAccessKeys\",\"ListUsers\")\n| summarize\n    count(),\n    make_set(AWSRegion),\n    make_set(UserAgent),\n    make_set(SourceIpAddress),\n    make_set(ErrorCode),\n    make_set(ErrorMessage),\n    make_set(EventName)\n    by bin(TimeGenerated, 10m), UserIdentityPrincipalid, UserIdentityArn, UserIdentityAccountId\n| where count_ > threshold\n| mv-expand set_SourceIpAddress\n| extend UserName = substring(UserIdentityPrincipalid, indexof_regex(UserIdentityPrincipalid, \":\") + 1)\n| extend Name = split(UserName,'@')[0],UpnSuffix = split(UserName,'@')[1]\n",
-        "severity": "Medium"
+        "description": "Detects enumeration of IAM account configuration via repeated API calls to list roles, users, groups, and policies within a short time period. The threshold can be adjusted to reduce false positives from authorized cloud scanners such as Wiz.\n",
+        "queryPeriod": "10m"
       }
     }
   ]
