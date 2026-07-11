@@ -14,37 +14,36 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "PolicyName": "PolicyName",
-          "EventName": "EventName",
-          "UserIdentityArn": "UserIdentityArn",
-          "RecipientAccountId": "RecipientAccountId"
-        },
-        "queryFrequency": "1d",
-        "description": "Detects inline IAM policy updates that grant broad KMS create, read, update, enable/disable, and delete\npermissions. This pattern can support key management abuse and indicates possible privilege escalation through\nexpanded cloud role capabilities.\n",
+        "severity": "Medium",
+        "queryPeriod": "1d",
+        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"kms:Create\" and (Action contains \"kms:Get\" or Action contains \"kms:Describe\")  and (Action contains \"kms:Disable\" or Action contains \"kms:Enable\") and Action contains \"kms:Delete\") and Resource == \"*\" and Condition == \"\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS KMS privilege escalation policy update by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline KMS escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
         },
+        "queryFrequency": "1d",
+        "description": "Detects inline IAM policy updates that grant broad KMS create, read, update, enable/disable, and delete\npermissions. This pattern can support key management abuse and indicates possible privilege escalation through\nexpanded cloud role capabilities.\n",
+        "name": "AWSCloudTrail - Privilege escalation via CRUD KMS policy",
+        "triggerThreshold": 0,
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "triggerThreshold": 0,
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -52,18 +51,19 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "queryPeriod": "1d",
-        "name": "AWSCloudTrail - Privilege escalation via CRUD KMS policy",
-        "severity": "Medium",
-        "status": "Available",
         "triggerOperator": "gt",
-        "query": "AWSCloudTrail\n| where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n| extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n| mvexpand Statement\n| extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n| extend Action = tostring(Action)\n| where Effect =~ \"Allow\" and (Action contains \"kms:Create\" and (Action contains \"kms:Get\" or Action contains \"kms:Describe\")  and (Action contains \"kms:Disable\" or Action contains \"kms:Enable\") and Action contains \"kms:Delete\") and Resource == \"*\" and Condition == \"\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n"
+        "customDetails": {
+          "EventName": "EventName",
+          "PolicyName": "PolicyName",
+          "UserIdentityArn": "UserIdentityArn",
+          "RecipientAccountId": "RecipientAccountId"
+        }
       }
     }
   ]

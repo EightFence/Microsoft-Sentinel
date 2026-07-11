@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c3f8e4d6-0d57-4a3b-9e2c-4f6a8b0d3e52')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c3f8e4d6-0d57-4a3b-9e2c-4f6a8b0d3e52')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "High",
+        "queryPeriod": "1h",
+        "query": "let dlpIncidentThreshold = 10;\nNetskopeAlertEvents_CL\n| where TimeGenerated > ago(1h)\n| where AlertType =~ \"DLP\" or isnotempty(DlpProfile) or isnotempty(DlpIncidentId)\n| summarize\n    IncidentCount = count(),\n    DistinctIncidents = dcount(DlpIncidentId),\n    Profiles = make_set(DlpProfile, 20),\n    Rules = make_set(DlpRule, 20),\n    Applications = make_set(App, 20),\n    Files = make_set(DlpFile, 20),\n    Activities = make_set(Activity, 10),\n    Actions = make_set(Action, 10),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n    by User, Userip, Hostname\n| where IncidentCount > dlpIncidentThreshold\n| order by IncidentCount desc\n| project\n    LastSeen,\n    User,\n    Userip,\n    Hostname,\n    IncidentCount,\n    DistinctIncidents,\n    Profiles,\n    Rules,\n    Applications,\n    Files,\n    Activities,\n    Actions,\n    FirstSeen\n",
+        "queryFrequency": "1h",
+        "description": "Detects a spike in Netskope DLP incidents within a short window. A sudden increase in\nDLP violations for a single user or DLP profile can indicate active data exfiltration,\na misconfigured policy, or bulk handling of sensitive data. Triggers when a user\ngenerates more DLP incidents in the last hour than a configurable threshold.\n",
+        "name": "Netskope - DLP Incident Spike",
+        "triggerThreshold": 0,
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "status": "Available",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "Name"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "Userip",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Hostname",
+                "identifier": "HostName"
+              }
+            ]
+          }
+        ],
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}

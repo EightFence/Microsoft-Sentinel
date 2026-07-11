@@ -14,38 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "EventSource": "EventSource",
-          "EventName": "EventName",
-          "AWSRegion": "AWSRegion",
-          "UserIdentityArn": "UserIdentityArn"
-        },
-        "queryFrequency": "1d",
-        "description": "Detects successful attachment of admin-related managed IAM policies to users, roles, or groups, excluding\nthe dedicated AdministratorAccess and FullAccess patterns handled by other detections. This behavior may indicate\nunauthorized privilege escalation and should be validated against approved administrative changes.\n",
+        "severity": "Medium",
+        "queryPeriod": "1d",
+        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) contains \"Admin\" and tostring(parse_json(RequestParameters).policyArn) !contains \"FullAccess\" and tostring(parse_json(RequestParameters).policyArn) !startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, ResponseElements, UserIdentityArn\n",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "AWS admin managed policy attachment by {{AccountName}}",
           "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching admin-related managed policy in account {{RecipientAccountId}}."
         },
+        "queryFrequency": "1d",
+        "description": "Detects successful attachment of admin-related managed IAM policies to users, roles, or groups, excluding\nthe dedicated AdministratorAccess and FullAccess patterns handled by other detections. This behavior may indicate\nunauthorized privilege escalation and should be validated against approved administrative changes.\n",
+        "name": "AWSCloudTrail - Privilege escalation with admin managed policy",
+        "triggerThreshold": 0,
         "tactics": [
           "PrivilegeEscalation",
           "Persistence"
         ],
-        "triggerThreshold": 0,
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "AccountName"
+                "columnName": "AccountName",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
               },
               {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
               }
             ]
           },
@@ -53,18 +52,19 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
               }
             ]
           }
         ],
-        "queryPeriod": "1d",
-        "name": "AWSCloudTrail - Privilege escalation with admin managed policy",
-        "severity": "Medium",
-        "status": "Available",
         "triggerOperator": "gt",
-        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) contains \"Admin\" and tostring(parse_json(RequestParameters).policyArn) !contains \"FullAccess\" and tostring(parse_json(RequestParameters).policyArn) !startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, ResponseElements, UserIdentityArn\n"
+        "customDetails": {
+          "EventName": "EventName",
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn",
+          "EventSource": "EventSource"
+        }
       }
     }
   ]
