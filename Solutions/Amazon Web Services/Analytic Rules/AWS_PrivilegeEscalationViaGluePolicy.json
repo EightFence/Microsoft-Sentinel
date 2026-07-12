@@ -14,36 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"glue:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"glue:CreateDevEndpoint\" and Action contains \"glue:GetDevEndpoints\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"glue:Create*\" and Action contains \"glue:Get*\")) or (Action contains \"glue:*\") or (Action contains \"glue:GetDevEndpoints\" and Action contains \"glue:UpdateDevEndpoint\") or (Action contains \"glue:Get*\" and Action contains \"glue:Update*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS Glue privilege escalation policy update by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline Glue escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
-        },
-        "queryFrequency": "1d",
-        "description": "Detects inline IAM policy updates that grant broad AWS Glue permissions or Glue actions paired with IAM\nprivileges such as iam:PassRole. This pattern can enable elevated execution paths and indicates potential\nprivilege escalation through expanded cloud role capabilities.\n",
-        "name": "AWSCloudTrail - Privilege escalation via Glue policy",
-        "triggerThreshold": 0,
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "status": "Available",
+        "description": "Detects inline IAM policy updates that grant broad AWS Glue permissions or Glue actions paired with IAM\nprivileges such as iam:PassRole. This pattern can enable elevated execution paths and indicates potential\nprivilege escalation through expanded cloud role capabilities.\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
             ]
           },
@@ -51,19 +40,30 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ]
           }
         ],
+        "status": "Available",
+        "name": "AWSCloudTrail - Privilege escalation via Glue policy",
+        "queryPeriod": "1d",
         "triggerOperator": "gt",
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and ((((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"glue:*\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"glue:CreateDevEndpoint\" and Action contains \"glue:GetDevEndpoints\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"glue:Create*\" and Action contains \"glue:Get*\")) or (Action contains \"glue:*\") or (Action contains \"glue:GetDevEndpoints\" and Action contains \"glue:UpdateDevEndpoint\") or (Action contains \"glue:Get*\" and Action contains \"glue:Update*\")) and Resource == \"*\" and Condition == \"\"\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS Glue privilege escalation policy update by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline Glue escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
+        },
+        "severity": "Medium",
+        "queryFrequency": "1d",
         "customDetails": {
+          "RecipientAccountId": "RecipientAccountId",
           "EventName": "EventName",
-          "PolicyName": "PolicyName",
           "UserIdentityArn": "UserIdentityArn",
-          "RecipientAccountId": "RecipientAccountId"
-        }
+          "PolicyName": "PolicyName"
+        },
+        "triggerThreshold": 0
       }
     }
   ]

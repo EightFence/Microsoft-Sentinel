@@ -14,36 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "queryPeriod": "1d",
-        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:CreatePipeline\" and Action has \"datapipeline:PutPipelineDefinition\" and Action has \"datapipeline:ActivatePipeline\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"datapipeline:Create*\" and Action contains \"datapipeline:Put*\" and Action contains \"datapipeline:Activate*\")) and Resource == \"*\" and isempty(Condition)\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS Data Pipeline privilege escalation policy update by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline Data Pipeline escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
-        },
-        "queryFrequency": "1d",
-        "description": "Detects inline IAM policy updates that combine Data Pipeline permissions with IAM privileges such as\niam:PassRole. This sequence can enable indirect execution and elevated access pathways, indicating potential\nprivilege escalation activity.\n",
-        "name": "AWSCloudTrail - Privilege escalation via DataPipeline policy",
-        "triggerThreshold": 0,
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "status": "Available",
+        "description": "Detects inline IAM policy updates that combine Data Pipeline permissions with IAM privileges such as\niam:PassRole. This sequence can enable indirect execution and elevated access pathways, indicating potential\nprivilege escalation activity.\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
             ]
           },
@@ -51,19 +40,30 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
             ]
           }
         ],
+        "status": "Available",
+        "name": "AWSCloudTrail - Privilege escalation via DataPipeline policy",
+        "queryPeriod": "1d",
         "triggerOperator": "gt",
+        "query": "AWSCloudTrail\n  | where EventName in (\"PutUserPolicy\",\"PutRolePolicy\",\"PutGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)\n  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement\n  | mvexpand Statement\n  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)\n  | extend Action = tostring(Action)\n  | where Effect =~ \"Allow\" and (((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:*\") or ((Action has \"iam:*\" or Action has \"iam:PassRole\") and Action has \"datapipeline:CreatePipeline\" and Action has \"datapipeline:PutPipelineDefinition\" and Action has \"datapipeline:ActivatePipeline\") or ((Action contains \"iam:*\" or Action contains \"iam:PassRole\") and Action contains \"datapipeline:Create*\" and Action contains \"datapipeline:Put*\" and Action contains \"datapipeline:Activate*\")) and Resource == \"*\" and isempty(Condition)\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserIdentityUserName\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS Data Pipeline privilege escalation policy update by {{AccountName}}",
+          "alertDescriptionFormat": "Detected {{EventName}} Event, updating inline Data Pipeline escalation policy {{PolicyName}} in account {{RecipientAccountId}}."
+        },
+        "severity": "Medium",
+        "queryFrequency": "1d",
         "customDetails": {
+          "RecipientAccountId": "RecipientAccountId",
           "EventName": "EventName",
-          "PolicyName": "PolicyName",
           "UserIdentityArn": "UserIdentityArn",
-          "RecipientAccountId": "RecipientAccountId"
-        }
+          "PolicyName": "PolicyName"
+        },
+        "triggerThreshold": 0
       }
     }
   ]
