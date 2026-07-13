@@ -14,10 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "customDetails": {
+          "TargetUserAltId": "TargetUser_alternateId",
+          "TargetUserName": "TargetUser_displayName",
+          "EventType": "eventType_s",
+          "TargetUserType": "TargetUser_type",
+          "ActorDisplayName": "actor_displayName_s"
+        },
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "description": "This query detects instances of user session impersonation, where an attacker successfully initiates a session impersonation event. The query extracts detailed information about the target user and the actor involved in the impersonation, providing insights into potential privilege escalation activities.\n",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Okta session impersonation by {{actor_displayName_s}} for {{TargetUser_displayName}}",
+          "alertDescriptionFormat": "Okta user session impersonation succeeded. Actor {{actor_alternateId_s}} impersonated target {{TargetUser_alternateId}} during {{eventType_s}}."
+        },
+        "queryPeriod": "6h",
+        "queryFrequency": "6h",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Account",
@@ -33,25 +47,11 @@
             ]
           }
         ],
-        "status": "Available",
-        "name": "User Session Impersonation(Okta)",
-        "queryPeriod": "6h",
-        "triggerOperator": "gt",
         "query": "OktaSSO\n| where eventType_s == \"user.session.impersonation.initiate\" and outcome_result_s == \"SUCCESS\"\n// Expand the JSON array in 'target_s' field to extract detailed information about the event\n| mv-expand parsed_json = todynamic(target_s) // Unpack and understand the details from the 'target_s' JSON array\n// Enhance visibility by extending columns with extracted details for better analysis\n| extend TargetUser_id = tostring(parsed_json.id), \n         TargetUser_type = tostring(parsed_json.type), \n         TargetUser_alternateId = tostring(parsed_json.alternateId), \n         TargetUser_displayName = tostring(parsed_json.displayName), \n         Target_detailEntry = tostring(parsed_json.detailEntry)\n// Filter out events with unknown target user IDs to focus on valid impersonation attempts\n| where isnotempty(TargetUser_alternateId) and TargetUser_alternateId != \"unknown\"\n// Project event details to gain insights into the security context, including actor and target user information\n| project TimeGenerated, actor_alternateId_s, actor_displayName_s, TargetUser_alternateId, TargetUser_displayName, TargetUser_type, TargetUser_id, eventType_s, outcome_result_s\n| extend AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Okta session impersonation by {{actor_displayName_s}} for {{TargetUser_displayName}}",
-          "alertDescriptionFormat": "Okta user session impersonation succeeded. Actor {{actor_alternateId_s}} impersonated target {{TargetUser_alternateId}} during {{eventType_s}}."
-        },
+        "name": "User Session Impersonation(Okta)",
         "severity": "Medium",
-        "queryFrequency": "6h",
-        "customDetails": {
-          "EventType": "eventType_s",
-          "TargetUserAltId": "TargetUser_alternateId",
-          "ActorDisplayName": "actor_displayName_s",
-          "TargetUserName": "TargetUser_displayName",
-          "TargetUserType": "TargetUser_type"
-        },
-        "triggerThreshold": 0
+        "description": "This query detects instances of user session impersonation, where an attacker successfully initiates a session impersonation event. The query extracts detailed information about the target user and the actor involved in the impersonation, providing insights into potential privilege escalation activities.\n",
+        "triggerOperator": "gt"
       }
     }
   ]

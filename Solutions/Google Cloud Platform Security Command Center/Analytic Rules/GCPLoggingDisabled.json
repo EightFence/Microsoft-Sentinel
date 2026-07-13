@@ -14,14 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "GCP resources with logging disabled: {{ProjectName}} ({{ResourceType}})",
-          "alertDescriptionFormat": "Resource {{ResourceName}} in project {{ProjectName}} (type: {{ResourceType}}) has logging disabled."
+        "customDetails": {
+          "FindingCategory": "FindingCategory",
+          "ResourceType": "ResourceType",
+          "Severity": "Severity",
+          "ProjectName": "ProjectName",
+          "ExternalUri": "ExternalUri",
+          "Description": "Description"
         },
         "tactics": [
           "DefenseEvasion"
         ],
-        "description": "Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.\n",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "GCP resources with logging disabled: {{ProjectName}} ({{ResourceType}})",
+          "alertDescriptionFormat": "Resource {{ResourceName}} in project {{ProjectName}} (type: {{ResourceType}}) has logging disabled."
+        },
+        "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "CloudApplication",
@@ -33,25 +47,11 @@
             ]
           }
         ],
-        "status": "Available",
-        "name": "GCP Security Command Center - Detect Resources with Logging Disabled",
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
         "query": "GoogleCloudSCC\n| where tostring(Findings.state) == \"ACTIVE\"\n| extend FindingCategory = tostring(Findings.category)\n| where FindingCategory in (\"BUCKET_LOGGING_DISABLED\", \"FIREWALL_RULE_LOGGING_DISABLED\", \"DNS_LOGGING_DISABLED\")\n| extend FindingsJson = parse_json(Findings)\n| extend Resource = tostring(FindingsJson.resourceName),\n         ExternalUri = tostring(FindingsJson.externalUri),\n         Description = tostring(FindingsJson.description),\n         Severity = tostring(FindingsJson.severity),\n         ProjectName = extract(@\"projects/([^/]+)\", 1, tostring(FindingsJson.resourceName)),\n         ResourceType = extract(@\"//([a-z0-9_.-]+)/\", 1, tostring(FindingsJson.resourceName)),\n         SourceProps = parse_json(tostring(FindingsJson.sourceProperties))\n// Normalize display-friendly resource id\n| extend ResourceName = case(\n    Resource contains \"firewalls/\", extract(@\"firewalls/([^/]+)\", 1, Resource),\n    Resource contains \"storage.googleapis.com/\", extract(@'storage.googleapis.com/([^/\\\"]+)', 1, Resource),\n    Resource contains \"networks/\", extract(@\"networks/([^/]+)\", 1, Resource),\n    Resource\n  )\n| project TimeGenerated, ProjectName, ResourceType, ResourceName, Resource, FindingCategory, Severity, ExternalUri, Description\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "name": "GCP Security Command Center - Detect Resources with Logging Disabled",
         "severity": "Medium",
-        "queryFrequency": "1h",
-        "customDetails": {
-          "Description": "Description",
-          "ExternalUri": "ExternalUri",
-          "ResourceType": "ResourceType",
-          "ProjectName": "ProjectName",
-          "Severity": "Severity",
-          "FindingCategory": "FindingCategory"
-        },
-        "triggerThreshold": 0
+        "description": "Detects Google Cloud resources where logging is disabled for services like (Cloud Storage buckets, Firewall rules, Cloud DNS networks) based on Google Cloud Security Command Center findings.\n",
+        "triggerOperator": "gt"
       }
     }
   ]
