@@ -14,26 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "EventName": "EventName",
-          "UserAgent": "UserAgent",
-          "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource"
-        },
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS ELB security group change by {{AccountName}} in {{AWSRegion}}",
-          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} for account {{RecipientAccountId}} affecting ELB security group settings."
-        },
-        "queryPeriod": "1d",
+        "query": "let EventNameList = dynamic([\"ApplySecurityGroupsToLoadBalancer\", \"SetSecurityGroups\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)\nby EventSource, EventName, UserIdentityType,  SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,\nAdditionalEventData, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements\n",
         "queryFrequency": "1d",
         "triggerThreshold": 0,
+        "severity": "Low",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -47,23 +33,37 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "query": "let EventNameList = dynamic([\"ApplySecurityGroupsToLoadBalancer\", \"SetSecurityGroups\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)\nby EventSource, EventName, UserIdentityType,  SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,\nAdditionalEventData, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements\n",
-        "name": "AWSCloudTrail - Changes to AWS Elastic Load Balancer security groups",
-        "severity": "Low",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} for account {{RecipientAccountId}} affecting ELB security group settings.",
+          "alertDisplayNameFormat": "AWS ELB security group change by {{AccountName}} in {{AWSRegion}}"
+        },
         "description": "Detects AWS CloudTrail events that modify Elastic Load Balancer security group associations. Unauthorized\nchanges can expose services to unintended network access or weaken cloud boundary protections. Validate these\nupdates against approved change control and deployment activity.\n",
-        "triggerOperator": "gt"
+        "customDetails": {
+          "AWSRegion": "AWSRegion",
+          "EventSource": "EventSource",
+          "EventName": "EventName",
+          "UserAgent": "UserAgent"
+        },
+        "name": "AWSCloudTrail - Changes to AWS Elastic Load Balancer security groups",
+        "queryPeriod": "1d",
+        "status": "Available"
       }
     }
   ]

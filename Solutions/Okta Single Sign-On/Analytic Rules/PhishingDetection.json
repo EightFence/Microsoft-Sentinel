@@ -14,26 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "UserAgent": "client_userAgent_rawUserAgent_s",
-          "Location": "Location",
-          "UserAgentBrowser": "client_userAgent_browser_s",
-          "UserAgentOS": "client_userAgent_os_s"
-        },
-        "tactics": [
-          "InitialAccess"
-        ],
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Okta FastPass phishing attempt declined for {{actor_alternateId_s}}",
-          "alertDescriptionFormat": "Okta FastPass declined a phishing attempt for {{actor_alternateId_s}} from {{client_ipAddress_s}} using {{client_userAgent_browser_s}}."
-        },
-        "queryPeriod": "1h",
+        "query": "// Add any known good IPs to this list to reduce noise\nlet AllowedIPList = dynamic([]);\nOktaSSO\n| where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPList)\n| where eventType_s == 'user.authentication.auth_via_mfa'\n| where outcome_result_s == 'FAILURE'\n| where outcome_reason_s == 'FastPass declined phishing attempt'\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,\n outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), debugContext_debugData_threatSuspected_s, client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, client_geographicalContext_city_s, client_geographicalContext_country_s\n| extend Location = strcat(client_geographicalContext_city_s, \"-\", client_geographicalContext_country_s), AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
         "queryFrequency": "1h",
         "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -43,23 +29,37 @@
                 "identifier": "UPNSuffix",
                 "columnName": "AccountUPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "client_ipAddress_s"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "query": "// Add any known good IPs to this list to reduce noise\nlet AllowedIPList = dynamic([]);\nOktaSSO\n| where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPList)\n| where eventType_s == 'user.authentication.auth_via_mfa'\n| where outcome_result_s == 'FAILURE'\n| where outcome_reason_s == 'FastPass declined phishing attempt'\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, client_geographicalContext_state_s,displayMessage_s, outcome_result_s,\n outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), debugContext_debugData_threatSuspected_s, client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, client_geographicalContext_city_s, client_geographicalContext_country_s\n| extend Location = strcat(client_geographicalContext_city_s, \"-\", client_geographicalContext_country_s), AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
-        "name": "Okta Fast Pass phishing Detection",
-        "severity": "Medium",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Okta FastPass declined a phishing attempt for {{actor_alternateId_s}} from {{client_ipAddress_s}} using {{client_userAgent_browser_s}}.",
+          "alertDisplayNameFormat": "Okta FastPass phishing attempt declined for {{actor_alternateId_s}}"
+        },
         "description": "This query detects cases in which Okta FastPass effectively prevented access to a known phishing website.\n",
-        "triggerOperator": "gt"
+        "customDetails": {
+          "UserAgentBrowser": "client_userAgent_browser_s",
+          "UserAgentOS": "client_userAgent_os_s",
+          "UserAgent": "client_userAgent_rawUserAgent_s",
+          "Location": "Location"
+        },
+        "name": "Okta Fast Pass phishing Detection",
+        "queryPeriod": "1h",
+        "status": "Available"
       }
     }
   ]

@@ -14,26 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "UserIdentityArn": "UserIdentityArn",
-          "EventName": "EventName",
-          "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource"
-        },
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS IAM default policy version changed by {{AccountName}}",
-          "alertDescriptionFormat": "Detected SetDefaultPolicyVersion from {{SourceIpAddress}} in account {{RecipientAccountId}}."
-        },
-        "queryPeriod": "1h",
+        "query": "AWSCloudTrail\n| where EventName == \"SetDefaultPolicyVersion\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "queryFrequency": "1h",
         "triggerThreshold": 0,
+        "severity": "Medium",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -47,23 +33,37 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "query": "AWSCloudTrail\n| where EventName == \"SetDefaultPolicyVersion\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "name": "AWSCloudTrail - Policy version set to default",
-        "severity": "Medium",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Detected SetDefaultPolicyVersion from {{SourceIpAddress}} in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS IAM default policy version changed by {{AccountName}}"
+        },
         "description": "Detects SetDefaultPolicyVersion activity that makes a different IAM policy version active.\nAttackers can use this to activate previously created permissive versions and escalate access.\n",
-        "triggerOperator": "gt"
+        "customDetails": {
+          "AWSRegion": "AWSRegion",
+          "EventSource": "EventSource",
+          "EventName": "EventName",
+          "UserIdentityArn": "UserIdentityArn"
+        },
+        "name": "AWSCloudTrail - Policy version set to default",
+        "queryPeriod": "1h",
+        "status": "Available"
       }
     }
   ]
