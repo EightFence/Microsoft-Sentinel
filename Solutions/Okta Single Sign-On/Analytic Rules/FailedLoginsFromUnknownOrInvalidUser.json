@@ -14,10 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "// Adjust threshold for failed logins to reduce noise. This can be customized based on the organization's typical login patterns.\nlet FailureThreshold = 15;\n// Adjust list of allowed users to reduce false positives. This can include service accounts, known test accounts, or any other accounts that are expected to generate failed login attempts.\nlet AllowedUsers = dynamic([]);\nlet FailedLogins = OktaSSO\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| where isnotempty(actor_alternateId_s) and actor_alternateId_s !in (AllowedUsers)\n| summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)\n| where count_ > FailureThreshold\n| project client_ipAddress_s, actor_alternateId_s;\nOktaSSO\n| join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| summarize FailedLoginCount = count(), City = take_any(column_ifexists('client_geographicalContext_city_s', \"\")), Country = take_any(column_ifexists('client_geographicalContext_country_s', \"\")), LastSeen = max(column_ifexists('TimeGenerated', now())) by actor_alternateId_s, client_ipAddress_s\n| sort by LastSeen desc\n| extend AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
-        "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "severity": "Medium",
+        "tactics": [
+          "CredentialAccess"
+        ],
         "entityMappings": [
           {
             "fieldMappings": [
@@ -42,22 +41,23 @@
             "entityType": "IP"
           }
         ],
-        "tactics": [
-          "CredentialAccess"
-        ],
+        "queryPeriod": "1h",
+        "query": "// Adjust threshold for failed logins to reduce noise. This can be customized based on the organization's typical login patterns.\nlet FailureThreshold = 15;\n// Adjust list of allowed users to reduce false positives. This can include service accounts, known test accounts, or any other accounts that are expected to generate failed login attempts.\nlet AllowedUsers = dynamic([]);\nlet FailedLogins = OktaSSO\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| where isnotempty(actor_alternateId_s) and actor_alternateId_s !in (AllowedUsers)\n| summarize count() by actor_alternateId_s, client_ipAddress_s, bin(TimeGenerated, 5m)\n| where count_ > FailureThreshold\n| project client_ipAddress_s, actor_alternateId_s;\nOktaSSO\n| join kind=inner (FailedLogins) on client_ipAddress_s, actor_alternateId_s\n| where eventType_s =~ \"user.session.start\" and outcome_reason_s =~ \"VERIFICATION_ERROR\"\n| summarize FailedLoginCount = count(), City = take_any(column_ifexists('client_geographicalContext_city_s', \"\")), Country = take_any(column_ifexists('client_geographicalContext_country_s', \"\")), LastSeen = max(column_ifexists('TimeGenerated', now())) by actor_alternateId_s, client_ipAddress_s\n| sort by LastSeen desc\n| extend AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
+        "triggerThreshold": 0,
         "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Account {{actor_alternateId_s}} generated {{FailedLoginCount}} failed logins from IP {{client_ipAddress_s}} in the last 5 minutes.",
-          "alertDisplayNameFormat": "Failed logins from unknown or invalid user: {{actor_alternateId_s}} from IP {{client_ipAddress_s}}"
-        },
-        "description": "This rule alerts when an unknown or invalid user generates more than 15 failed Okta management console login attempts from the same IP address within 5 minutes.\n",
         "customDetails": {
           "Country": "Country",
           "FailedLoginCount": "FailedLoginCount",
           "City": "City"
         },
+        "description": "This rule alerts when an unknown or invalid user generates more than 15 failed Okta management console login attempts from the same IP address within 5 minutes.\n",
+        "queryFrequency": "1h",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Account {{actor_alternateId_s}} generated {{FailedLoginCount}} failed logins from IP {{client_ipAddress_s}} in the last 5 minutes.",
+          "alertDisplayNameFormat": "Failed logins from unknown or invalid user: {{actor_alternateId_s}} from IP {{client_ipAddress_s}}"
+        },
+        "severity": "Medium",
         "name": "Failed Logins from Unknown or Invalid User",
-        "queryPeriod": "1h",
         "status": "Available"
       }
     }
