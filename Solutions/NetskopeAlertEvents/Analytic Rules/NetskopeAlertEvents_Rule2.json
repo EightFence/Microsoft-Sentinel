@@ -18,6 +18,10 @@
           "Exfiltration",
           "CommandAndControl"
         ],
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
+        "query": "let riskyCcl = dynamic([\"low\", \"poor\"]);\nlet sensitiveActivities = dynamic([\"Upload\", \"Share\", \"Download\", \"Post\", \"Send\"]);\nNetskopeAlertEvents_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(App)\n| where tolower(Ccl) in (riskyCcl)\n     or Action =~ \"block\"\n     or (Activity in~ (sensitiveActivities) and tolower(Ccl) != \"excellent\")\n| summarize\n    EventCount = count(),\n    Activities = make_set(Activity, 20),\n    Actions = make_set(Action, 10),\n    CCLs = make_set(Ccl, 10),\n    Categories = make_set(Appcategory, 20),\n    DistinctApps = dcount(App),\n    Apps = make_set(App, 20),\n    LastSeen = max(TimeGenerated)\n    by User, Userip, Hostname, DeviceClassification\n| where EventCount > 5 or DistinctApps > 3\n| extend RiskIndicators = strcat_array(array_concat(\n    iff(set_has_element(CCLs, \"low\") or set_has_element(CCLs, \"poor\"), dynamic([\"Low Confidence App\"]), dynamic([])),\n    iff(set_has_element(Actions, \"block\"), dynamic([\"Blocked Activity\"]), dynamic([])),\n    iff(DistinctApps > 3, dynamic([\"Multiple Risky Apps\"]), dynamic([]))\n), \", \")\n| order by EventCount desc\n| project\n    LastSeen,\n    User,\n    Userip,\n    Hostname,\n    DeviceClassification,\n    EventCount,\n    DistinctApps,\n    Apps,\n    Categories,\n    Activities,\n    Actions,\n    CCLs,\n    RiskIndicators\n",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -47,15 +51,11 @@
             "entityType": "Host"
           }
         ],
-        "queryPeriod": "1h",
-        "query": "let riskyCcl = dynamic([\"low\", \"poor\"]);\nlet sensitiveActivities = dynamic([\"Upload\", \"Share\", \"Download\", \"Post\", \"Send\"]);\nNetskopeAlertEvents_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(App)\n| where tolower(Ccl) in (riskyCcl)\n     or Action =~ \"block\"\n     or (Activity in~ (sensitiveActivities) and tolower(Ccl) != \"excellent\")\n| summarize\n    EventCount = count(),\n    Activities = make_set(Activity, 20),\n    Actions = make_set(Action, 10),\n    CCLs = make_set(Ccl, 10),\n    Categories = make_set(Appcategory, 20),\n    DistinctApps = dcount(App),\n    Apps = make_set(App, 20),\n    LastSeen = max(TimeGenerated)\n    by User, Userip, Hostname, DeviceClassification\n| where EventCount > 5 or DistinctApps > 3\n| extend RiskIndicators = strcat_array(array_concat(\n    iff(set_has_element(CCLs, \"low\") or set_has_element(CCLs, \"poor\"), dynamic([\"Low Confidence App\"]), dynamic([])),\n    iff(set_has_element(Actions, \"block\"), dynamic([\"Blocked Activity\"]), dynamic([])),\n    iff(DistinctApps > 3, dynamic([\"Multiple Risky Apps\"]), dynamic([]))\n), \", \")\n| order by EventCount desc\n| project\n    LastSeen,\n    User,\n    Userip,\n    Hostname,\n    DeviceClassification,\n    EventCount,\n    DistinctApps,\n    Apps,\n    Categories,\n    Activities,\n    Actions,\n    CCLs,\n    RiskIndicators\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
         "description": "Detects activity involving risky or low Cloud Confidence Level (CCL) applications,\nblocked application actions, or sensitive activities (upload, share, download) on\nunsanctioned apps. Helps surface Shadow IT and potential data leakage via risky\ncloud applications.\n",
-        "queryFrequency": "1h",
-        "severity": "Medium",
         "name": "Netskope - Suspicious Application Activity (Low Confidence / Risky App)",
-        "status": "Available"
+        "status": "Available",
+        "severity": "Medium",
+        "queryFrequency": "1h"
       }
     }
   ]
