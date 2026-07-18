@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "query": "AWSCloudTrail\n  | where EventName == \"PutObjectAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n  | mvexpand Grant\n  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n  | where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n    or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
+        "description": "Detects S3 object ACL changes that expose objects to public or broadly authenticated users.\nThis can result in unintended data disclosure from object-level permissions.\n",
         "triggerThreshold": 0,
-        "tactics": [
-          "Exfiltration"
-        ],
-        "customDetails": {
-          "RecipientAccountId": "RecipientAccountId",
-          "xamzacl": "xamzacl",
-          "URI": "URI",
-          "EventName": "EventName"
-        },
         "queryFrequency": "1h",
+        "status": "Available",
+        "queryPeriod": "1h",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "Detected {{EventName}} event from {{SourceIpAddress}} applying public object ACL settings in account {{RecipientAccountId}}.",
           "alertDisplayNameFormat": "AWS S3 object public ACL exposure by {{AccountName}}"
         },
+        "query": "AWSCloudTrail\n  | where EventName == \"PutObjectAcl\" and isempty(ErrorCode) and isempty(ErrorMessage)\n  | extend Grant = parse_json(tostring((parse_json(RequestParameters).AccessControlPolicy))).AccessControlList.Grant\n  | mvexpand Grant\n  | extend cannedacl = parse_json(tostring((parse_json(RequestParameters))))\n  | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.[\"xsi:type\"], xamzacl = parse_json(cannedacl).[\"x-amz-acl\"]\n  | where (type == \"Group\" and (URI endswith \"AllUsers\" or URI endswith \"AuthenticatedUsers\"))\n    or xamzacl in (\"authenticated-read\",\"public-read\",\"public-read-write\")\n  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n  | extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n  | extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n    AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "name": "AWSCloudTrail - S3 object publicly exposed",
+        "customDetails": {
+          "xamzacl": "xamzacl",
+          "EventName": "EventName",
+          "RecipientAccountId": "RecipientAccountId",
+          "URI": "URI"
+        },
         "severity": "Medium",
-        "triggerOperator": "gt",
-        "queryPeriod": "1h",
+        "tactics": [
+          "Exfiltration"
+        ],
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
               },
               {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "description": "Detects S3 object ACL changes that expose objects to public or broadly authenticated users.\nThis can result in unintended data disclosure from object-level permissions.\n"
+        "triggerOperator": "gt"
       }
     }
   ]

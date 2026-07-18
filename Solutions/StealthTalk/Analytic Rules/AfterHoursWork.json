@@ -14,57 +14,57 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "suppressionDuration": "5h",
-        "status": "Available",
-        "query": "let LookbackPeriod    = 48h;\nlet MinAttempts       = 3;\nlet MinDistinctDays   = 2;\nlet OffHoursThreshold = 180;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"OffHoursLogin\"\n| where IsWeekend == true or DeviationMinutes >= OffHoursThreshold\n| summarize\n    AttemptCount   = count(),\n    DistinctDays   = dcount(startofday(TimeGenerated)),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated),\n    DeviceIds      = make_set(DeviceId),\n    MaxDeviation   = max(DeviationMinutes),\n    WeekendsCount  = countif(IsWeekend == true),\n    AppVersions    = make_set(AppVersion)\n  by UserId\n| where AttemptCount >= MinAttempts and DistinctDays >= MinDistinctDays\n| extend\n    AlertName    = \"AfterHoursWork\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" performed \", AttemptCount, \" off-hours logins\",\n        \" across \", DistinctDays, \" distinct days.\",\n        \" Max deviation from working hours: \", MaxDeviation, \" min.\",\n        \" Weekend logins: \", WeekendsCount, \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, AttemptCount, DistinctDays, MaxDeviation,\n    WeekendsCount, DeviceIds, AppVersions, FirstSeen, LastSeen,\n    AlertName, AlertDetails\n",
+        "description": "Identifies systematic off-hours activity for a single StealthTalk user - repeated authentications\noutside the user's configured working hours OR on weekends, observed across at least two\ndistinct calendar days within a 48-hour window. The pattern is a common indicator of credential\nmisuse, insider threat, or compromise of the account by an attacker operating in a different\ntimezone.\n\nAn \"off-hours event\" is one where IsWeekend=true OR DeviationMinutes >= 180 (i.e. >= 3 hours\nafter the configured working-hours end). Three or more such events on at least two distinct\ndays are required for an incident to fire - a single late-evening login is not enough.\n",
         "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "status": "Available",
+        "suppressionDuration": "5h",
+        "queryPeriod": "2d",
+        "suppressionEnabled": false,
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{AlertDetails}}",
+          "alertDisplayNameFormat": "StealthTalk: After-Hours Work - {{UserId}} ({{AttemptCount}} events / {{DistinctDays}} days)"
+        },
+        "query": "let LookbackPeriod    = 48h;\nlet MinAttempts       = 3;\nlet MinDistinctDays   = 2;\nlet OffHoursThreshold = 180;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"OffHoursLogin\"\n| where IsWeekend == true or DeviationMinutes >= OffHoursThreshold\n| summarize\n    AttemptCount   = count(),\n    DistinctDays   = dcount(startofday(TimeGenerated)),\n    FirstSeen      = min(TimeGenerated),\n    LastSeen       = max(TimeGenerated),\n    DeviceIds      = make_set(DeviceId),\n    MaxDeviation   = max(DeviationMinutes),\n    WeekendsCount  = countif(IsWeekend == true),\n    AppVersions    = make_set(AppVersion)\n  by UserId\n| where AttemptCount >= MinAttempts and DistinctDays >= MinDistinctDays\n| extend\n    AlertName    = \"AfterHoursWork\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" performed \", AttemptCount, \" off-hours logins\",\n        \" across \", DistinctDays, \" distinct days.\",\n        \" Max deviation from working hours: \", MaxDeviation, \" min.\",\n        \" Weekend logins: \", WeekendsCount, \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, AttemptCount, DistinctDays, MaxDeviation,\n    WeekendsCount, DeviceIds, AppVersions, FirstSeen, LastSeen,\n    AlertName, AlertDetails\n",
+        "name": "StealthTalk - After hours work",
+        "customDetails": {
+          "DistinctDays": "DistinctDays",
+          "FirstSeen": "FirstSeen",
+          "AttemptCount": "AttemptCount",
+          "LastSeen": "LastSeen",
+          "WeekendsCount": "WeekendsCount",
+          "MaxDeviation": "MaxDeviation"
+        },
+        "severity": "Low",
         "tactics": [
           "InitialAccess",
           "DefenseEvasion",
           "Persistence"
         ],
-        "customDetails": {
-          "FirstSeen": "FirstSeen",
-          "MaxDeviation": "MaxDeviation",
-          "LastSeen": "LastSeen",
-          "WeekendsCount": "WeekendsCount",
-          "AttemptCount": "AttemptCount",
-          "DistinctDays": "DistinctDays"
-        },
-        "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{AlertDetails}}",
-          "alertDisplayNameFormat": "StealthTalk: After-Hours Work - {{UserId}} ({{AttemptCount}} events / {{DistinctDays}} days)"
-        },
-        "name": "StealthTalk - After hours work",
-        "severity": "Low",
-        "suppressionEnabled": false,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "UserId"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
         "triggerOperator": "gt",
         "incidentConfiguration": {
+          "createIncident": true,
           "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "lookbackDuration": "5h",
             "groupByEntities": [
               "Account"
             ],
+            "enabled": true,
             "reopenClosedIncident": false,
-            "enabled": true
-          },
-          "createIncident": true
-        },
-        "queryPeriod": "2d",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "UserId",
-                "identifier": "Name"
-              }
-            ]
+            "lookbackDuration": "5h",
+            "matchingMethod": "Selected"
           }
-        ],
-        "description": "Identifies systematic off-hours activity for a single StealthTalk user - repeated authentications\noutside the user's configured working hours OR on weekends, observed across at least two\ndistinct calendar days within a 48-hour window. The pattern is a common indicator of credential\nmisuse, insider threat, or compromise of the account by an attacker operating in a different\ntimezone.\n\nAn \"off-hours event\" is one where IsWeekend=true OR DeviationMinutes >= 180 (i.e. >= 3 hours\nafter the configured working-hours end). Three or more such events on at least two distinct\ndays are required for an incident to fire - a single late-evening login is not enough.\n"
+        }
       }
     }
   ]
