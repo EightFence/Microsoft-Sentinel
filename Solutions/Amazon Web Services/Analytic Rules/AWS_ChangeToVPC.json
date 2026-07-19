@@ -14,57 +14,57 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies changes to Amazon VPC(Virtual Private Cloud) settings that can alter network exposure, routing, or access controls.\nThis rule identifies changes to Amazon VPC (Virtual Private Cloud) settings such as new ACL entries, routes, routetable or Gateways. \nAWS VPC API Docs: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/OperationList-query-vpc.html'\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "1d",
+        "query": "let EventNameList = dynamic([\"CreateNetworkAclEntry\",\"CreateRoute\",\"CreateRouteTable\",\"CreateInternetGateway\",\"CreateNatGateway\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| where EventSource != \"apigateway.amazonaws.com\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n",
         "status": "Available",
-        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "name": "AWSCloudTrail - Changes to Amazon VPC settings",
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDescriptionFormat": "Event {{EventName}} executed by {{AccountName}} from {{SourceIpAddress}}.",
           "alertDisplayNameFormat": "AWS VPC change by {{AccountName}} in {{AWSRegion}}"
         },
-        "query": "let EventNameList = dynamic([\"CreateNetworkAclEntry\",\"CreateRoute\",\"CreateRouteTable\",\"CreateInternetGateway\",\"CreateNatGateway\"]);\nAWSCloudTrail\n| where EventName in~ (EventNameList)\n| where EventSource != \"apigateway.amazonaws.com\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements\n",
-        "name": "AWSCloudTrail - Changes to Amazon VPC settings",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              },
+              {
+                "columnName": "RecipientAccountId",
+                "identifier": "CloudAppAccountId"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SourceIpAddress",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "tactics": [
+          "PrivilegeEscalation",
+          "DefenseEvasion"
+        ],
+        "severity": "Low",
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "description": "Identifies changes to Amazon VPC(Virtual Private Cloud) settings that can alter network exposure, routing, or access controls.\nThis rule identifies changes to Amazon VPC (Virtual Private Cloud) settings such as new ACL entries, routes, routetable or Gateways. \nAWS VPC API Docs: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/OperationList-query-vpc.html'\n",
         "customDetails": {
           "EventName": "EventName",
           "AWSRegion": "AWSRegion",
           "EventSource": "EventSource",
           "RecipientAccountId": "RecipientAccountId"
-        },
-        "severity": "Low",
-        "tactics": [
-          "PrivilegeEscalation",
-          "DefenseEvasion"
-        ],
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
-              },
-              {
-                "identifier": "CloudAppAccountId",
-                "columnName": "RecipientAccountId"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "SourceIpAddress"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "triggerOperator": "gt"
+        }
       }
     }
   ]

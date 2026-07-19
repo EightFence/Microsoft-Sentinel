@@ -14,55 +14,55 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Identifies a single StealthTalk user registering two or more previously-unseen devices within\na 24-hour window. Sudden registration of multiple new devices is a strong indicator of\naccount takeover (an attacker enrolling their own device after credential theft) or\ndevice-farm abuse.\n\nThe rule fires when a user produces two or more distinct NewDeviceId values within the\nlookback window, regardless of operating system. Look at the OSList custom detail to spot\ncross-platform patterns (e.g. an iOS-only user suddenly enrolling an Android device).\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "30m",
+        "query": "let LookbackPeriod = 24h;\nlet MinNewDevices  = 2;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"NewDeviceLogin\"\n| summarize\n    NewDeviceCount  = dcount(NewDeviceId),\n    NewDevices      = make_set(NewDeviceId),\n    NewDeviceOSList = make_set(NewDeviceOS),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated),\n    AppVersions     = make_set(AppVersion)\n  by UserId\n| where NewDeviceCount >= MinNewDevices\n| extend\n    AlertName    = \"MultiNewDevicesRegistration\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" registered \", NewDeviceCount, \" new devices within 24 hours.\",\n        \" Device IDs: \", tostring(NewDevices), \".\",\n        \" Operating systems: \", tostring(NewDeviceOSList), \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, NewDeviceCount, NewDevices, NewDeviceOSList,\n    FirstSeen, LastSeen, AppVersions, AlertName, AlertDetails\n",
         "status": "Available",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "5h",
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ]
+          },
+          "createIncident": true
+        },
+        "queryFrequency": "30m",
+        "name": "StealthTalk - Multi new devices registration",
         "suppressionDuration": "5h",
-        "queryPeriod": "1d",
-        "suppressionEnabled": false,
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDescriptionFormat": "{{AlertDetails}}",
           "alertDisplayNameFormat": "StealthTalk: Multi New Devices - {{UserId}} ({{NewDeviceCount}} new devices)"
         },
-        "query": "let LookbackPeriod = 24h;\nlet MinNewDevices  = 2;\nStealthTalkAnomalousAuth_CL\n| where TimeGenerated >= ago(LookbackPeriod)\n| where EventType == \"NewDeviceLogin\"\n| summarize\n    NewDeviceCount  = dcount(NewDeviceId),\n    NewDevices      = make_set(NewDeviceId),\n    NewDeviceOSList = make_set(NewDeviceOS),\n    FirstSeen       = min(TimeGenerated),\n    LastSeen        = max(TimeGenerated),\n    AppVersions     = make_set(AppVersion)\n  by UserId\n| where NewDeviceCount >= MinNewDevices\n| extend\n    AlertName    = \"MultiNewDevicesRegistration\",\n    AlertDetails = strcat(\n        \"User \", UserId,\n        \" registered \", NewDeviceCount, \" new devices within 24 hours.\",\n        \" Device IDs: \", tostring(NewDevices), \".\",\n        \" Operating systems: \", tostring(NewDeviceOSList), \".\"\n    )\n| project\n    TimeGenerated = LastSeen,\n    UserId, NewDeviceCount, NewDevices, NewDeviceOSList,\n    FirstSeen, LastSeen, AppVersions, AlertName, AlertDetails\n",
-        "name": "StealthTalk - Multi new devices registration",
-        "customDetails": {
-          "NewDeviceCount": "NewDeviceCount",
-          "NewDevices": "NewDevices",
-          "NewDeviceOSList": "NewDeviceOSList",
-          "FirstSeen": "FirstSeen",
-          "LastSeen": "LastSeen"
-        },
-        "severity": "Medium",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserId",
+                "identifier": "Name"
+              }
+            ]
+          }
+        ],
+        "suppressionEnabled": false,
         "tactics": [
           "Persistence",
           "InitialAccess",
           "DefenseEvasion"
         ],
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "UserId"
-              }
-            ],
-            "entityType": "Account"
-          }
-        ],
+        "severity": "Medium",
         "triggerOperator": "gt",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Account"
-            ],
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "lookbackDuration": "5h",
-            "matchingMethod": "Selected"
-          }
+        "queryPeriod": "1d",
+        "description": "Identifies a single StealthTalk user registering two or more previously-unseen devices within\na 24-hour window. Sudden registration of multiple new devices is a strong indicator of\naccount takeover (an attacker enrolling their own device after credential theft) or\ndevice-farm abuse.\n\nThe rule fires when a user produces two or more distinct NewDeviceId values within the\nlookback window, regardless of operating system. Look at the OSList custom detail to spot\ncross-platform patterns (e.g. an iOS-only user suddenly enrolling an Android device).\n",
+        "customDetails": {
+          "NewDevices": "NewDevices",
+          "NewDeviceOSList": "NewDeviceOSList",
+          "LastSeen": "LastSeen",
+          "FirstSeen": "FirstSeen",
+          "NewDeviceCount": "NewDeviceCount"
         }
       }
     }
