@@ -14,56 +14,56 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "let timeframe = 1h;\nlet lookback = 2h;\n// The attacker downloads the object(s) from the compromised bucket\nlet GetObject = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName == \"GetObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| project-rename StartTime = TimeGenerated;\n// Then, the attacker overwrites the same object(s) but encrypted with his own key\nlet PutObject = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"PutObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| extend kmsId = tostring(parse_json(RequestParameters).[\"x-amz-server-side-encryption-aws-kms-key-id\"])\n| where tostring(kmsId) !has tostring(RecipientAccountId) and kmsId <> \"\";\nPutObject\n| join kind=inner \n(\n   GetObject\n)\non $left.bucketName == $right.bucketName, $left.keyName == $right.keyName\n| where TimeGenerated > StartTime\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
-        "status": "Available",
-        "queryFrequency": "1h",
-        "name": "AWSCloudTrail - S3 bucket suspicious ransomware activity",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Detected GetObject followed by encrypted PutObject activity in bucket {{bucketName}} from {{SourceIpAddress}} for account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS S3 ransomware-like overwrite activity by {{AccountName}}"
-        },
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "columnName": "AccountName",
-                "identifier": "Name"
-              },
-              {
-                "columnName": "AccountUPNSuffix",
-                "identifier": "UPNSuffix"
-              },
-              {
-                "columnName": "RecipientAccountId",
-                "identifier": "CloudAppAccountId"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "SourceIpAddress",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
+        "severity": "High",
         "tactics": [
           "Impact"
         ],
-        "severity": "High",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "queryPeriod": "1h",
+        "queryFrequency": "1h",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS S3 ransomware-like overwrite activity by {{AccountName}}",
+          "alertDescriptionFormat": "Detected GetObject followed by encrypted PutObject activity in bucket {{bucketName}} from {{SourceIpAddress}} for account {{RecipientAccountId}}."
+        },
+        "query": "let timeframe = 1h;\nlet lookback = 2h;\n// The attacker downloads the object(s) from the compromised bucket\nlet GetObject = AWSCloudTrail\n| where TimeGenerated >= ago(lookback)\n| where EventName == \"GetObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| project-rename StartTime = TimeGenerated;\n// Then, the attacker overwrites the same object(s) but encrypted with his own key\nlet PutObject = AWSCloudTrail\n| where TimeGenerated >= ago(timeframe)\n| where EventName == \"PutObject\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend bucketName = tostring(parse_json(RequestParameters).bucketName), keyName = tostring(parse_json(RequestParameters).key)\n| extend kmsId = tostring(parse_json(RequestParameters).[\"x-amz-server-side-encryption-aws-kms-key-id\"])\n| where tostring(kmsId) !has tostring(RecipientAccountId) and kmsId <> \"\";\nPutObject\n| join kind=inner \n(\n   GetObject\n)\non $left.bucketName == $right.bucketName, $left.keyName == $right.keyName\n| where TimeGenerated > StartTime\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "AccountUPNSuffix"
+              },
+              {
+                "identifier": "CloudAppAccountId",
+                "columnName": "RecipientAccountId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SourceIpAddress"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
         "description": "Detects a ransomware-like sequence where objects are read from an S3 bucket and then overwritten using an\nexternal KMS key. This pattern can indicate malicious encryption and potential data denial in the bucket.\n",
+        "name": "AWSCloudTrail - S3 bucket suspicious ransomware activity",
         "customDetails": {
-          "kmsId": "kmsId",
-          "keyName": "keyName",
+          "bucketName": "bucketName",
           "RecipientAccountId": "RecipientAccountId",
-          "bucketName": "bucketName"
-        }
+          "keyName": "keyName",
+          "kmsId": "kmsId"
+        },
+        "status": "Available"
       }
     }
   ]
