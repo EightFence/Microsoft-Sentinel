@@ -14,53 +14,53 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "This rule identifies successful Okta device registration events that originate from IP addresses also observed by Okta ThreatInsight as malicious or suspicious.\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "User {{actor_displayName_s}} ({{actor_alternateId_s}}) registered a device from {{client_ipAddress_s}} and the IP is associated with malicious activity in Okta ThreatInsight.",
+          "alertDisplayNameFormat": "Device registration from Malicious IP {{client_ipAddress_s}}"
+        },
+        "query": "let Events = dynamic([\"device.enrollment.create\"]);\nlet ThreatInsightOperations = dynamic([\"security.threat.detected\", \"security.attack.start\", \"security.attack.end\" ]);\n// Adjust list of allowed IPs to reduce false positives\nlet AllowedIPs = dynamic([]);\nlet DeviceRegistrations =  OktaSSO\n| where eventType_s in (Events)\n| where outcome_result_s == \"SUCCESS\"\n| where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPs)\n| extend oktaDeviceId_ = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).oktaDeviceId), NewDevice_osPlatform = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osPlatform),  NewDevice_osVersion = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osVersion), displayName_ = tostring(parse_json(target_s)[0].displayName)\n| extend Location = strcat(client_geographicalContext_city_s,  \" | \", client_geographicalContext_state_s,\" | \", client_geographicalContext_country_s)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,\noutcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), column_ifexists('debugContext_debugData_threatSuspected_s',\"\"), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location ;\nlet ThreatInsightEvents = OktaSSO\n| where eventType_s in (ThreatInsightOperations)\n| extend SuspiciousIP = actor_displayName_s\n| project TimeGenerated, column_ifexists('debugContext_debugData_threatDetections_s', \"\"), client_userAgent_rawUserAgent_s, severity_s, outcome_result_s, eventType_s, displayMessage_s, SuspiciousIP, transaction_id_s;\nDeviceRegistrations \n| join kind=inner (ThreatInsightEvents) on $left.client_ipAddress_s == $right.SuspiciousIP\n| project TimeGenerated, actor_alternateId_s, actor_displayName_s, client_ipAddress_s, client_userAgent_os_s, client_userAgent_rawUserAgent_s, client_userAgent_browser_s, displayMessage_s, outcome_result_s, outcome_reason_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location, SuspiciousIP, transaction_id_s\n| extend AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
+        "queryFrequency": "1h",
+        "name": "Device Registration from Malicious IP",
+        "status": "Available",
+        "queryPeriod": "1h",
         "severity": "High",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "AccountUPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "client_ipAddress_s",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "customDetails": {
+          "ActorDeviceOS": "NewDevice_osPlatform",
+          "ActorDeviceOSVersion": "NewDevice_osVersion",
+          "UserAgent": "client_userAgent_rawUserAgent_s",
+          "ActorDisplayName": "actor_displayName_s",
+          "Location": "Location"
+        },
         "tactics": [
           "Persistence"
         ],
-        "triggerThreshold": 0,
-        "queryPeriod": "1h",
-        "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Device registration from Malicious IP {{client_ipAddress_s}}",
-          "alertDescriptionFormat": "User {{actor_displayName_s}} ({{actor_alternateId_s}}) registered a device from {{client_ipAddress_s}} and the IP is associated with malicious activity in Okta ThreatInsight."
-        },
-        "query": "let Events = dynamic([\"device.enrollment.create\"]);\nlet ThreatInsightOperations = dynamic([\"security.threat.detected\", \"security.attack.start\", \"security.attack.end\" ]);\n// Adjust list of allowed IPs to reduce false positives\nlet AllowedIPs = dynamic([]);\nlet DeviceRegistrations =  OktaSSO\n| where eventType_s in (Events)\n| where outcome_result_s == \"SUCCESS\"\n| where isnotempty(client_ipAddress_s) and client_ipAddress_s !in (AllowedIPs)\n| extend oktaDeviceId_ = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).oktaDeviceId), NewDevice_osPlatform = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osPlatform),  NewDevice_osVersion = tostring(parse_json(tostring(parse_json(target_s)[0].detailEntry)).osVersion), displayName_ = tostring(parse_json(target_s)[0].displayName)\n| extend Location = strcat(client_geographicalContext_city_s,  \" | \", client_geographicalContext_state_s,\" | \", client_geographicalContext_country_s)\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, client_userAgent_os_s, client_ipAddress_s, displayMessage_s, outcome_result_s,\noutcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', \"\"), column_ifexists('debugContext_debugData_threatSuspected_s',\"\"), client_userAgent_rawUserAgent_s,client_userAgent_browser_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location ;\nlet ThreatInsightEvents = OktaSSO\n| where eventType_s in (ThreatInsightOperations)\n| extend SuspiciousIP = actor_displayName_s\n| project TimeGenerated, column_ifexists('debugContext_debugData_threatDetections_s', \"\"), client_userAgent_rawUserAgent_s, severity_s, outcome_result_s, eventType_s, displayMessage_s, SuspiciousIP, transaction_id_s;\nDeviceRegistrations \n| join kind=inner (ThreatInsightEvents) on $left.client_ipAddress_s == $right.SuspiciousIP\n| project TimeGenerated, actor_alternateId_s, actor_displayName_s, client_ipAddress_s, client_userAgent_os_s, client_userAgent_rawUserAgent_s, client_userAgent_browser_s, displayMessage_s, outcome_result_s, outcome_reason_s, severity_s, NewDevice_osPlatform, NewDevice_osVersion, eventType_s, Location, SuspiciousIP, transaction_id_s\n| extend AccountName = tostring(split(actor_alternateId_s, \"@\")[0]), AccountUPNSuffix = tostring(split(actor_alternateId_s, \"@\")[1])\n",
-        "triggerOperator": "gt",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "AccountUPNSuffix"
-              }
-            ],
-            "entityType": "Account"
-          },
-          {
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "client_ipAddress_s"
-              }
-            ],
-            "entityType": "IP"
-          }
-        ],
-        "description": "This rule identifies successful Okta device registration events that originate from IP addresses also observed by Okta ThreatInsight as malicious or suspicious.\n",
-        "name": "Device Registration from Malicious IP",
-        "customDetails": {
-          "ActorDisplayName": "actor_displayName_s",
-          "UserAgent": "client_userAgent_rawUserAgent_s",
-          "ActorDeviceOSVersion": "NewDevice_osVersion",
-          "Location": "Location",
-          "ActorDeviceOS": "NewDevice_osPlatform"
-        },
-        "status": "Available"
+        "triggerOperator": "gt"
       }
     }
   ]
