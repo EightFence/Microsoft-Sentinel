@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c5d6e7f8-2345-6789-01ab-cdef12345011')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c5d6e7f8-2345-6789-01ab-cdef12345011')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "15m",
+        "queryPeriod": "15m",
+        "query": "Tailscale_Audit_CL\n| where Action == \"UPDATE\"\n| where tostring(Target.type) == \"TAILNET\"\n| where tostring(Target.property) == \"DNS_NAMESERVERS\"\n| extend ActorLogin = tostring(Actor.loginName)\n| extend OldServers = Old.dns\n| extend NewServers = New.dns\n| extend Added = set_difference(NewServers, OldServers)\n| extend Removed = set_difference(OldServers, NewServers)\n| project TimeGenerated, ActorLogin, OldServers, NewServers, Added, Removed, Origin\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "DefenseEvasion",
+          "CommandAndControl"
+        ],
+        "name": "Tailscale: DNS nameservers modified",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "ActorLogin",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when the tailnet's global DNS nameserver list is modified. Adding an attacker-controlled resolver as a tailnet-wide nameserver enables broad DNS hijacking for every device using MagicDNS resolution.\n"
+      }
+    }
+  ]
+}

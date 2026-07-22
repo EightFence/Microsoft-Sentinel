@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a5b6c7d8-5e6f-7a8b-9c0d-1e2f3a4b5c6d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a5b6c7d8-5e6f-7a8b-9c0d-1e2f3a4b5c6d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "8d",
+        "query": "let baselineDays = 7d;\nlet recent = 1h;\nlet multiplier = 3.0;\nlet recentTraffic =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags);\nlet baseline =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize TotalBaselineBytes = sum(Bytes) by NodeId\n    | extend BaselineHourlyBytes = TotalBaselineBytes / 168.0;\nrecentTraffic\n| join kind=inner baseline on NodeId\n| where RecentBytes > BaselineHourlyBytes * multiplier\n| extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)\n| project NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags, RecentMB, BaselineHourlyMB, Multiplier\n| order by Multiplier desc\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Low",
+        "tactics": [
+          "Exfiltration",
+          "CommandAndControl"
+        ],
+        "name": "Tailscale Premium: Subnet router throughput anomaly",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SrcNodeName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SrcUser",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when a subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handles 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate exfiltration or scanning. Requires Tailscale Premium or Enterprise.\n"
+      }
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-5678-9012-3456-789012340042')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-5678-9012-3456-789012340042')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "query": "Tailscale_Devices_CL\n| where TimeGenerated > ago(1h)\n| summarize arg_max(TimeGenerated, *) by DeviceId\n| where Authorized == false and ConnectedToControl == true\n| project TimeGenerated, DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, MachineKey, NodeKey\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "InitialAccess",
+          "Persistence"
+        ],
+        "name": "Tailscale: Unauthorized device connected to control plane",
+        "description-detailed": "Identifies devices actively connected to the Tailscale control plane (ConnectedToControl=true) but not yet authorized by an admin (Authorized=false). With device approval enabled, persistent entries warrant review; without approval, persistence may indicate a node-key injection attempt.\n",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Hostname",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies devices actively connected to the Tailscale control plane (ConnectedToControl=true) but not yet authorized by an admin (Authorized=false). Often benign onboarding but can indicate rogue joins."
+      }
+    }
+  ]
+}

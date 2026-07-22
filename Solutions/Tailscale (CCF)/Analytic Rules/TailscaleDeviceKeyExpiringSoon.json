@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b1a2c3d4-1234-5678-90ab-cdef12345001')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b1a2c3d4-1234-5678-90ab-cdef12345001')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "6h",
+        "queryPeriod": "6h",
+        "query": "Tailscale_Devices_CL\n| where TimeGenerated > ago(6h)\n| summarize arg_max(TimeGenerated, *) by DeviceId\n| where KeyExpiryDisabled == false\n| where isnotnull(Expires)\n| where Expires between (now() .. now() + 7d)\n| extend DaysToExpiry = datetime_diff('day', Expires, now())\n| project TimeGenerated, DeviceName, Hostname, User, Os, DaysToExpiry, Expires, LastSeen\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Tailscale: Device key expiring within 7 days",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Hostname",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies tailnet devices whose machine key expires within the next 7 days and where key expiry is not disabled. Surface proactively so renewal can be scheduled rather than forced during an outage.\n"
+      }
+    }
+  ]
+}

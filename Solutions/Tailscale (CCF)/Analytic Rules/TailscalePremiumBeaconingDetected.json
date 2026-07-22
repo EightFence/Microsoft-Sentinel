@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e3f4a5b6-3c4d-5e6f-7a8b-9c0d1e2f3a4b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e3f4a5b6-3c4d-5e6f-7a8b-9c0d1e2f3a4b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "2d",
+        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "CommandAndControl",
+          "Exfiltration"
+        ],
+        "name": "Tailscale Premium: Network flow beaconing detected",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SrcNodeName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "DstNodeName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SrcUser",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "Src",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n"
+      }
+    }
+  ]
+}

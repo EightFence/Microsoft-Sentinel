@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b2c3d4e5-6789-0123-4567-890123450043')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b2c3d4e5-6789-0123-4567-890123450043')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "2d",
+        "query": "let recent =\n    Tailscale_Devices_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where IsExternal == true\n    | project DeviceId, DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags;\nlet prior =\n    Tailscale_Devices_CL\n    | where TimeGenerated between (ago(2d) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where IsExternal == true\n    | distinct DeviceId;\nrecent\n| join kind=leftanti prior on DeviceId\n| project TimeGenerated = now(), DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Tailscale: External (shared-in) device added",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Hostname",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies new external (shared-in) devices joining the tailnet that were not present in the prior 24-hour baseline. Each shared-in device expands the trust boundary - confirm the share matches a documented agreement and ACL scope.\n"
+      }
+    }
+  ]
+}

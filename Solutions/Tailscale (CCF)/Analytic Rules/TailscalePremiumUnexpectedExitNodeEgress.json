@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c1d2e3f4-1a2b-3c4d-5e6f-7a8b9c0d1e2f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c1d2e3f4-1a2b-3c4d-5e6f-7a8b9c0d1e2f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "query": "let baseline = 7d;\nlet recent = 1h;\nlet recentEgress =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasExitTraffic\n    | mv-expand t = ExitTraffic\n    | extend Src = tostring(t.src), ExitDst = tostring(t.dst), Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize FirstSeen = min(TimeGenerated), TotalBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, Src, ExitDst;\nlet baselineEgress =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baseline + recent) .. ago(recent))\n    | where HasExitTraffic\n    | mv-expand t = ExitTraffic\n    | extend Src = tostring(t.src), ExitDst = tostring(t.dst)\n    | distinct NodeId, Src, ExitDst;\nrecentEgress\n| join kind=leftanti baselineEgress on NodeId, Src, ExitDst\n| extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "CommandAndControl",
+          "Exfiltration"
+        ],
+        "name": "Tailscale Premium: Unexpected exit-node egress",
+        "description-detailed": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a specific source may indicate unsanctioned egress, a compromised node pivoting, or a policy misconfiguration. Requires Tailscale Premium or Enterprise.\n",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SrcNodeName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SrcUser",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "Src",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a node may indicate routing-policy drift, data exfiltration, or compromise."
+      }
+    }
+  ]
+}

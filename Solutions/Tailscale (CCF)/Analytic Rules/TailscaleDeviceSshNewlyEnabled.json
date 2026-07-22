@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f0a1b2c3-4567-8901-23de-f12345670041')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f0a1b2c3-4567-8901-23de-f12345670041')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "2d",
+        "query": "let recent =\n    Tailscale_Devices_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where SshEnabled == true\n    | project DeviceId, DeviceName, Hostname, User, Os, ClientVersion, LastSeen;\nlet prior =\n    Tailscale_Devices_CL\n    | where TimeGenerated between (ago(2d) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where SshEnabled == true\n    | distinct DeviceId;\nrecent\n| join kind=leftanti prior on DeviceId\n| project TimeGenerated = now(), DeviceName, Hostname, User, Os, ClientVersion, LastSeen\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "Persistence",
+          "LateralMovement"
+        ],
+        "name": "Tailscale: Device Tailscale SSH newly enabled",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Hostname",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when Tailscale SSH is enabled on a device that previously did not have it. SSH provides authenticated shell access over the tailnet using Tailscale identity, broadening attack surface if unexpected. Verify and confirm the SSH ACL covers it.\n"
+      }
+    }
+  ]
+}

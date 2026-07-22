@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/668b43fd-cf28-961a-85af-957850df5027')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/668b43fd-cf28-961a-85af-957850df5027')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "15m",
+        "queryPeriod": "15m",
+        "query": "Tailscale_Audit_CL\n      | where Action == \"CREATE\"\n      | where tostring(Target.type) in (\"API_KEY\", \"OAUTH_CLIENT\")\n      | extend ActorLogin = tostring(Actor.loginName)\n      | extend TargetName = tostring(Target.name)\n      | extend TargetId = tostring(Target.id)\n      | project TimeGenerated, ActorLogin, Action, TargetName, TargetId, Origin, New\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "Persistence",
+          "CredentialAccess"
+        ],
+        "name": "Tailscale: New API access token or OAuth client created",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "ActorLogin",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when a new API access token or OAuth client is created in the tailnet. These grant programmatic access - verify the actor and intent.\n"
+      }
+    }
+  ]
+}

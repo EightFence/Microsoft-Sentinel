@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b4c5d6e7-1234-5678-90ab-cdef12345010')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b4c5d6e7-1234-5678-90ab-cdef12345010')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "15m",
+        "queryPeriod": "15m",
+        "query": "Tailscale_Audit_CL\n| where Action == \"UPDATE\"\n| where tostring(Target.type) == \"TAILNET\"\n| where tostring(Target.property) == \"DNS_SPLIT_DNS\"\n| extend ActorLogin = tostring(Actor.loginName)\n| extend OldDomains = bag_keys(Old)\n| extend NewDomains = bag_keys(New)\n| extend AddedDomains = set_difference(NewDomains, OldDomains)\n| extend RemovedDomains = set_difference(OldDomains, NewDomains)\n| project TimeGenerated, ActorLogin, AddedDomains, RemovedDomains, Old, New, Origin\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "DefenseEvasion",
+          "CommandAndControl"
+        ],
+        "name": "Tailscale: Split-DNS configuration modified",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "ActorLogin",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when the tailnet split-DNS configuration is modified. Split-DNS overrides per-domain resolution within the tailnet - an attacker adding a new domain mapping or changing the resolver IP can hijack DNS for that domain.\n"
+      }
+    }
+  ]
+}

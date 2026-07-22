@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e9f0a1b2-3456-7890-12cd-ef1234560040')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e9f0a1b2-3456-7890-12cd-ef1234560040')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "query": "Tailscale_Devices_CL\n| where TimeGenerated > ago(1h)\n| summarize arg_max(TimeGenerated, *) by DeviceId\n| where isnotempty(TailnetLockError)\n| project TimeGenerated, DeviceName, Hostname, User, Os, ClientVersion, TailnetLockError, TailnetLockKey, LastSeen, Authorized\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "DefenseEvasion",
+          "InitialAccess"
+        ],
+        "name": "Tailscale: Tailnet lock validation failed",
+        "description-detailed": "Identifies tailnet devices with a non-empty TailnetLockError, indicating the device failed tailnet-lock cryptographic validation. Tailnet lock requires new node-keys be co-signed by trusted signers; errors here are the only direct signal of a node-key injection attempt.\n",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "Hostname",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "User",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies tailnet devices with a non-empty TailnetLockError, indicating the device failed tailnet-lock cryptographic validation. Suspicious - likely an unsigned node attempting to join."
+      }
+    }
+  ]
+}

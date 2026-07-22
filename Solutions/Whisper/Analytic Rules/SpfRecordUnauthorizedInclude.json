@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9c275139-b554-58f1-b390-8520b10e54ad')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9c275139-b554-58f1-b390-8520b10e54ad')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "1d",
+        "customDetails": {
+          "UnauthorizedInclude": "UnauthorizedInclude",
+          "Domain": "DnsDomain"
+        },
+        "query": "// MITRE ATT&CK: T1566.001 - Phishing: Spearphishing Attachment\n// Tactic: Initial Access\n// Detects unauthorized SPF include directives not seen in previous scans\n// Configure authorized_spf_includes with your organization's known SPF providers\nlet authorized_spf_includes = dynamic([\"_spf.google.com\", \"spf.protection.outlook.com\", \"amazonses.com\", \"sendgrid.net\", \"mailgun.org\"]);\nlet previousIncludes = WhisperInfraContext_CL\n    | where TimeGenerated between (ago(1d) .. ago(1h))\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | summarize PreviousIncludes = make_set(SpfInclude) by indicator;\nlet currentIncludes = WhisperInfraContext_CL\n    | where TimeGenerated > ago(1h)\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | project indicator, SpfInclude, TimeGenerated;\ncurrentIncludes\n    | join kind=leftanti (previousIncludes | mv-expand PrevInclude = PreviousIncludes | extend SpfInclude = tostring(PrevInclude) | project indicator, SpfInclude) on indicator, SpfInclude\n    | where SpfInclude !in (authorized_spf_includes)\n    | project TimeGenerated, DnsDomain = indicator, UnauthorizedInclude = SpfInclude\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Whisper Security - SPF Record Unauthorized Include Detection",
+        "entityMappings": [
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "columnName": "DnsDomain",
+                "identifier": "DomainName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Detects new SPF include directives on monitored domains that were not seen in the previous scan window. Unauthorized SPF modifications may allow adversaries to send phishing emails that pass SPF checks.\n"
+      }
+    }
+  ]
+}

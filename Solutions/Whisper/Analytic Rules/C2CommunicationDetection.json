@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/00682c4c-b8b5-5ef7-af33-50891b271b7b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/00682c4c-b8b5-5ef7-af33-50891b271b7b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "5m",
+        "queryPeriod": "1h",
+        "customDetails": {
+          "ThreatLevel": "threatLevel",
+          "FeedNames": "feedNames",
+          "ThreatScore": "threatScore"
+        },
+        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "name": "Whisper Security - C2 Communication Detection",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SourceIP",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "DestinationIP",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "columnName": "DnsDomain",
+                "identifier": "DomainName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n"
+      }
+    }
+  ]
+}

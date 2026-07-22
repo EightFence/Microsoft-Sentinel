@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/32e7bcab-4424-516e-9c7c-dbe868144494')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/32e7bcab-4424-516e-9c7c-dbe868144494')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "1d",
+        "customDetails": {
+          "ScoreDelta": "ScoreDelta",
+          "ASN": "ASN",
+          "AsnName": "AsnName",
+          "OldScore": "OldScore",
+          "NewScore": "NewScore"
+        },
+        "query": "// MITRE ATT&CK: T1583.002 - Acquire Infrastructure: DNS Server\n// Tactic: Resource Development\n// Detects ASN reputation degradation (score increase > 20 points in 24h)\n// Note: Higher reputationScore = worse reputation\nlet degradationThreshold = 20;\nlet currentScores = WhisperASNReputation_CL\n    | where TimeGenerated > ago(1h)\n    | summarize (LatestTime, CurrentScore, CurrentLevel, AsnName, Country, PrefixCount, PeerCount) = arg_max(TimeGenerated, reputationScore, reputationLevel, asnName, country, prefixCount, peerCount) by asn\n    | project asn, CurrentScore, CurrentLevel, AsnName, Country, PrefixCount, PeerCount;\nlet previousScores = WhisperASNReputation_CL\n    | where TimeGenerated between (ago(1d) .. ago(1h))\n    | summarize (PreviousTime, PreviousScore) = arg_max(TimeGenerated, reputationScore) by asn\n    | project asn, PreviousScore;\ncurrentScores\n    | join kind=inner (previousScores) on asn\n    | extend ScoreDelta = CurrentScore - PreviousScore\n    | where ScoreDelta > degradationThreshold\n    | project TimeGenerated = now(), ASN = asn, AsnName, OldScore = PreviousScore, NewScore = CurrentScore, ScoreDelta, CurrentLevel, Country, PrefixCount, PeerCount\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "ResourceDevelopment"
+        ],
+        "name": "Whisper Security - ASN Reputation Degradation",
+        "triggerThreshold": 0,
+        "description": "Detects autonomous systems whose reputation score has increased by more than 20 points in the last 24 hours. Higher scores indicate worse reputation, so a score increase signals degradation that may indicate adversary use of the network.\n"
+      }
+    }
+  ]
+}

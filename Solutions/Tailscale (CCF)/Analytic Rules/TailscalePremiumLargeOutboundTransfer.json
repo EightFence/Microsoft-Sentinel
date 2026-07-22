@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d2e3f4a5-2b3c-4d5e-6f7a-8b9c0d1e2f3a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d2e3f4a5-2b3c-4d5e-6f7a-8b9c0d1e2f3a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "1h",
+        "queryPeriod": "1h",
+        "query": "let bytesThreshold = 100 * 1024 * 1024;\nTailscale_Network_CL\n| where TimeGenerated > ago(1h)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto), Bytes = tolong(t.txBytes) + tolong(t.rxBytes), Pkts = tolong(t.txPkts) + tolong(t.rxPkts)\n| summarize TotalBytes = sum(Bytes), TotalPackets = sum(Pkts) by NodeId, SrcNodeName, SrcUser, DstNodeName, DstUser, Src, Dst, Proto\n| where TotalBytes > bytesThreshold\n| extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)\n| order by TotalBytes desc\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "triggerOperator": "gt",
+        "severity": "Medium",
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "name": "Tailscale Premium: Large outbound transfer over tailnet",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SrcNodeName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "DstNodeName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "SrcUser",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "Src",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "description": "Identifies when a single src-dst pair transfers more than 100 MB over the tailnet within a 1-hour window. Large bursts can indicate data staging, exfiltration, or a misconfigured backup. Requires Tailscale Premium or Enterprise.\n"
+      }
+    }
+  ]
+}
