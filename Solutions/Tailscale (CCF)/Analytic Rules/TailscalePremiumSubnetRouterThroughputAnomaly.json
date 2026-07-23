@@ -14,33 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "queryPeriod": "8d",
-        "query": "let baselineDays = 7d;\nlet recent = 1h;\nlet multiplier = 3.0;\nlet recentTraffic =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags);\nlet baseline =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize TotalBaselineBytes = sum(Bytes) by NodeId\n    | extend BaselineHourlyBytes = TotalBaselineBytes / 168.0;\nrecentTraffic\n| join kind=inner baseline on NodeId\n| where RecentBytes > BaselineHourlyBytes * multiplier\n| extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)\n| project NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags, RecentMB, BaselineHourlyMB, Multiplier\n| order by Multiplier desc\n",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "P1D",
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "enabled": true
-          },
-          "createIncident": true
-        },
         "status": "Available",
-        "triggerOperator": "gt",
-        "severity": "Low",
-        "tactics": [
-          "Exfiltration",
-          "CommandAndControl"
-        ],
-        "name": "Tailscale Premium: Subnet router throughput anomaly",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SrcNodeName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SrcNodeName"
               }
             ]
           },
@@ -48,14 +31,31 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "SrcUser",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "SrcUser"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "description": "Identifies when a subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handles 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate exfiltration or scanning. Requires Tailscale Premium or Enterprise.\n"
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities"
+          },
+          "createIncident": true
+        },
+        "triggerOperator": "gt",
+        "description": "Identifies when a subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handles 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate exfiltration or scanning. Requires Tailscale Premium or Enterprise.\n",
+        "queryPeriod": "8d",
+        "tactics": [
+          "Exfiltration",
+          "CommandAndControl"
+        ],
+        "name": "Tailscale Premium: Subnet router throughput anomaly",
+        "query": "let baselineDays = 7d;\nlet recent = 1h;\nlet multiplier = 3.0;\nlet recentTraffic =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags);\nlet baseline =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize TotalBaselineBytes = sum(Bytes) by NodeId\n    | extend BaselineHourlyBytes = TotalBaselineBytes / 168.0;\nrecentTraffic\n| join kind=inner baseline on NodeId\n| where RecentBytes > BaselineHourlyBytes * multiplier\n| extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)\n| project NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags, RecentMB, BaselineHourlyMB, Multiplier\n| order by Multiplier desc\n",
+        "severity": "Low"
       }
     }
   ]

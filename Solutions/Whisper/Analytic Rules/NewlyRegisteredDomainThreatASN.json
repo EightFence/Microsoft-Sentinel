@@ -14,38 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "queryPeriod": "1d",
-        "customDetails": {
-          "MaxThreatScore": "maxThreatScore",
-          "ReputationScore": "reputationScore",
-          "DomainAgeDays": "domainAge",
-          "ASNName": "asnName"
-        },
-        "query": "// MITRE ATT&CK: T1583.001 - Acquire Infrastructure: Domains\n// Tactic: Resource Development\n// Correlates newly registered domains with high-threat ASN reputation data\nlet maxDomainAgeDays = 7;\nlet asnThreatThreshold = 50;\n// Defensive: WhisperInfraChainPipeline currently emits domainAge=-1 as a\n// sentinel when the create date is unknown (tracked bug - proper fix needs\n// CALL whisper.history() integration). Filter the sentinel out so the rule\n// does not fire on every domain with an ASN.\nlet newDomains = WhisperInfraContext_CL\n    | where TimeGenerated > ago(1d)\n    | where domainAge >= 0 and domainAge < maxDomainAgeDays\n    | where isnotempty(asns)\n    | extend parsedAsn = tostring(split(asns, \",\")[0])\n    | extend parsedIp = tostring(split(ipAddresses, \",\")[0])\n    | project TimeGenerated, indicator, domainAge, parsedAsn, parsedIp, registrar, countries;\nlet threatAsns = WhisperASNReputation_CL\n    | where TimeGenerated > ago(1d)\n    | where maxThreatScore > asnThreatThreshold\n    | project asn, asnName, reputationScore, reputationLevel, maxThreatScore;\nnewDomains\n    | join kind=inner (threatAsns) on $left.parsedAsn == $right.asn\n    | extend DnsDomain = indicator, IPAddress = parsedIp\n    | project TimeGenerated, DnsDomain, IPAddress, domainAge, registrar, countries, asn, asnName, reputationScore, reputationLevel, maxThreatScore\n",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "enabled": true
-          },
-          "createIncident": true
-        },
         "status": "Available",
-        "triggerOperator": "gt",
-        "severity": "High",
-        "tactics": [
-          "ResourceDevelopment"
-        ],
-        "name": "Whisper Security - Newly Registered Domain on Threat ASN",
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "entityType": "DNS",
             "fieldMappings": [
               {
-                "columnName": "DnsDomain",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "DnsDomain"
               }
             ]
           },
@@ -53,14 +31,36 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "IPAddress",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPAddress"
               }
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "description": "Identifies newly registered domains (under 7 days old) hosted on autonomous systems with elevated threat scores. This combination often indicates adversary infrastructure staging for phishing, malware delivery, or C2 operations.\n"
+        "customDetails": {
+          "MaxThreatScore": "maxThreatScore",
+          "DomainAgeDays": "domainAge",
+          "ASNName": "asnName",
+          "ReputationScore": "reputationScore"
+        },
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities"
+          },
+          "createIncident": true
+        },
+        "triggerOperator": "gt",
+        "description": "Identifies newly registered domains (under 7 days old) hosted on autonomous systems with elevated threat scores. This combination often indicates adversary infrastructure staging for phishing, malware delivery, or C2 operations.\n",
+        "queryPeriod": "1d",
+        "tactics": [
+          "ResourceDevelopment"
+        ],
+        "name": "Whisper Security - Newly Registered Domain on Threat ASN",
+        "query": "// MITRE ATT&CK: T1583.001 - Acquire Infrastructure: Domains\n// Tactic: Resource Development\n// Correlates newly registered domains with high-threat ASN reputation data\nlet maxDomainAgeDays = 7;\nlet asnThreatThreshold = 50;\n// Defensive: WhisperInfraChainPipeline currently emits domainAge=-1 as a\n// sentinel when the create date is unknown (tracked bug - proper fix needs\n// CALL whisper.history() integration). Filter the sentinel out so the rule\n// does not fire on every domain with an ASN.\nlet newDomains = WhisperInfraContext_CL\n    | where TimeGenerated > ago(1d)\n    | where domainAge >= 0 and domainAge < maxDomainAgeDays\n    | where isnotempty(asns)\n    | extend parsedAsn = tostring(split(asns, \",\")[0])\n    | extend parsedIp = tostring(split(ipAddresses, \",\")[0])\n    | project TimeGenerated, indicator, domainAge, parsedAsn, parsedIp, registrar, countries;\nlet threatAsns = WhisperASNReputation_CL\n    | where TimeGenerated > ago(1d)\n    | where maxThreatScore > asnThreatThreshold\n    | project asn, asnName, reputationScore, reputationLevel, maxThreatScore;\nnewDomains\n    | join kind=inner (threatAsns) on $left.parsedAsn == $right.asn\n    | extend DnsDomain = indicator, IPAddress = parsedIp\n    | project TimeGenerated, DnsDomain, IPAddress, domainAge, registrar, countries, asn, asnName, reputationScore, reputationLevel, maxThreatScore\n",
+        "severity": "High"
       }
     }
   ]
