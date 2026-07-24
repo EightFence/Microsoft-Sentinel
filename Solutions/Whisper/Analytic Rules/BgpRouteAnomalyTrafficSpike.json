@@ -14,43 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "severity": "High",
+        "description": "Detects BGP origin AS changes for IP prefixes correlated with network traffic volume spikes. May indicate BGP hijacking or adversary-in-the-middle attacks.\n",
+        "tactics": [
+          "Collection"
+        ],
+        "triggerOperator": "gt",
+        "customDetails": {
+          "OriginASN": "OriginASN",
+          "Prefix": "Prefix",
+          "TrafficChange": "TrafficChange"
+        },
+        "queryPeriod": "1d",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          }
+        },
         "triggerThreshold": 0,
-        "queryFrequency": "15m",
+        "name": "Whisper Security - BGP Route Anomaly with Traffic Spike",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "IPAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "customDetails": {
-          "Prefix": "Prefix",
-          "TrafficChange": "TrafficChange",
-          "OriginASN": "OriginASN"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "triggerOperator": "gt",
-        "description": "Detects BGP origin AS changes for IP prefixes correlated with network traffic volume spikes. May indicate BGP hijacking or adversary-in-the-middle attacks.\n",
-        "queryPeriod": "1d",
-        "tactics": [
-          "Collection"
-        ],
-        "name": "Whisper Security - BGP Route Anomaly with Traffic Spike",
+        "queryFrequency": "15m",
         "query": "// MITRE ATT&CK: T1557 - Adversary-in-the-Middle\n// Tactic: Collection\n// Detects BGP route origin changes correlated with traffic volume anomalies\nlet lookbackPeriod = 1d;\nlet bgpChanges = WhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where isnotempty(bgpOrigin)\n    | serialize\n    | extend PreviousOrigin = prev(bgpOrigin), PreviousIndicator = prev(indicator)\n    | where indicator == PreviousIndicator\n    | where bgpOrigin != PreviousOrigin\n    | where isnotempty(PreviousOrigin)\n    | project indicator, bgpPrefix, OldOrigin = PreviousOrigin, NewOrigin = bgpOrigin, ChangeTime = snapshotDate;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SentBytes:long, ReceivedBytes:long)[]);\nlet trafficBaseline = CommonSecurityLogSafe\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where isnotempty(DestinationIP)\n    | summarize BaselineBytes = avg(SentBytes + ReceivedBytes), BaselineCount = count() by DestinationIP, bin(TimeGenerated, 1h)\n    | summarize AvgBaselineBytes = avg(BaselineBytes), AvgBaselineCount = avg(BaselineCount) by DestinationIP;\nlet recentTraffic = CommonSecurityLogSafe\n    | where TimeGenerated > ago(15m)\n    | where isnotempty(DestinationIP)\n    | summarize RecentBytes = sum(SentBytes + ReceivedBytes), RecentCount = count() by DestinationIP;\nrecentTraffic\n    | join kind=inner (trafficBaseline) on DestinationIP\n    | where RecentBytes > AvgBaselineBytes * 3 or RecentCount > AvgBaselineCount * 3\n    | extend TrafficChange = iff(AvgBaselineBytes > 0, round((RecentBytes - AvgBaselineBytes) / AvgBaselineBytes * 100, 2), 0.0)\n    | join kind=inner (bgpChanges) on $left.DestinationIP == $right.indicator\n    | project TimeGenerated = ChangeTime, IPAddress = DestinationIP, Prefix = bgpPrefix, OriginASN = NewOrigin, OldOriginASN = OldOrigin, TrafficChange, RecentBytes, AvgBaselineBytes\n",
-        "severity": "High"
+        "status": "Available"
       }
     }
   ]

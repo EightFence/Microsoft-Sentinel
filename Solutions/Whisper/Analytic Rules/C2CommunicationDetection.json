@@ -14,61 +14,61 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "severity": "High",
+        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "triggerOperator": "gt",
+        "customDetails": {
+          "ThreatScore": "threatScore",
+          "FeedNames": "feedNames",
+          "ThreatLevel": "threatLevel"
+        },
+        "queryPeriod": "1h",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          }
+        },
         "triggerThreshold": 0,
-        "queryFrequency": "5m",
+        "name": "Whisper Security - C2 Communication Detection",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "DestinationIP"
               }
-            ]
+            ],
+            "entityType": "IP"
           },
           {
-            "entityType": "DNS",
             "fieldMappings": [
               {
                 "identifier": "DomainName",
                 "columnName": "DnsDomain"
               }
-            ]
+            ],
+            "entityType": "DNS"
           }
         ],
-        "customDetails": {
-          "FeedNames": "feedNames",
-          "ThreatScore": "threatScore",
-          "ThreatLevel": "threatLevel"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "triggerOperator": "gt",
-        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
-        "queryPeriod": "1h",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "name": "Whisper Security - C2 Communication Detection",
+        "queryFrequency": "5m",
         "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
-        "severity": "High"
+        "status": "Available"
       }
     }
   ]

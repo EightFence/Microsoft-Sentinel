@@ -14,40 +14,40 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "severity": "High",
+        "description": "Identifies creation of a Tailscale OAuth client or API access key whose granted scopes include WRITE permissions (anything matching :write). Tokens with write scopes are high-value adversary targets.",
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
         "description-detailed": "Detects creation of a Tailscale OAuth client or API access key whose granted scopes include WRITE permissions (anything matching \":write\"). Tokens with write scopes can modify tailnet configuration, manage devices, write ACLs, and revoke keys - high-value adversary targets. Compare against the recent actor history; revoke immediately if unexpected.\n",
+        "triggerOperator": "gt",
+        "queryPeriod": "15m",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          }
+        },
         "triggerThreshold": 0,
-        "queryFrequency": "15m",
+        "name": "Tailscale: OAuth client or API key created with write scopes",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "ActorLogin"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "triggerOperator": "gt",
-        "description": "Identifies creation of a Tailscale OAuth client or API access key whose granted scopes include WRITE permissions (anything matching :write). Tokens with write scopes are high-value adversary targets.",
-        "queryPeriod": "15m",
-        "tactics": [
-          "Persistence",
-          "PrivilegeEscalation"
-        ],
-        "name": "Tailscale: OAuth client or API key created with write scopes",
+        "queryFrequency": "15m",
         "query": "Tailscale_Audit_CL\n| where EventType == \"CONFIG\"\n| where Action == \"CREATE\"\n| where tostring(Target.type) in (\"API_KEY\", \"OAUTH_CLIENT\")\n| extend Scopes = extract(@\"scopes\\s*-\\s*(.+)$\", 1, ActionDetails)\n| where Scopes contains \":write\"\n| extend WriteScopes = extract_all(@\"([a-zA-Z_]+:write)\", Scopes)\n| extend ActorLogin = tostring(Actor.loginName)\n| extend ActorType = tostring(Actor.type)\n| extend TargetName = tostring(Target.name)\n| extend TargetId = tostring(Target.id)\n| extend TargetType = tostring(Target.type)\n| project TimeGenerated, ActorLogin, ActorType, Action, TargetType, TargetName, TargetId, WriteScopes, Scopes, Origin, ActionDetails\n",
-        "severity": "High"
+        "status": "Available"
       }
     }
   ]

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5e8f2a1b-7c3d-4b9e-a6f0-1d2e3c4b5a6f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5e8f2a1b-7c3d-4b9e-a6f0-1d2e3c4b5a6f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "Medium",
+        "description": "Identifies SAP BTP custom applications (CloudFoundry, SAP CAP, etc.) that only produce\nXSUAA authentication events (TokenIssuedEvent, ClientAuthenticationSuccess) but have not\ngenerated any business audit log activity in the past 7 days. This pattern indicates that\nthe application has not implemented audit logging (e.g., missing @AuditLog annotations in\nCAP or missing audit log service bindings), creating a security blind spot where user\nactions within the application are invisible to monitoring. The 7-day lookback avoids\nfalse positives for properly instrumented apps whose users simply have not performed\nauditable actions in the current session. Attackers could exploit such unaudited\napplications to perform malicious operations without detection.\n",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerOperator": "gt",
+        "customDetails": {
+          "SpaceId": "SpaceId",
+          "SubaccountName": "SubaccountName",
+          "XsAppName": "XsAppName",
+          "Tenant": "Tenant",
+          "LoginCount": "LoginCount",
+          "OrgId": "OrgId",
+          "AppName": "AppName",
+          "IPs": "IPs",
+          "ClientId": "ClientId",
+          "Users": "Users"
+        },
+        "queryPeriod": "7d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "name": "SAP BTP - Unaudited custom app with login-only activity",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "CloudApp"
+              }
+            ],
+            "entityType": "CloudApplication"
+          }
+        ],
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "query": "// Lookback period for audit events - a longer window avoids false positives for\n// properly instrumented apps where users logged in but haven't performed actions yet\nlet audit_lookback = ago(7d);\n// Known BTP platform service patterns (excluded from detection)\nlet platform_service_patterns = dynamic([\n    \"app-studio\", \"auditlog\", \"cis-local\", \"service-manager\",\n    \"destination-xsappname\", \"connectivity-proxy\", \"feature-flags\"\n]);\n// Step 1: From XSUAA TokenIssuedEvent, identify custom apps with interactive user logins\n// XSUAA is a shared subaccount service - the client_id in each token identifies the actual app\nlet app_logins = SAPBTPAuditLog_CL\n    // Scope logins to the current 1h run cycle (matches queryFrequency)\n    | where TimeGenerated > ago(1h)\n    | where Category == \"audit.security-events\"\n    | extend data_s = tostring(Message.data)\n    | where data_s has \"TokenIssuedEvent\"\n    | extend ParsedData = parse_json(data_s)\n    // origin field = client_id of the app the token was issued for\n    | extend ClientId = tostring(ParsedData.origin)\n    | where ClientId startswith \"sb-\"\n    // Parse nested event message for human user and grant type\n    | extend EventMessage = tostring(ParsedData.message)\n    | extend GrantType = extract(@'\"grant_type\"\\s*:\\s*\"([^\"]+)\"', 1, EventMessage)\n    // Only interactive browser-based logins (not service-to-service tokens)\n    | where GrantType == \"authorization_code\"\n    // Derive app identifiers: sb-<XsAppName>!t<number>\n    | extend XsAppName = extract(@\"^sb-(.+?)!\\w+$\", 1, ClientId)\n    | where isnotempty(XsAppName)\n    // Exclude known platform services\n    | where not(XsAppName has_any (platform_service_patterns))\n    // Extract human-readable app name (first segment before subaccount qualifier)\n    | extend AppName = extract(@\"^([A-Za-z][A-Za-z0-9_]*)\", 1, XsAppName)\n    | extend HumanUser = extract(@'\"user_name\"\\s*:\\s*\"([^\"]+)\"', 1, EventMessage)\n    | extend IPAddress = tostring(Message.ip);\n// Step 2a: Identify apps that have business audit events where the service binding\n// identity appears in UserName (e.g. platform-generated audit events)\nlet audited_apps = SAPBTPAuditLog_CL\n    | where TimeGenerated > audit_lookback\n    | where Category !in (\"audit.security-events\")\n    | where UserName startswith \"sb-\"\n    | extend AuditedAppName = extract(@\"^sb-(.+?)!\\w+\", 1, UserName)\n    | where isnotempty(AuditedAppName)\n    | distinct AuditedAppName, Tenant;\n// Step 2b: Identify CF app instances that have an audit log service binding.\n// When a CAP/custom app binds the audit log service, BTP provisions a\n// 'customer-auditlog' service key whose XSUAA token events share the same\n// AlsServiceId (CF app GUID) as the app's own login tokens. This gives a\n// reliable per-app correlation that works even when the audit log service\n// instance is deployed in a different CF space than the app itself.\nlet audited_app_instances = SAPBTPAuditLog_CL\n    | where TimeGenerated > audit_lookback\n    | where Category == \"audit.security-events\"\n    | where UserName contains \"customer-auditlog\"\n    | where isnotempty(AlsServiceId)\n    | distinct AlsServiceId, Tenant;\n// Step 3: Find custom apps with logins but no business audit trail\napp_logins\n| join kind=leftanti (audited_apps | project XsAppName = AuditedAppName, Tenant) on XsAppName, Tenant\n| join kind=leftanti (audited_app_instances) on AlsServiceId, Tenant\n| summarize\n    LoginCount = count(),\n    FirstLogin = min(TimeGenerated),\n    LastLogin = max(TimeGenerated),\n    Users = make_set(HumanUser, 100),\n    IPs = make_set(IPAddress, 100),\n    AppName = take_any(AppName),\n    SubaccountName = take_any(SubaccountName),\n    OrgId = take_any(OrgId),\n    SpaceId = take_any(SpaceId)\n    by XsAppName, ClientId, Tenant\n| extend Users = set_difference(Users, dynamic([\"\"]))\n| project\n    FirstLogin,\n    LastLogin,\n    AppName,\n    XsAppName,\n    ClientId,\n    SubaccountName,\n    Tenant,\n    OrgId,\n    SpaceId,\n    LoginCount,\n    Users,\n    IPs,\n    CloudApp = \"SAP BTP\"\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SAP BTP: Unaudited custom app '{{AppName}}' - login-only activity detected",
+          "alertDescriptionFormat": "The custom app '{{AppName}}' ({{XsAppName}}) in subaccount '{{SubaccountName}}' produced only\nXSUAA authentication events but no business audit trail within the past 7 days.\n\nThis indicates the app has not implemented audit logging, creating a security blind spot\nwhere user actions within the application are invisible to Microsoft Sentinel.\n\nRecommended actions:\n1. Review the application's audit log implementation\n2. Add the audit log service binding in SAP BTP cockpit\n3. For CAP apps, implement @AuditLog annotations on sensitive entities and services\n4. Investigate user activity through alternative logs (application logs, HTTP access logs)\n"
+        },
+        "status": "Available"
+      }
+    }
+  ]
+}

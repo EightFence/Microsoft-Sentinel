@@ -14,34 +14,34 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "customDetails": {
-          "ScoreDelta": "ScoreDelta",
-          "ASN": "ASN",
-          "OldScore": "OldScore",
-          "AsnName": "AsnName",
-          "NewScore": "NewScore"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities"
-          },
-          "createIncident": true
-        },
-        "triggerOperator": "gt",
+        "severity": "Medium",
         "description": "Detects autonomous systems whose reputation score has increased by more than 20 points in the last 24 hours. Higher scores indicate worse reputation, so a score increase signals degradation that may indicate adversary use of the network.\n",
-        "queryPeriod": "1d",
         "tactics": [
           "ResourceDevelopment"
         ],
+        "triggerOperator": "gt",
+        "customDetails": {
+          "ASN": "ASN",
+          "OldScore": "OldScore",
+          "ScoreDelta": "ScoreDelta",
+          "NewScore": "NewScore",
+          "AsnName": "AsnName"
+        },
+        "queryPeriod": "1d",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "AllEntities"
+          }
+        },
+        "triggerThreshold": 0,
         "name": "Whisper Security - ASN Reputation Degradation",
+        "queryFrequency": "1h",
         "query": "// MITRE ATT&CK: T1583.002 - Acquire Infrastructure: DNS Server\n// Tactic: Resource Development\n// Detects ASN reputation degradation (score increase > 20 points in 24h)\n// Note: Higher reputationScore = worse reputation\nlet degradationThreshold = 20;\nlet currentScores = WhisperASNReputation_CL\n    | where TimeGenerated > ago(1h)\n    | summarize (LatestTime, CurrentScore, CurrentLevel, AsnName, Country, PrefixCount, PeerCount) = arg_max(TimeGenerated, reputationScore, reputationLevel, asnName, country, prefixCount, peerCount) by asn\n    | project asn, CurrentScore, CurrentLevel, AsnName, Country, PrefixCount, PeerCount;\nlet previousScores = WhisperASNReputation_CL\n    | where TimeGenerated between (ago(1d) .. ago(1h))\n    | summarize (PreviousTime, PreviousScore) = arg_max(TimeGenerated, reputationScore) by asn\n    | project asn, PreviousScore;\ncurrentScores\n    | join kind=inner (previousScores) on asn\n    | extend ScoreDelta = CurrentScore - PreviousScore\n    | where ScoreDelta > degradationThreshold\n    | project TimeGenerated = now(), ASN = asn, AsnName, OldScore = PreviousScore, NewScore = CurrentScore, ScoreDelta, CurrentLevel, Country, PrefixCount, PeerCount\n",
-        "severity": "Medium"
+        "status": "Available"
       }
     }
   ]
