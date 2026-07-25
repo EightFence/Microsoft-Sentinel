@@ -14,35 +14,28 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "triggerThreshold": 0,
         "description": "Identifies network traffic communicating with known Tor exit nodes. While Tor usage may be legitimate in some environments, unexpected Tor communication can indicate data exfiltration, C2 tunneling, or policy violations.\n",
+        "severity": "Medium",
+        "queryPeriod": "1d",
         "tactics": [
           "CommandAndControl"
         ],
-        "triggerOperator": "gt",
+        "queryFrequency": "1h",
         "customDetails": {
-          "ThreatScore": "threatScore",
+          "ThreatLevel": "threatLevel",
           "FeedNames": "feedNames",
-          "ThreatLevel": "threatLevel"
+          "ThreatScore": "threatScore"
         },
-        "queryPeriod": "1d",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "AllEntities"
-          }
-        },
-        "triggerThreshold": 0,
-        "name": "Whisper Security - Tor Exit Node Communication",
+        "triggerOperator": "gt",
+        "query": "// MITRE ATT&CK: T1090.003 - Proxy: Multi-hop Proxy\n// Tactic: Command and Control\n// Detects communication with Tor exit nodes using Whisper threat intelligence\nlet timeRange = 1d;\nlet torIndicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isTor == true\n    | project indicator, threatScore, threatLevel, feedNames, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SourceIP:string, DeviceProduct:string, DeviceAction:string, DeviceVendor:string, Activity:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP)\n    | join kind=inner (torIndicators) on $left.DestinationIP == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP\n    | project TimeGenerated, SourceIP, DestinationIP, DeviceProduct, DeviceAction, DeviceVendor, Activity, threatScore, threatLevel, feedNames\n",
+        "status": "Available",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIP"
+                "columnName": "SourceIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -50,16 +43,23 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "DestinationIP"
+                "columnName": "DestinationIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "queryFrequency": "1h",
-        "query": "// MITRE ATT&CK: T1090.003 - Proxy: Multi-hop Proxy\n// Tactic: Command and Control\n// Detects communication with Tor exit nodes using Whisper threat intelligence\nlet timeRange = 1d;\nlet torIndicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isTor == true\n    | project indicator, threatScore, threatLevel, feedNames, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SourceIP:string, DeviceProduct:string, DeviceAction:string, DeviceVendor:string, Activity:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP)\n    | join kind=inner (torIndicators) on $left.DestinationIP == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP\n    | project TimeGenerated, SourceIP, DestinationIP, DeviceProduct, DeviceAction, DeviceVendor, Activity, threatScore, threatLevel, feedNames\n",
-        "status": "Available"
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true,
+            "lookbackDuration": "PT5H"
+          },
+          "createIncident": true
+        },
+        "name": "Whisper Security - Tor Exit Node Communication"
       }
     }
   ]

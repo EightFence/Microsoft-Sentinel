@@ -14,31 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "triggerThreshold": 0,
         "description": "Identifies when a tailnet device begins advertising subnet routes (subnet-router capability) not present in the previous snapshot. Unexpected advertisement may indicate a compromised node expanding reachable surface area or an unsanctioned admin change.\n",
+        "severity": "Medium",
+        "queryPeriod": "1d",
         "tactics": [
           "LateralMovement",
           "Persistence"
         ],
+        "queryFrequency": "1h",
         "triggerOperator": "gt",
-        "queryPeriod": "1d",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "P1D",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "AllEntities"
-          }
-        },
-        "triggerThreshold": 0,
-        "name": "Tailscale: Device started advertising subnet routes",
+        "query": "let recent =\n    Tailscale_Devices_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where array_length(AdvertisedRoutes) > 0;\nlet baseline =\n    Tailscale_Devices_CL\n    | where TimeGenerated between (ago(1d + 1h) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where array_length(AdvertisedRoutes) > 0\n    | distinct DeviceId;\nrecent\n| join kind=leftanti baseline on DeviceId\n| project TimeGenerated, DeviceId, DeviceName, Hostname, User, AdvertisedRoutes, EnabledRoutes, LastSeen\n",
+        "status": "Available",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "Hostname"
+                "columnName": "Hostname",
+                "identifier": "HostName"
               }
             ],
             "entityType": "Host"
@@ -46,16 +39,23 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "User"
+                "columnName": "User",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
           }
         ],
-        "queryFrequency": "1h",
-        "query": "let recent =\n    Tailscale_Devices_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where array_length(AdvertisedRoutes) > 0;\nlet baseline =\n    Tailscale_Devices_CL\n    | where TimeGenerated between (ago(1d + 1h) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where array_length(AdvertisedRoutes) > 0\n    | distinct DeviceId;\nrecent\n| join kind=leftanti baseline on DeviceId\n| project TimeGenerated, DeviceId, DeviceName, Hostname, User, AdvertisedRoutes, EnabledRoutes, LastSeen\n",
-        "status": "Available"
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": true,
+            "lookbackDuration": "P1D"
+          },
+          "createIncident": true
+        },
+        "name": "Tailscale: Device started advertising subnet routes"
       }
     }
   ]
