@@ -1,0 +1,89 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/38f2f6f4-2869-401c-8341-e3a5c11018a5')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/38f2f6f4-2869-401c-8341-e3a5c11018a5')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "description": "Monitoring AD Site GPOs being Linked, Unlinked, or Enforced.\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": false,
+            "reopenClosedIncident": false
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Channel": "Channel",
+          "EventData": "EventData",
+          "ObjectName": "ObjectName",
+          "EventID": "EventID",
+          "ObjectClass": "ObjectClass",
+          "Account": "Account",
+          "AttributeLDAP": "AttributeLDAP",
+          "Computer": "Computer",
+          "Domain": "Domain",
+          "ActivityType": "ActivityType"
+        },
+        "name": "PROD (TM014.1) - GPO - Linked, Unlinked, or Enforced at the AD Site Level",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "ObjectName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Computer"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Account"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "triggerThreshold": 0,
+        "query": "SecurityEvent \n| where EventID == 5136 \n    and EventData matches regex @\"(?i)CN=Sites\"\n    and Activity has \"modified\" \n    and EventData has '\"ObjectClass\">site'\n    and EventData has '<Data Name=\"AttributeLDAPDisplayName\">gPLink</Data>' \n    and (EventData has ';0]' \n        or EventData has ';1]' \n        or EventData has ';2]')\n    and EventData has '\"OperationType\">%%14674'\n| extend ObjectName = extract(\"<Data Name=\\\"ObjectDN\\\">((?i)CN=[^,]+(?:,(?i)CN=[^,]+)*),DC=\", 1, EventData)\n| extend AttributeLDAP = extract(\"<Data Name=\\\"AttributeLDAPDisplayName\\\">([^<]+)</Data>\", 1, EventData)\n| extend AttributeValue = extract(\"\\\\[([^\\\\]]+)\\\\]\", 1, EventData)\n| extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)\n| extend AttributeValueDescription = case(\n    LastThreeChars == \";0\", \"Linked\",\n    LastThreeChars == \";1\", \"Unlinked\",\n    LastThreeChars == \";2\", \"Enforced\",\n    \"Unknown\")\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectClass\n   , ActivityType = AttributeValueDescription\n   , AttributeLDAP\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "(TM014.1) A GPO was {{ActivityType}} at the Active Directory Site Level",
+          "alertDescriptionFormat": "Site Level GPOs can overwrite Tier Model GPOs."
+        },
+        "queryPeriod": "5m",
+        "queryFrequency": "5m"
+      }
+    }
+  ]
+}

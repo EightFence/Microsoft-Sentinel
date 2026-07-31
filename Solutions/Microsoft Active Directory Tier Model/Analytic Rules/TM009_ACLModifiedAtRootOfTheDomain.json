@@ -1,0 +1,91 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7437402c-800b-4cf3-90d9-0c1f12204375')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7437402c-800b-4cf3-90d9-0c1f12204375')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "description": "ACL Modification at the Root of the Domain.\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": false,
+            "reopenClosedIncident": false
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "AttributeLDAP": "AttributeLDAP",
+          "Channel": "Channel",
+          "OperationType": "OperationType",
+          "EventData": "EventData",
+          "ObjectName": "ObjectName",
+          "EventID": "EventID",
+          "ObjectClass": "ObjectClass",
+          "Account": "Account",
+          "ObjectTier": "ObjectTier",
+          "Computer": "Computer",
+          "Domain": "Domain",
+          "ActivityType": "ActivityType"
+        },
+        "name": "PROD (TM009.1) - ACL - Modified at Root of the Domain",
+        "triggerOperator": "gt",
+        "severity": "High",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "ObjectName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Computer"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Account"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "triggerThreshold": 0,
+        "query": "SecurityEvent \n| where EventID == 5136 \n    and EventData matches regex @\"(?i)DC=\"\n    and Activity has \"modified\" \n    and EventData has '\"ObjectClass\">domainDNS'\n    and EventData has '<Data Name=\"AttributeLDAPDisplayName\">nTSecurityDescriptor</Data>'\n    and EventData has '\"OperationType\">%%14674'\n| extend ObjectName = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| where ObjectName startswith \"DC=\" or ObjectName startswith \"dc=\"\n| extend ObjectTier = \"Tier 0\"\n| extend AttributeLDAP = extract(\"<Data Name=\\\"AttributeLDAPDisplayName\\\">([^<]+)</Data>\", 1, EventData)\n| extend AttributeValue = extract(\"\\\\[([^\\\\]]+)\\\\]\", 1, EventData)\n| extend OperationType = iff(EventData has 'nTSecurityDescriptor', \"ACL Modified\", tostring(OperationType))\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , OperationType\n   , ActivityType\n   , AttributeLDAP\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "(TM009.1) A Tier 0 ACL was modified at the Root of the Domain",
+          "alertDescriptionFormat": "Any ACL changes at the root of the domain could impact or bypass the Tier Model security controls."
+        },
+        "queryPeriod": "5m",
+        "queryFrequency": "5m"
+      }
+    }
+  ]
+}
