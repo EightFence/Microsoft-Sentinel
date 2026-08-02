@@ -14,27 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "name": "Whisper Security - SPF Record Unauthorized Include Detection",
         "query": "// MITRE ATT&CK: T1566.001 - Phishing: Spearphishing Attachment\n// Tactic: Initial Access\n// Detects unauthorized SPF include directives not seen in previous scans\n// Configure authorized_spf_includes with your organization's known SPF providers\nlet authorized_spf_includes = dynamic([\"_spf.google.com\", \"spf.protection.outlook.com\", \"amazonses.com\", \"sendgrid.net\", \"mailgun.org\"]);\nlet previousIncludes = WhisperInfraContext_CL\n    | where TimeGenerated between (ago(1d) .. ago(1h))\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | summarize PreviousIncludes = make_set(SpfInclude) by indicator;\nlet currentIncludes = WhisperInfraContext_CL\n    | where TimeGenerated > ago(1h)\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | project indicator, SpfInclude, TimeGenerated;\ncurrentIncludes\n    | join kind=leftanti (previousIncludes | mv-expand PrevInclude = PreviousIncludes | extend SpfInclude = tostring(PrevInclude) | project indicator, SpfInclude) on indicator, SpfInclude\n    | where SpfInclude !in (authorized_spf_includes)\n    | project TimeGenerated, DnsDomain = indicator, UnauthorizedInclude = SpfInclude\n",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
         "tactics": [
           "InitialAccess"
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
-        "queryFrequency": "1h",
-        "triggerOperator": "gt",
+        "queryPeriod": "1d",
         "customDetails": {
-          "UnauthorizedInclude": "UnauthorizedInclude",
-          "Domain": "DnsDomain"
+          "Domain": "DnsDomain",
+          "UnauthorizedInclude": "UnauthorizedInclude"
         },
+        "status": "Available",
         "entityMappings": [
           {
             "entityType": "DNS",
@@ -46,10 +37,19 @@
             ]
           }
         ],
-        "description": "Detects new SPF include directives on monitored domains that were not seen in the previous scan window. Unauthorized SPF modifications may allow adversaries to send phishing emails that pass SPF checks.\n",
+        "triggerOperator": "gt",
+        "name": "Whisper Security - SPF Record Unauthorized Include Detection",
         "severity": "High",
-        "triggerThreshold": 0,
-        "status": "Available"
+        "description": "Detects new SPF include directives on monitored domains that were not seen in the previous scan window. Unauthorized SPF modifications may allow adversaries to send phishing emails that pass SPF checks.\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities"
+          }
+        }
       }
     }
   ]
