@@ -14,22 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "customDetails": {
-          "EventName": "EventName",
-          "EventSource": "EventSource",
-          "UserIdentityArn": "UserIdentityArn",
-          "AWSRegion": "AWSRegion"
-        },
         "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements, RecipientAccountId, AccountName, AccountUPNSuffix\n",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS AdministratorAccess policy attachment by {{AccountName}}",
-          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching AdministratorAccess in account {{RecipientAccountId}}."
+          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching AdministratorAccess in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS AdministratorAccess policy attachment by {{AccountName}}"
         },
         "name": "AWSCloudTrail - Privilege escalation with AdministratorAccess managed policy",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn",
+          "EventSource": "EventSource",
+          "EventName": "EventName"
+        },
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "tactics": [
+          "PrivilegeEscalation",
+          "Persistence"
+        ],
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -43,28 +50,21 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "tactics": [
-          "PrivilegeEscalation",
-          "Persistence"
-        ],
-        "description": "Detects successful attachment of the AWS managed AdministratorAccess policy to users, roles, or groups.\nThis action can immediately grant full administrative permissions and is a high-risk privilege escalation pattern\nthat should be validated against approved administrative activity.\n",
-        "queryPeriod": "1d",
         "status": "Available",
-        "severity": "Medium",
-        "queryFrequency": "1d",
-        "triggerOperator": "gt"
+        "description": "Detects successful attachment of the AWS managed AdministratorAccess policy to users, roles, or groups.\nThis action can immediately grant full administrative permissions and is a high-risk privilege escalation pattern\nthat should be validated against approved administrative activity.\n"
       }
     }
   ]
