@@ -14,43 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "// MITRE ATT&CK: T1584 - Compromise Infrastructure\n// Tactic: Resource Development\n// Detects registrar changes across WHOIS history snapshots\nlet lookbackPeriod = 14d;\nWhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where indicatorType == \"domain\"\n    | where isnotempty(registrar)\n    | summarize Registrars = make_set(registrar), SnapshotCount = count(), EarliestSnapshot = min(snapshotDate), LatestSnapshot = max(snapshotDate) by indicator\n    | where array_length(Registrars) > 1\n    | mv-expand CurrentRegistrar = Registrars\n    | extend CurrentRegistrar = tostring(CurrentRegistrar)\n    | join kind=inner (\n        WhisperHistory_CL\n        | where TimeGenerated > ago(lookbackPeriod)\n        | where indicatorType == \"domain\"\n        | where isnotempty(registrar)\n        | serialize\n        | extend PreviousRegistrar = prev(registrar), PreviousIndicator = prev(indicator)\n        | where indicator == PreviousIndicator\n        | where registrar != PreviousRegistrar\n        | where isnotempty(PreviousRegistrar)\n        | project indicator, OldRegistrar = PreviousRegistrar, NewRegistrar = registrar, ChangeDate = snapshotDate\n    ) on indicator\n    | project TimeGenerated = ChangeDate, DnsDomain = indicator, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n    | distinct TimeGenerated, DnsDomain, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n",
-        "name": "Whisper Security - Domain Registrar Change Anomaly",
+        "severity": "Medium",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true
+          }
+        },
         "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "query": "// MITRE ATT&CK: T1584 - Compromise Infrastructure\n// Tactic: Resource Development\n// Detects registrar changes across WHOIS history snapshots\nlet lookbackPeriod = 14d;\nWhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where indicatorType == \"domain\"\n    | where isnotempty(registrar)\n    | summarize Registrars = make_set(registrar), SnapshotCount = count(), EarliestSnapshot = min(snapshotDate), LatestSnapshot = max(snapshotDate) by indicator\n    | where array_length(Registrars) > 1\n    | mv-expand CurrentRegistrar = Registrars\n    | extend CurrentRegistrar = tostring(CurrentRegistrar)\n    | join kind=inner (\n        WhisperHistory_CL\n        | where TimeGenerated > ago(lookbackPeriod)\n        | where indicatorType == \"domain\"\n        | where isnotempty(registrar)\n        | serialize\n        | extend PreviousRegistrar = prev(registrar), PreviousIndicator = prev(indicator)\n        | where indicator == PreviousIndicator\n        | where registrar != PreviousRegistrar\n        | where isnotempty(PreviousRegistrar)\n        | project indicator, OldRegistrar = PreviousRegistrar, NewRegistrar = registrar, ChangeDate = snapshotDate\n    ) on indicator\n    | project TimeGenerated = ChangeDate, DnsDomain = indicator, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n    | distinct TimeGenerated, DnsDomain, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n",
+        "status": "Available",
         "customDetails": {
-          "ChangeDate": "ChangeDate",
           "OldRegistrar": "OldRegistrar",
+          "ChangeDate": "ChangeDate",
           "NewRegistrar": "NewRegistrar"
         },
-        "triggerOperator": "gt",
-        "queryPeriod": "14d",
-        "severity": "Medium",
-        "queryFrequency": "1h",
+        "description": "Detects domains whose registrar has changed across WHOIS history snapshots within the last 30 days. Registrar changes may indicate domain hijacking or adversary infrastructure acquisition.\n",
+        "entityMappings": [
+          {
+            "entityType": "DNS",
+            "fieldMappings": [
+              {
+                "columnName": "DnsDomain",
+                "identifier": "DomainName"
+              }
+            ]
+          }
+        ],
         "tactics": [
           "ResourceDevelopment"
         ],
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "DnsDomain"
-              }
-            ],
-            "entityType": "DNS"
-          }
-        ],
-        "status": "Available",
-        "description": "Detects domains whose registrar has changed across WHOIS history snapshots within the last 30 days. Registrar changes may indicate domain hijacking or adversary infrastructure acquisition.\n",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "enabled": true
-          },
-          "createIncident": true
-        }
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
+        "name": "Whisper Security - Domain Registrar Change Anomaly"
       }
     }
   ]
