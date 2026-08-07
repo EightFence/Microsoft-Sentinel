@@ -1,0 +1,67 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3c8e5f0b-1d4a-4b69-9c2e-7f0d3a5e8b1f')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3c8e5f0b-1d4a-4b69-9c2e-7f0d3a5e8b1f')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "query": "let Lookback = 1h;\nlet SuspiciousChildProcesses = dynamic([\n  \"powershell.exe\", \"pwsh.exe\", \"cmd.exe\", \"cscript.exe\", \"wscript.exe\",\n  \"mshta.exe\", \"certutil.exe\", \"bitsadmin.exe\", \"regsvr32.exe\",\n  \"rundll32.exe\", \"msiexec.exe\", \"installutil.exe\", \"cmstp.exe\",\n  \"msbuild.exe\", \"wmic.exe\", \"net.exe\", \"net1.exe\", \"nltest.exe\",\n  \"whoami.exe\", \"ipconfig.exe\", \"tasklist.exe\", \"schtasks.exe\",\n  \"at.exe\", \"sc.exe\", \"reg.exe\"\n]);\nlet AllowlistedCmdPatterns = dynamic([\n  \"ccmexec\", \"SMSAgent\", \"MOMAgent\", \"nessus\", \"qualys\"\n]);\nlet NetworkIndicators = dynamic([\n  \"http://\", \"https://\", \"ftp://\", \"Net.WebClient\",\n  \"DownloadString\", \"IEX\", \"Invoke-Expression\", \"/transfer\", \"-urlcache\"\n]);\nlet CredentialIndicators = dynamic([\n  \"lsass\", \"mimikatz\", \"sekurlsa\", \"dump\", \"sam\", \"ntds\"\n]);\nlet MDE_Results =\n  DeviceProcessEvents\n  | where Timestamp >= ago(Lookback)\n  | where InitiatingProcessFileName =~ \"WmiPrvSE.exe\"\n  | where FileName in~ (SuspiciousChildProcesses)\n  | where not(ProcessCommandLine has_any (AllowlistedCmdPatterns))\n  | extend\n      ChildProcess       = FileName,\n      ChildCmdLine       = ProcessCommandLine,\n      AccountName        = InitiatingProcessAccountName,\n      AccountDomain      = InitiatingProcessAccountDomain,\n      HostName           = DeviceName,\n      EventTime          = Timestamp,\n      NetworkActivity    = ProcessCommandLine has_any (NetworkIndicators),\n      CredentialActivity = ProcessCommandLine has_any (CredentialIndicators)\n  | project EventTime, HostName, AccountName, AccountDomain, ChildProcess,\n      ChildCmdLine, NetworkActivity, CredentialActivity;\nlet SecEvent_Results =\n  SecurityEvent\n  | where TimeGenerated >= ago(Lookback)\n  | where EventID == 4688\n  | where ParentProcessName endswith \"\\\\WmiPrvSE.exe\"\n  | extend ChildProcess = tostring(split(NewProcessName, \"\\\\\")[-1])\n  | where ChildProcess in~ (SuspiciousChildProcesses)\n  | where not(CommandLine has_any (AllowlistedCmdPatterns))\n  | extend\n      ChildCmdLine       = CommandLine,\n      AccountName        = SubjectUserName,\n      AccountDomain      = SubjectDomainName,\n      HostName           = Computer,\n      EventTime          = TimeGenerated,\n      NetworkActivity    = CommandLine has_any (NetworkIndicators),\n      CredentialActivity = CommandLine has_any (CredentialIndicators)\n  | project EventTime, HostName, AccountName, AccountDomain, ChildProcess,\n      ChildCmdLine, NetworkActivity, CredentialActivity;\nunion MDE_Results, SecEvent_Results\n| extend RiskScore = iif(CredentialActivity == true, 3, iif(NetworkActivity == true, 2, 1))\n| sort by RiskScore desc, EventTime desc\n",
+        "name": "WMI Spawning Suspicious Child Process (Living off the Land)",
+        "queryFrequency": "1h",
+        "description": "Detects WmiPrvSE.exe (the WMI Provider Host) spawning high-risk processes\nsuch as PowerShell, cmd.exe, cscript, or other LOLBins.\nWMI requires no external tools, generates minimal disk artifacts, and can\nexecute code on remote systems over DCOM/RPC while bypassing many controls.\nTune AllowlistedCmdPatterns for known-safe management tools such as SCCM.\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "NTDomain",
+                "columnName": "AccountDomain"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "CommandLine",
+                "columnName": "ChildCmdLine"
+              }
+            ],
+            "entityType": "Process"
+          }
+        ],
+        "status": "Available",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Execution",
+          "LateralMovement",
+          "Persistence"
+        ],
+        "queryPeriod": "1h"
+      }
+    }
+  ]
+}
