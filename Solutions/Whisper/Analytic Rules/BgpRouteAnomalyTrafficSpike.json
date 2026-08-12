@@ -14,43 +14,43 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "TrafficChange": "TrafficChange",
-          "Prefix": "Prefix",
-          "OriginASN": "OriginASN"
-        },
-        "name": "Whisper Security - BGP Route Anomaly with Traffic Spike",
         "severity": "High",
+        "queryPeriod": "1d",
+        "query": "// MITRE ATT&CK: T1557 - Adversary-in-the-Middle\n// Tactic: Collection\n// Detects BGP route origin changes correlated with traffic volume anomalies\nlet lookbackPeriod = 1d;\nlet bgpChanges = WhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where isnotempty(bgpOrigin)\n    | serialize\n    | extend PreviousOrigin = prev(bgpOrigin), PreviousIndicator = prev(indicator)\n    | where indicator == PreviousIndicator\n    | where bgpOrigin != PreviousOrigin\n    | where isnotempty(PreviousOrigin)\n    | project indicator, bgpPrefix, OldOrigin = PreviousOrigin, NewOrigin = bgpOrigin, ChangeTime = snapshotDate;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SentBytes:long, ReceivedBytes:long)[]);\nlet trafficBaseline = CommonSecurityLogSafe\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where isnotempty(DestinationIP)\n    | summarize BaselineBytes = avg(SentBytes + ReceivedBytes), BaselineCount = count() by DestinationIP, bin(TimeGenerated, 1h)\n    | summarize AvgBaselineBytes = avg(BaselineBytes), AvgBaselineCount = avg(BaselineCount) by DestinationIP;\nlet recentTraffic = CommonSecurityLogSafe\n    | where TimeGenerated > ago(15m)\n    | where isnotempty(DestinationIP)\n    | summarize RecentBytes = sum(SentBytes + ReceivedBytes), RecentCount = count() by DestinationIP;\nrecentTraffic\n    | join kind=inner (trafficBaseline) on DestinationIP\n    | where RecentBytes > AvgBaselineBytes * 3 or RecentCount > AvgBaselineCount * 3\n    | extend TrafficChange = iff(AvgBaselineBytes > 0, round((RecentBytes - AvgBaselineBytes) / AvgBaselineBytes * 100, 2), 0.0)\n    | join kind=inner (bgpChanges) on $left.DestinationIP == $right.indicator\n    | project TimeGenerated = ChangeTime, IPAddress = DestinationIP, Prefix = bgpPrefix, OriginASN = NewOrigin, OldOriginASN = OldOrigin, TrafficChange, RecentBytes, AvgBaselineBytes\n",
+        "status": "Available",
+        "name": "Whisper Security - BGP Route Anomaly with Traffic Spike",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "queryFrequency": "15m",
+        "customDetails": {
+          "TrafficChange": "TrafficChange",
+          "OriginASN": "OriginASN",
+          "Prefix": "Prefix"
+        },
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "triggerThreshold": 0,
+        "description": "Detects BGP origin AS changes for IP prefixes correlated with network traffic volume spikes. May indicate BGP hijacking or adversary-in-the-middle attacks.\n",
         "tactics": [
           "Collection"
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "enabled": true,
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
-        "queryPeriod": "1d",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
-        "description": "Detects BGP origin AS changes for IP prefixes correlated with network traffic volume spikes. May indicate BGP hijacking or adversary-in-the-middle attacks.\n",
-        "query": "// MITRE ATT&CK: T1557 - Adversary-in-the-Middle\n// Tactic: Collection\n// Detects BGP route origin changes correlated with traffic volume anomalies\nlet lookbackPeriod = 1d;\nlet bgpChanges = WhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where isnotempty(bgpOrigin)\n    | serialize\n    | extend PreviousOrigin = prev(bgpOrigin), PreviousIndicator = prev(indicator)\n    | where indicator == PreviousIndicator\n    | where bgpOrigin != PreviousOrigin\n    | where isnotempty(PreviousOrigin)\n    | project indicator, bgpPrefix, OldOrigin = PreviousOrigin, NewOrigin = bgpOrigin, ChangeTime = snapshotDate;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, SentBytes:long, ReceivedBytes:long)[]);\nlet trafficBaseline = CommonSecurityLogSafe\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where isnotempty(DestinationIP)\n    | summarize BaselineBytes = avg(SentBytes + ReceivedBytes), BaselineCount = count() by DestinationIP, bin(TimeGenerated, 1h)\n    | summarize AvgBaselineBytes = avg(BaselineBytes), AvgBaselineCount = avg(BaselineCount) by DestinationIP;\nlet recentTraffic = CommonSecurityLogSafe\n    | where TimeGenerated > ago(15m)\n    | where isnotempty(DestinationIP)\n    | summarize RecentBytes = sum(SentBytes + ReceivedBytes), RecentCount = count() by DestinationIP;\nrecentTraffic\n    | join kind=inner (trafficBaseline) on DestinationIP\n    | where RecentBytes > AvgBaselineBytes * 3 or RecentCount > AvgBaselineCount * 3\n    | extend TrafficChange = iff(AvgBaselineBytes > 0, round((RecentBytes - AvgBaselineBytes) / AvgBaselineBytes * 100, 2), 0.0)\n    | join kind=inner (bgpChanges) on $left.DestinationIP == $right.indicator\n    | project TimeGenerated = ChangeTime, IPAddress = DestinationIP, Prefix = bgpPrefix, OriginASN = NewOrigin, OldOriginASN = OldOrigin, TrafficChange, RecentBytes, AvgBaselineBytes\n",
-        "status": "Available",
-        "queryFrequency": "15m"
+        "triggerOperator": "gt"
       }
     }
   ]
