@@ -14,8 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "suppressionEnabled": true,
+        "suppressionDuration": "5m",
         "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{Description}} - {{name}} ",
           "alertDisplayNameFormat": "High-Confidence Command & Control Network Indicators with Monitor Recommendation Rule - {{name}} ",
           "alertDynamicProperties": [
             {
@@ -26,22 +27,50 @@
               "value": "ProviderName",
               "alertProperty": "ProviderName"
             }
-          ],
-          "alertDescriptionFormat": "{{Description}} - {{name}} "
+          ]
         },
-        "queryFrequency": "5m",
-        "queryPeriod": "5m",
+        "customDetails": {
+          "SecurityVendors": "SecurityVendors",
+          "Roles": "Roles",
+          "ConfidenceScore": "ConfidenceScore",
+          "Sources": "Sources",
+          "Country": "Country",
+          "IPAbuse": "IPAbuse",
+          "ThreatActors": "ThreatActors",
+          "ThreatType": "ThreatType",
+          "Created": "created",
+          "Description": "Description",
+          "TimeGenerated": "TimeGenerated",
+          "RecommendedActions": "RecommendedActions",
+          "Tags": "Tags",
+          "Modified": "modified",
+          "IndicatorID": "IndicatorID",
+          "ValidFrom": "valid_from"
+        },
+        "suppressionEnabled": true,
         "tactics": [
           "CommandAndControl",
           "InitialAccess",
           "Exfiltration"
         ],
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT5H",
+            "enabled": false,
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
+        "enabled": false,
+        "severity": "Medium",
+        "query": "// Network Indicators query with Monitor Recommended Action And C2 Roles\nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where  (ConfidenceScore < 80 and ConfidenceScore >= 50)\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Monitor' and (Roles contains 'c2' or Roles contains 'Command & Control')\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "IPv4",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPv4"
               }
             ],
             "entityType": "IP"
@@ -49,8 +78,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "IPv6",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "IPv6"
               }
             ],
             "entityType": "IP"
@@ -58,8 +87,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "Domain",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "Domain"
               }
             ],
             "entityType": "DNS"
@@ -67,51 +96,22 @@
           {
             "fieldMappings": [
               {
-                "columnName": "URL",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "URL"
               }
             ],
             "entityType": "URL"
           }
         ],
+        "description": "\"This analytics rule detects network-based indicators identified by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure.\nThese may represent attacker-controlled endpoints used to maintain persistence, exfiltrate data, or receive commands from malware-infected hosts.\"\n",
+        "name": "CYFIRMA - Medium severity Command & Control Network Indicators with Monitor Recommendation Rule",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "query": "// Network Indicators query with Monitor Recommended Action And C2 Roles\nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where  (ConfidenceScore < 80 and ConfidenceScore >= 50)\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Monitor' and (Roles contains 'c2' or Roles contains 'Command & Control')\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H",
-            "enabled": false,
-            "reopenClosedIncident": false
-          }
-        },
-        "enabled": false,
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "name": "CYFIRMA - Medium severity Command & Control Network Indicators with Monitor Recommendation Rule",
-        "description": "\"This analytics rule detects network-based indicators identified by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure.\nThese may represent attacker-controlled endpoints used to maintain persistence, exfiltrate data, or receive commands from malware-infected hosts.\"\n",
         "triggerOperator": "GreaterThan",
-        "suppressionDuration": "5m",
-        "customDetails": {
-          "ValidFrom": "valid_from",
-          "Country": "Country",
-          "Roles": "Roles",
-          "RecommendedActions": "RecommendedActions",
-          "Sources": "Sources",
-          "Modified": "modified",
-          "ThreatActors": "ThreatActors",
-          "IPAbuse": "IPAbuse",
-          "Description": "Description",
-          "SecurityVendors": "SecurityVendors",
-          "IndicatorID": "IndicatorID",
-          "Created": "created",
-          "Tags": "Tags",
-          "ConfidenceScore": "ConfidenceScore",
-          "TimeGenerated": "TimeGenerated",
-          "ThreatType": "ThreatType"
-        }
+        "queryFrequency": "5m",
+        "triggerThreshold": 0,
+        "queryPeriod": "5m"
       }
     }
   ]

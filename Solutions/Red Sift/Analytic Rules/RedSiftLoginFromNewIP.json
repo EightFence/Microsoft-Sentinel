@@ -14,14 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "suppressionEnabled": false,
+        "suppressionDuration": "PT1H",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "RedSift - New IP Login for {{UserEmail}}",
-          "alertDescriptionFormat": "User {{UserEmail}} logged in from a previously unseen IP address {{SrcIp}}."
+          "alertDescriptionFormat": "User {{UserEmail}} logged in from a previously unseen IP address {{SrcIp}}.",
+          "alertDisplayNameFormat": "RedSift - New IP Login for {{UserEmail}}"
         },
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
+        "customDetails": {
+          "ServiceName": "ServiceName",
+          "UserAgent": "HttpUserAgent"
+        },
+        "suppressionEnabled": false,
+        "status": "Available",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "Account"
+            ]
+          },
+          "createIncident": true
+        },
+        "severity": "Medium",
+        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalLogins = RedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| summarize by UserEmail, SrcIp;\nRedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    HttpUserAgent = tostring(column_ifexists(\"HttpUserAgent\", \"\")),\n    ServiceName = tostring(column_ifexists(\"ServiceName\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\"))\n| where TimeGenerated >= ago(recentWindow)\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| join kind=leftanti (historicalLogins) on UserEmail, SrcIp\n| project\n    TimeGenerated,\n    UserEmail,\n    SrcIp,\n    HttpUserAgent,\n    ServiceName,\n    ActivityName,\n    Severity\n",
         "tactics": [
           "InitialAccess"
         ],
@@ -29,8 +46,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "UserEmail",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserEmail"
               }
             ],
             "entityType": "Account"
@@ -38,39 +55,22 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SrcIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIp"
               }
             ],
             "entityType": "IP"
           }
         ],
-        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalLogins = RedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| summarize by UserEmail, SrcIp;\nRedSiftAuth_CL\n| extend\n    ActivityName = tostring(column_ifexists(\"ActivityName\", \"\")),\n    UserEmail = tostring(column_ifexists(\"UserEmail\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    HttpUserAgent = tostring(column_ifexists(\"HttpUserAgent\", \"\")),\n    ServiceName = tostring(column_ifexists(\"ServiceName\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\"))\n| where TimeGenerated >= ago(recentWindow)\n| where ActivityName has \"Logon\"\n| where isnotempty(UserEmail) and isnotempty(SrcIp)\n| join kind=leftanti (historicalLogins) on UserEmail, SrcIp\n| project\n    TimeGenerated,\n    UserEmail,\n    SrcIp,\n    HttpUserAgent,\n    ServiceName,\n    ActivityName,\n    Severity\n",
-        "status": "Available",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "lookbackDuration": "P1D",
-            "enabled": true,
-            "reopenClosedIncident": false
-          }
-        },
+        "description": "'Detects a successful login from an IP address that has not been seen in the previous 14 days for that user, which may indicate compromised credentials or unauthorized access.'\n",
+        "name": "Red Sift - Login from previously unseen IP address",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
         "triggerThreshold": 0,
-        "severity": "Medium",
-        "name": "Red Sift - Login from previously unseen IP address",
-        "description": "'Detects a successful login from an IP address that has not been seen in the previous 14 days for that user, which may indicate compromised credentials or unauthorized access.'\n",
-        "suppressionDuration": "PT1H",
-        "customDetails": {
-          "ServiceName": "ServiceName",
-          "UserAgent": "HttpUserAgent"
-        }
+        "queryPeriod": "14d"
       }
     }
   ]
