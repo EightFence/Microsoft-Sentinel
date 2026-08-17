@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "description": "'Identifies network sessions whose source IP addresses HoneyLabs honeypot telemetry has observed running exploit or loader commands. Uses the ASIM NetworkSession parser, so it works across any normalised network source (firewalls, VPN, cloud NSG flow logs) without requiring CEF. Only the structured source IP is matched; destination IPs are intentionally excluded. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'\n",
+        "name": "HoneyLabs TI Map IP Entity to Network Session (ASIM)",
         "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl"
-        ],
         "triggerOperator": "gt",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet HoneyLabs_IPs = ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where IsActive == true and ValidUntil > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n  | where SourceSystem startswith 'HoneyLabs'\n  | where ObservableKey == 'ipv4-addr:value'\n  | extend TI_ipEntity = tostring(ObservableValue),\n           HoneyLabsConfidence = Confidence,\n           IndicatorDescription = tostring(Data.description),\n           HoneyLabsReport = strcat('https://honeylabs.net/lookup/', tostring(ObservableValue));\nHoneyLabs_IPs\n| join kind=innerunique (\n    _Im_NetworkSession(starttime=ago(dt_lookBack))\n    | where isnotempty(SrcIpAddr)\n    | extend NS_ipEntity = SrcIpAddr\n    | extend NetworkSession_TimeGenerated = TimeGenerated\n) on $left.TI_ipEntity == $right.NS_ipEntity\n| where NetworkSession_TimeGenerated < ValidUntil\n| summarize NetworkSession_TimeGenerated = arg_max(NetworkSession_TimeGenerated, *) by Id, NS_ipEntity\n| project NetworkSession_TimeGenerated, IndicatorDescription, Id, ValidUntil, HoneyLabsConfidence,\n  HoneyLabsReport, TI_ipEntity, NS_ipEntity, SrcIpAddr, DstIpAddr, DstPortNumber, Dvc, EventResult\n| extend timestamp = NetworkSession_TimeGenerated\n",
+        "queryPeriod": "14d",
+        "description": "'Identifies network sessions whose source IP addresses HoneyLabs honeypot telemetry has observed running exploit or loader commands. Uses the ASIM NetworkSession parser, so it works across any normalised network source (firewalls, VPN, cloud NSG flow logs) without requiring CEF. Only the structured source IP is matched; destination IPs are intentionally excluded. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'\n",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "NS_ipEntity",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "NS_ipEntity"
               }
             ]
           }
         ],
-        "severity": "Medium",
-        "name": "HoneyLabs TI Map IP Entity to Network Session (ASIM)"
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "severity": "Medium"
       }
     }
   ]

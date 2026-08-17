@@ -14,34 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
-        "description": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a node may indicate routing-policy drift, data exfiltration, or compromise.",
-        "status": "Available",
+        "name": "Tailscale Premium: Unexpected exit-node egress",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "query": "let baseline = 7d;\nlet recent = 1h;\nlet recentEgress =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasExitTraffic\n    | mv-expand t = ExitTraffic\n    | extend Src = tostring(t.src), ExitDst = tostring(t.dst), Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize FirstSeen = min(TimeGenerated), TotalBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, Src, ExitDst;\nlet baselineEgress =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baseline + recent) .. ago(recent))\n    | where HasExitTraffic\n    | mv-expand t = ExitTraffic\n    | extend Src = tostring(t.src), ExitDst = tostring(t.dst)\n    | distinct NodeId, Src, ExitDst;\nrecentEgress\n| join kind=leftanti baselineEgress on NodeId, Src, ExitDst\n| extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)\n",
+        "queryPeriod": "1h",
         "incidentConfiguration": {
           "groupingConfiguration": {
-            "reopenClosedIncident": false,
             "enabled": true,
             "lookbackDuration": "PT5H",
-            "matchingMethod": "AllEntities"
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
           },
           "createIncident": true
         },
-        "queryFrequency": "1h",
-        "queryPeriod": "1h",
-        "tactics": [
-          "CommandAndControl",
-          "Exfiltration"
-        ],
-        "triggerOperator": "gt",
-        "description-detailed": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a specific source may indicate unsanctioned egress, a compromised node pivoting, or a policy misconfiguration. Requires Tailscale Premium or Enterprise.\n",
-        "query": "let baseline = 7d;\nlet recent = 1h;\nlet recentEgress =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasExitTraffic\n    | mv-expand t = ExitTraffic\n    | extend Src = tostring(t.src), ExitDst = tostring(t.dst), Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize FirstSeen = min(TimeGenerated), TotalBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, Src, ExitDst;\nlet baselineEgress =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baseline + recent) .. ago(recent))\n    | where HasExitTraffic\n    | mv-expand t = ExitTraffic\n    | extend Src = tostring(t.src), ExitDst = tostring(t.dst)\n    | distinct NodeId, Src, ExitDst;\nrecentEgress\n| join kind=leftanti baselineEgress on NodeId, Src, ExitDst\n| extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)\n",
+        "status": "Available",
+        "description": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a node may indicate routing-policy drift, data exfiltration, or compromise.",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "SrcNodeName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SrcNodeName"
               }
             ]
           },
@@ -49,8 +45,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "SrcUser",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "SrcUser"
               }
             ]
           },
@@ -58,14 +54,18 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "Src",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "Src"
               }
             ]
           }
         ],
+        "tactics": [
+          "CommandAndControl",
+          "Exfiltration"
+        ],
         "severity": "Medium",
-        "name": "Tailscale Premium: Unexpected exit-node egress"
+        "description-detailed": "Identifies when a node sends traffic via an exit node not used in the prior 7-day baseline. First-seen exit destinations from a specific source may indicate unsanctioned egress, a compromised node pivoting, or a policy misconfiguration. Requires Tailscale Premium or Enterprise.\n"
       }
     }
   ]
