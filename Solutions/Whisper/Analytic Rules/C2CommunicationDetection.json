@@ -14,15 +14,31 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "name": "Whisper Security - C2 Communication Detection",
+        "status": "Available",
+        "severity": "High",
+        "queryPeriod": "1h",
         "tactics": [
           "CommandAndControl"
         ],
+        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
+        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "SourceIP"
+                "columnName": "SourceIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -30,8 +46,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "DestinationIP"
+                "columnName": "DestinationIP",
+                "identifier": "Address"
               }
             ],
             "entityType": "IP"
@@ -39,36 +55,20 @@
           {
             "fieldMappings": [
               {
-                "identifier": "DomainName",
-                "columnName": "DnsDomain"
+                "columnName": "DnsDomain",
+                "identifier": "DomainName"
               }
             ],
             "entityType": "DNS"
           }
         ],
-        "triggerOperator": "gt",
-        "name": "Whisper Security - C2 Communication Detection",
-        "queryPeriod": "1h",
-        "status": "Available",
         "customDetails": {
-          "FeedNames": "feedNames",
           "ThreatLevel": "threatLevel",
+          "FeedNames": "feedNames",
           "ThreatScore": "threatScore"
         },
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "lookbackDuration": "PT5H"
-          }
-        },
-        "severity": "High",
-        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
-        "queryFrequency": "5m",
-        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
-        "triggerThreshold": 0
+        "triggerThreshold": 0,
+        "queryFrequency": "5m"
       }
     }
   ]
