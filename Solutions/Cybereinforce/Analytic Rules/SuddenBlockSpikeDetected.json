@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fbbf3418-f1d8-4bd5-b7da-137a70af6bce')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fbbf3418-f1d8-4bd5-b7da-137a70af6bce')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "queryFrequency": "10m",
+        "name": "CTE - Sudden Block Spike Detected",
+        "description": "A sudden spike in blocked URLs/domains on a single device may indicate an active phishing or malware campaign.\n",
+        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| extend d = parse_json(Details)\n| extend\n    DeviceId = tostring(d.deviceId),\n    HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat(\"cte-device-\", substring(EntityId, 0, 8))),\n    DeviceUser = tostring(d.deviceUser),\n    DeviceOs = tostring(d.deviceOs),\n    DeviceVersion = tostring(d.deviceVersion),\n    RuleId = tostring(d.ruleId),\n    RuleName = iff(isnotempty(tostring(d.ruleName)), tostring(d.ruleName), \"Pattern Match\"),\n    Pattern = tostring(d.pattern),\n    Url = tostring(d.url),\n    Action = tostring(d.action),\n    IsIoc = tobool(d.ioc),\n    ClientIp = tostring(split(tostring(d.clientIp), \":\")[0]),\n    ClientPort = tostring(split(tostring(d.clientIp), \":\")[1]),\n    UserAgent = tostring(d.userAgent)\n| summarize BlockCount=count(), SampleUrls=make_set(Url, 20), SampleIps=make_set(ClientIp, 20), LastHit=max(TimeGenerated) by bin(TimeGenerated, 10m), HostName, DeviceId, DeviceUser, DeviceOs, TenantId\n| where BlockCount >= 15\n| extend Url = tostring(SampleUrls[0]), ClientIp = tostring(SampleIps[0])\n",
+        "severity": "High",
+        "queryPeriod": "10m",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostName",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "Url",
+                "identifier": "Url"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "ClientIp",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0
+      }
+    }
+  ]
+}
