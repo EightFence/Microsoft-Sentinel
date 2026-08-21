@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a7c3f9e2-4d18-4b6a-9f0c-2e5d8b1a6c43')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a7c3f9e2-4d18-4b6a-9f0c-2e5d8b1a6c43')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "suppressionDuration": "1h",
+        "queryFrequency": "1h",
+        "name": "Speculus - Network traffic to or from high-risk IP indicator",
+        "status": "Available",
+        "customDetails": {
+          "Labels": "Labels",
+          "Attribution": "Attribution",
+          "RiskScore": "RiskScore"
+        },
+        "triggerOperator": "gt",
+        "description": "'Matches network events in CommonSecurityLog against high-risk Speculus IP indicators (risk score >= 75)\nreceived in the last 14 days. These IPs are associated with malicious activity such as command and control,\nbotnets, ransomware infrastructure, or brute-force campaigns.'\n",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "MatchIP"
+              }
+            ]
+          }
+        ],
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "1d",
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "IP"
+            ],
+            "matchingMethod": "Selected",
+            "enabled": true
+          }
+        },
+        "query": "let indicators = Speculus_Indicators_CL\n    | where TimeGenerated > ago(14d)\n    | where isnotempty(IndicatorValue)\n    | where RiskScore >= 75\n    | summarize arg_max(Modified, *) by IndicatorValue\n    | project\n        IndicatorValue,\n        RiskScore,\n        SpeculusActivity = Activity,\n        Attribution,\n        Labels,\n        IndicatorDescription = Description;\nCommonSecurityLog\n| where TimeGenerated > ago(1h)\n| where isnotempty(SourceIP) or isnotempty(DestinationIP)\n| extend MatchIP = iff(isnotempty(DestinationIP), DestinationIP, SourceIP)\n| join kind=inner indicators on $left.MatchIP == $right.IndicatorValue\n| project\n    TimeGenerated,\n    MatchIP,\n    SourceIP,\n    DestinationIP,\n    DeviceVendor,\n    DeviceProduct,\n    RiskScore,\n    SpeculusActivity,\n    Attribution,\n    Labels,\n    IndicatorDescription\n",
+        "triggerThreshold": 0,
+        "suppressionEnabled": false,
+        "severity": "High",
+        "tactics": [
+          "CommandAndControl",
+          "InitialAccess"
+        ],
+        "queryPeriod": "14d"
+      }
+    }
+  ]
+}

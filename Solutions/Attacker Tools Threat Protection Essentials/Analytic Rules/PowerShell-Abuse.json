@@ -16,22 +16,16 @@
       "properties": {
         "queryFrequency": "1h",
         "name": "PowerShell Encoded Command Execution (Living off the Land)",
-        "description": "Detects PowerShell or pwsh.exe launched with encoded command flags\n(-EncodedCommand, -enc, -ec, -enco). Attackers encode commands in Base64\nto obfuscate malicious payloads and bypass script-based controls.\nRisk is elevated when a download cradle pattern is also detected.\nTune AllowlistedParents for known-safe management tools such as SCCM.\n",
-        "severity": "Medium",
-        "queryPeriod": "1h",
-        "tactics": [
-          "Execution",
-          "DefenseEvasion"
-        ],
+        "status": "Available",
         "triggerOperator": "gt",
-        "query": "let Lookback = 1h;\nlet EncodedFlagRegex = @'(?i)(^|\\s)-(encodedcommand|enc|ec|enco)\\b';\nlet AllowlistedParents = dynamic([\n  \"SqlServer.exe\", \"ManagementStudio.exe\", \"devenv.exe\",\n  \"ccmexec.exe\", \"SMSAgent.exe\"\n]);\nlet DownloadCradlePatterns = dynamic([\n  \"Net.WebClient\", \"WebRequest\", \"DownloadString\", \"DownloadFile\",\n  \"IEX\", \"Invoke-Expression\", \"Invoke-RestMethod\", \"Start-BitsTransfer\"\n]);\nlet MDE_Results =\n  DeviceProcessEvents\n  | where Timestamp >= ago(Lookback)\n  | where FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n  | where ProcessCommandLine matches regex EncodedFlagRegex\n  | where not(InitiatingProcessFileName has_any (AllowlistedParents))\n  | extend\n      HasDownloadCradle = ProcessCommandLine has_any (DownloadCradlePatterns),\n      AccountName       = InitiatingProcessAccountName,\n      AccountDomain     = InitiatingProcessAccountDomain,\n      HostName          = DeviceName,\n      EventTime         = Timestamp\n  | project EventTime, HostName, AccountName, AccountDomain,\n      ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;\nlet SecEvent_Results =\n  SecurityEvent\n  | where TimeGenerated >= ago(Lookback)\n  | where EventID == 4688\n  | where NewProcessName endswith \"\\\\powershell.exe\"\n      or NewProcessName endswith \"\\\\pwsh.exe\"\n  | where CommandLine matches regex EncodedFlagRegex\n  | where not(ParentProcessName has_any (AllowlistedParents))\n  | extend\n      HasDownloadCradle     = CommandLine has_any (DownloadCradlePatterns),\n      AccountName           = SubjectUserName,\n      AccountDomain         = SubjectDomainName,\n      HostName              = Computer,\n      EventTime             = TimeGenerated,\n      ProcessCommandLine    = CommandLine,\n      InitiatingProcessFileName = ParentProcessName\n  | project EventTime, HostName, AccountName, AccountDomain,\n      ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;\nunion MDE_Results, SecEvent_Results\n| extend RiskScore = iif(HasDownloadCradle, 2, 1)\n| sort by RiskScore desc, EventTime desc\n",
+        "description": "Detects PowerShell or pwsh.exe launched with encoded command flags\n(-EncodedCommand, -enc, -ec, -enco). Attackers encode commands in Base64\nto obfuscate malicious payloads and bypass script-based controls.\nRisk is elevated when a download cradle pattern is also detected.\nTune AllowlistedParents for known-safe management tools such as SCCM.\n",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "HostName",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "HostName"
               }
             ]
           },
@@ -39,12 +33,12 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "AccountDomain",
-                "identifier": "NTDomain"
+                "identifier": "NTDomain",
+                "columnName": "AccountDomain"
               }
             ]
           },
@@ -52,14 +46,20 @@
             "entityType": "Process",
             "fieldMappings": [
               {
-                "columnName": "ProcessCommandLine",
-                "identifier": "CommandLine"
+                "identifier": "CommandLine",
+                "columnName": "ProcessCommandLine"
               }
             ]
           }
         ],
-        "status": "Available",
-        "triggerThreshold": 0
+        "query": "let Lookback = 1h;\nlet EncodedFlagRegex = @'(?i)(^|\\s)-(encodedcommand|enc|ec|enco)\\b';\nlet AllowlistedParents = dynamic([\n  \"SqlServer.exe\", \"ManagementStudio.exe\", \"devenv.exe\",\n  \"ccmexec.exe\", \"SMSAgent.exe\"\n]);\nlet DownloadCradlePatterns = dynamic([\n  \"Net.WebClient\", \"WebRequest\", \"DownloadString\", \"DownloadFile\",\n  \"IEX\", \"Invoke-Expression\", \"Invoke-RestMethod\", \"Start-BitsTransfer\"\n]);\nlet MDE_Results =\n  DeviceProcessEvents\n  | where Timestamp >= ago(Lookback)\n  | where FileName in~ (\"powershell.exe\", \"pwsh.exe\")\n  | where ProcessCommandLine matches regex EncodedFlagRegex\n  | where not(InitiatingProcessFileName has_any (AllowlistedParents))\n  | extend\n      HasDownloadCradle = ProcessCommandLine has_any (DownloadCradlePatterns),\n      AccountName       = InitiatingProcessAccountName,\n      AccountDomain     = InitiatingProcessAccountDomain,\n      HostName          = DeviceName,\n      EventTime         = Timestamp\n  | project EventTime, HostName, AccountName, AccountDomain,\n      ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;\nlet SecEvent_Results =\n  SecurityEvent\n  | where TimeGenerated >= ago(Lookback)\n  | where EventID == 4688\n  | where NewProcessName endswith \"\\\\powershell.exe\"\n      or NewProcessName endswith \"\\\\pwsh.exe\"\n  | where CommandLine matches regex EncodedFlagRegex\n  | where not(ParentProcessName has_any (AllowlistedParents))\n  | extend\n      HasDownloadCradle     = CommandLine has_any (DownloadCradlePatterns),\n      AccountName           = SubjectUserName,\n      AccountDomain         = SubjectDomainName,\n      HostName              = Computer,\n      EventTime             = TimeGenerated,\n      ProcessCommandLine    = CommandLine,\n      InitiatingProcessFileName = ParentProcessName\n  | project EventTime, HostName, AccountName, AccountDomain,\n      ProcessCommandLine, InitiatingProcessFileName, HasDownloadCradle;\nunion MDE_Results, SecEvent_Results\n| extend RiskScore = iif(HasDownloadCradle, 2, 1)\n| sort by RiskScore desc, EventTime desc\n",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "tactics": [
+          "Execution",
+          "DefenseEvasion"
+        ],
+        "queryPeriod": "1h"
       }
     }
   ]
