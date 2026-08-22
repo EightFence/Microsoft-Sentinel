@@ -14,21 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "subTechniques": [
-          "T1590.005"
-        ],
-        "queryFrequency": "1h",
-        "name": "UniFi Site Manager: External WAN IP changed",
-        "status": "Available",
-        "triggerOperator": "gt",
         "description": "Identifies when a site reports more than one distinct WAN external IP within an hour, which may indicate ISP DHCP refresh, WAN reconfiguration, or routing hijack.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Reconnaissance"
+        ],
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "CurrentIp"
+                "columnName": "CurrentIp",
+                "identifier": "Address"
               }
             ]
           },
@@ -36,28 +34,30 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "SiteName"
+                "columnName": "SiteName",
+                "identifier": "HostName"
               }
             ]
           }
         ],
+        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(1h)\n      | extend SiteName = tostring(Meta.name),\n               currentIp = tostring(SiteStatistics.wans.WAN.externalIp)\n      | where isnotempty(currentIp)\n      | summarize DistinctIps = make_set(currentIp), arg_max(TimeGenerated, currentIp) by SiteId, SiteName\n      | where array_length(DistinctIps) > 1\n      | extend Activity = strcat('WAN IP changed; observed: ', tostring(DistinctIps))\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentIp = currentIp, ObservedIps = DistinctIps\n",
+        "name": "UniFi Site Manager: External WAN IP changed",
+        "subTechniques": [
+          "T1590.005"
+        ],
+        "severity": "High",
+        "queryPeriod": "1h",
+        "status": "Available",
+        "queryFrequency": "1h",
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
             "reopenClosedIncident": false,
             "matchingMethod": "AllEntities",
-            "enabled": true
-          }
-        },
-        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(1h)\n      | extend SiteName = tostring(Meta.name),\n               currentIp = tostring(SiteStatistics.wans.WAN.externalIp)\n      | where isnotempty(currentIp)\n      | summarize DistinctIps = make_set(currentIp), arg_max(TimeGenerated, currentIp) by SiteId, SiteName\n      | where array_length(DistinctIps) > 1\n      | extend Activity = strcat('WAN IP changed; observed: ', tostring(DistinctIps))\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentIp = currentIp, ObservedIps = DistinctIps\n",
-        "triggerThreshold": 0,
-        "severity": "High",
-        "tactics": [
-          "Reconnaissance"
-        ],
-        "queryPeriod": "1h"
+            "enabled": true,
+            "lookbackDuration": "PT5H"
+          },
+          "createIncident": true
+        }
       }
     }
   ]

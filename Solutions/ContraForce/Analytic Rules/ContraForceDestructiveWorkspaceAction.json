@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c5e9a1d7-4b2f-4e6c-8a9d-7f3b1c5e2a84')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c5e9a1d7-4b2f-4e6c-8a9d-7f3b1c5e2a84')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "description": "'Identifies destructive actions against the ContraForce workspace or its account: workspace\ndeletion, account deactivation, and account purge. These actions terminate or remove the\nsecurity service delivery for the affected workspace and should always correspond to a\nplanned offboarding; anything else warrants immediate investigation.'\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "query": "ContraForceEvents_CL\n| where ingestion_time() > ago(5m)\n| where ActivityType in (\"WorkspaceDeleted\", \"AccountDeactivated\", \"AccountPurged\")\n| extend Meta = parse_json(Metadata)\n| project TimeGenerated, EventId, CfWorkspaceId, ActivityType, ActivityAction,\n          ActorName, ActorEmail, TargetResourceType, TargetResourceId, TargetResourceName, Metadata\n",
+        "name": "ContraForce - Destructive workspace action",
+        "customDetails": {
+          "CfWorkspaceId": "CfWorkspaceId",
+          "TargetResourceId": "TargetResourceId",
+          "EventId": "EventId",
+          "ActorEmail": "ActorEmail"
+        },
+        "severity": "High",
+        "queryPeriod": "1d",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "ContraForce destructive action: {{ActivityType}} on {{TargetResourceName}}",
+          "alertDescriptionFormat": "{{ActorName}} performed {{ActivityType}} on {{TargetResourceName}}."
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryFrequency": "5m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "groupByCustomDetails": [
+              "EventId"
+            ],
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected",
+            "enabled": true,
+            "lookbackDuration": "PT2H"
+          },
+          "createIncident": true
+        }
+      }
+    }
+  ]
+}

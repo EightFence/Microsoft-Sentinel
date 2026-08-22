@@ -14,36 +14,19 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "5m",
-        "name": "PROD (TM016.1) - GROUP - Added to Well-Known or Tier Model Group",
-        "status": "Available",
-        "customDetails": {
-          "OperationType": "OperationType",
-          "ActivityType": "ActivityType",
-          "GroupTier": "GroupTier",
-          "Computer": "Computer",
-          "Domain": "Domain",
-          "EventID": "EventID",
-          "Channel": "Channel",
-          "EventData": "EventData",
-          "ObjectName": "ObjectName",
-          "GroupName": "GroupName",
-          "ObjectTier": "ObjectTier",
-          "ObjectType": "ObjectType",
-          "Account": "Account"
-        },
-        "triggerOperator": "gt",
         "description": "Well-Known Groups are classified as Tier 0, and Tier Model groups that provide permission over Tier Model objects.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "ObjectName"
+                "columnName": "ObjectName",
+                "identifier": "FullName"
               }
             ]
           },
@@ -51,8 +34,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "HostName"
               }
             ]
           },
@@ -60,32 +43,49 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Account"
+                "columnName": "Account",
+                "identifier": "FullName"
               }
             ]
           }
         ],
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "enabled": false
-          }
-        },
         "query": "let adminGroups = dynamic([\n    \"CN=Domain Admins,CN=Users\",\n    \"CN=Enterprise Admins,CN=Users\",\n    \"CN=Administrators,CN=Builtin\",\n    \"CN=Cert Publishers,CN=Users\",\n    \"CN=Cloneable Domain Controllers,CN=Users\",\n    \"CN=Denied RODC Password Replication Group,CN=Users\",\n    \"CN=DnsAdmins,CN=Users\",\n    \"CN=DnsUpdateProxy,CN=Users\",\n    \"CN=Domain Controllers,CN=Users\",\n    \"CN=Domain Guests,CN=Users\",\n    \"CN=Enterprise Key Admins,CN=Users\",\n    \"CN=Enterprise Read-only Domain Controllers,CN=Users\",\n    \"CN=External Trust Accounts,CN=Users\",\n    \"CN=Forest Trust Accounts,CN=Users\",\n    \"CN=Group Policy Creator Owners,CN=Users\",\n    \"CN=Key Admins,CN=Users\",\n    \"CN=RAS and IAS Servers,CN=Users\",\n    \"CN=Read-only Domain Controllers,CN=Users\",\n    \"CN=Schema Admins,CN=Users\",\n    \"CN=Access Control Assistance Operators,CN=Builtin\",\n    \"CN=Account Operators,CN=Builtin\",\n    \"CN=Backup Operators,CN=Builtin\",\n    \"CN=Certificate Service DCOM Access,CN=Builtin\",\n    \"CN=Cryptographic Operators,CN=Builtin\",\n    \"CN=Distributed COM Users,CN=Builtin\",\n    \"CN=Event Log Readers,CN=Builtin\",\n    \"CN=Guests,CN=Builtin\",\n    \"CN=Hyper-V Administrators,CN=Builtin\",\n    \"CN=IIS_IUSRS,CN=Builtin\",\n    \"CN=Incoming Forest Trust Builders,CN=Builtin\",\n    \"CN=Network Configuration Operators,CN=Builtin\",\n    \"CN=OpenSSH Users,CN=Builtin\",\n    \"CN=Performance Log Users,CN=Builtin\",\n    \"CN=Performance Monitor Users,CN=Builtin\",\n    \"CN=Pre-Windows 2000 Compatible Access,CN=Builtin\",\n    \"CN=Print Operators,CN=Builtin\",\n    \"CN=RDS Endpoint Servers,CN=Builtin\",\n    \"CN=RDS Management Servers,CN=Builtin\",\n    \"CN=RDS Remote Access Servers,CN=Builtin\",\n    \"CN=Remote Desktop Users,CN=Builtin\",\n    \"CN=Remote Management Users,CN=Builtin\",\n    \"CN=Replicator,CN=Builtin\",\n    \"CN=Server Operators,CN=Builtin\",\n    \"CN=Storage Replica Administrators,CN=Builtin\",\n    \"CN=Terminal Server License Servers,CN=Builtin\",\n    \"CN=Users,CN=Builtin\",\n    \"CN=Windows Authorization Access Group,CN=Builtin\",\n    \"CN=Tier 0 Admins,OU=Tier 0 Groups,OU=Tier 0,OU=Tier Model Administration\",\n    \"CN=Tier 0 Server Operators,OU=Tier 0 Groups,OU=Tier 0,OU=Tier Model Administration\",\n    \"CN=Tier 1 Admins,OU=Tier 1 Groups,OU=Tier 1,OU=Tier Model Administration\",\n    \"CN=Tier 1 Server Operators,OU=Tier 1 Groups,OU=Tier 1,OU=Tier Model Administration\",\n    \"CN=Tier 2 Admins,OU=Tier 2 Groups,OU=Tier 2,OU=Tier Model Administration\"\n]);\nSecurityEvent\n| where EventID == 5136\n| extend EventData = tostring(EventData)\n| where EventData has_any(adminGroups)\n    and EventData has '\"AttributeLDAPDisplayName\">member'\n    and EventData has 'OperationType\">%%14674'\n| extend GroupName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend GroupName = extract(\"(?i)CN=([^,]+)\", 1, GroupName_e)\n| extend GroupTier = case(\n    GroupName has \"Tier 0\", \"Tier 0\",\n    GroupName has \"Tier 1\", \"Tier 1\",\n    GroupName has \"Tier 2\", \"Tier 2\",\n    \"Tier 0\")\n| extend ObjectName_e = extract(\"<Data Name=\\\"AttributeValue\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectName_e)\n| extend ObjectTier = case(\n    ObjectName_e has \"Tier 0\", \"Tier 0\",\n    ObjectName_e has \"Tier 1\", \"Tier 1\",\n    ObjectName_e has \"Tier 2\", \"Tier 2\",\n    \"Outside Tier Model\")\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend SubjectUserName = extract(\"<Data Name=\\\"SubjectUserName\\\">([^<]+)</Data>\", 1, EventData)\n| extend SubjectDomainName = extract(\"<Data Name=\\\"SubjectDomainName\\\">([^<]+)</Data>\", 1, EventData)\n| extend Account = strcat(SubjectDomainName, \"\\\\\", SubjectUserName)\n| extend OperationType = iff(EventData has 'OperationType\">%%14674', \"Added\", tostring(OperationType))\n| project TimeGenerated \n        , ObjectName\n        , ObjectTier\n        , ObjectType = AccountType\n        , GroupName\n        , GroupTier\n        , ActivityType\n        , OperationType\n        , Account\n        , Domain\n        , Computer\n        , Channel\n        , EventID\n        , EventData\n",
-        "triggerThreshold": 0,
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "The following object {{ObjectName}} was added to a {{ObjectTier}}  Well-Known or Tier Model high privilege group.",
-          "alertDisplayNameFormat": "(TM016.1) A member was added to {{GroupName}} which is a Well-Known or Tier Model Group"
+        "name": "PROD (TM016.1) - GROUP - Added to Well-Known or Tier Model Group",
+        "customDetails": {
+          "ActivityType": "ActivityType",
+          "EventID": "EventID",
+          "GroupName": "GroupName",
+          "ObjectName": "ObjectName",
+          "OperationType": "OperationType",
+          "Computer": "Computer",
+          "Domain": "Domain",
+          "Channel": "Channel",
+          "EventData": "EventData",
+          "ObjectType": "ObjectType",
+          "Account": "Account",
+          "GroupTier": "GroupTier",
+          "ObjectTier": "ObjectTier"
         },
         "severity": "High",
-        "tactics": [
-          "PrivilegeEscalation"
-        ],
-        "queryPeriod": "5m"
+        "queryPeriod": "5m",
+        "status": "Available",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "(TM016.1) A member was added to {{GroupName}} which is a Well-Known or Tier Model Group",
+          "alertDescriptionFormat": "The following object {{ObjectName}} was added to a {{ObjectTier}}  Well-Known or Tier Model high privilege group."
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryFrequency": "5m",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "AllEntities",
+            "enabled": false,
+            "lookbackDuration": "PT5H"
+          },
+          "createIncident": true
+        }
       }
     }
   ]

@@ -14,27 +14,20 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "suppressionDuration": "1h",
-        "queryFrequency": "1h",
-        "name": "Speculus - Sign-in attempt from high-risk IP indicator",
-        "status": "Available",
-        "customDetails": {
-          "Labels": "Labels",
-          "Attribution": "Attribution",
-          "RiskScore": "RiskScore"
-        },
-        "triggerOperator": "gt",
         "description": "'Matches Microsoft Entra ID sign-in attempts against high-risk Speculus IP indicators (risk score >= 75)\nreceived in the last 14 days. A sign-in from a known C2, botnet, or brute-force source IP may indicate\ncredential theft or account takeover.'\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess",
+          "CredentialAccess"
+        ],
         "entityMappings": [
           {
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "IPAddress"
+                "columnName": "IPAddress",
+                "identifier": "Address"
               }
             ]
           },
@@ -42,34 +35,41 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "UserPrincipalName"
+                "columnName": "UserPrincipalName",
+                "identifier": "FullName"
               }
             ]
           }
         ],
+        "query": "let indicators = Speculus_Indicators_CL\n    | where TimeGenerated > ago(14d)\n    | where isnotempty(IndicatorValue)\n    | where RiskScore >= 75\n    | summarize arg_max(Modified, *) by IndicatorValue\n    | project\n        IndicatorValue,\n        RiskScore,\n        SpeculusActivity = Activity,\n        Attribution,\n        Labels,\n        IndicatorDescription = Description;\nSigninLogs\n| where TimeGenerated > ago(1h)\n| where isnotempty(IPAddress)\n| join kind=inner indicators on $left.IPAddress == $right.IndicatorValue\n| project\n    TimeGenerated,\n    IPAddress,\n    UserPrincipalName,\n    UserDisplayName,\n    AppDisplayName,\n    ResultType,\n    ResultDescription,\n    RiskScore,\n    SpeculusActivity,\n    Attribution,\n    Labels,\n    IndicatorDescription\n",
+        "name": "Speculus - Sign-in attempt from high-risk IP indicator",
+        "customDetails": {
+          "Labels": "Labels",
+          "RiskScore": "RiskScore",
+          "Attribution": "Attribution"
+        },
+        "severity": "High",
+        "queryPeriod": "14d",
+        "status": "Available",
+        "suppressionEnabled": false,
+        "queryFrequency": "1h",
+        "suppressionDuration": "1h",
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
-            "lookbackDuration": "1d",
             "reopenClosedIncident": false,
             "groupByEntities": [
               "Account",
               "IP"
             ],
             "matchingMethod": "Selected",
-            "enabled": true
-          }
+            "enabled": true,
+            "lookbackDuration": "1d"
+          },
+          "createIncident": true
         },
-        "query": "let indicators = Speculus_Indicators_CL\n    | where TimeGenerated > ago(14d)\n    | where isnotempty(IndicatorValue)\n    | where RiskScore >= 75\n    | summarize arg_max(Modified, *) by IndicatorValue\n    | project\n        IndicatorValue,\n        RiskScore,\n        SpeculusActivity = Activity,\n        Attribution,\n        Labels,\n        IndicatorDescription = Description;\nSigninLogs\n| where TimeGenerated > ago(1h)\n| where isnotempty(IPAddress)\n| join kind=inner indicators on $left.IPAddress == $right.IndicatorValue\n| project\n    TimeGenerated,\n    IPAddress,\n    UserPrincipalName,\n    UserDisplayName,\n    AppDisplayName,\n    ResultType,\n    ResultDescription,\n    RiskScore,\n    SpeculusActivity,\n    Attribution,\n    Labels,\n    IndicatorDescription\n",
-        "triggerThreshold": 0,
-        "suppressionEnabled": false,
-        "severity": "High",
-        "tactics": [
-          "InitialAccess",
-          "CredentialAccess"
-        ],
-        "queryPeriod": "14d"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        }
       }
     }
   ]
