@@ -14,6 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet HoneyLabs_URLs = ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where IsActive == true and ValidUntil > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n  | where SourceSystem startswith 'HoneyLabs'\n  | where ObservableKey == 'url:value'\n  | extend TI_urlEntity = tostring(ObservableValue),\n           HoneyLabsConfidence = Confidence,\n           IndicatorDescription = tostring(Data.description);\nHoneyLabs_URLs\n| join kind=innerunique (\n    CommonSecurityLog\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(RequestURL)\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.TI_urlEntity == $right.RequestURL\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, TI_urlEntity\n| project CommonSecurityLog_TimeGenerated, IndicatorDescription, Id, ValidUntil,\n  HoneyLabsConfidence, TI_urlEntity, SourceIP, DestinationIP, DeviceName, DeviceAction,\n  SourceUserName, RequestClientApplication\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
+        "tactics": [
+          "CommandAndControl",
+          "Execution"
+        ],
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "queryPeriod": "14d",
+        "severity": "High",
+        "queryFrequency": "1h",
+        "name": "HoneyLabs TI Map URL Entity to CommonSecurityLog",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -34,18 +45,7 @@
             "entityType": "IP"
           }
         ],
-        "tactics": [
-          "CommandAndControl",
-          "Execution"
-        ],
-        "triggerOperator": "gt",
-        "triggerThreshold": 0,
-        "description": "'Identifies requests in CommonSecurityLog to malware loader or command-and-control URLs that HoneyLabs pulled out of payloads captured by its honeypot sensors. A hit usually means a host inside your estate reached out to attacker-controlled infrastructure, so treat it as post-compromise until proven otherwise. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'\n",
-        "queryPeriod": "14d",
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet HoneyLabs_URLs = ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where IsActive == true and ValidUntil > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n  | where SourceSystem startswith 'HoneyLabs'\n  | where ObservableKey == 'url:value'\n  | extend TI_urlEntity = tostring(ObservableValue),\n           HoneyLabsConfidence = Confidence,\n           IndicatorDescription = tostring(Data.description);\nHoneyLabs_URLs\n| join kind=innerunique (\n    CommonSecurityLog\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(RequestURL)\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.TI_urlEntity == $right.RequestURL\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, TI_urlEntity\n| project CommonSecurityLog_TimeGenerated, IndicatorDescription, Id, ValidUntil,\n  HoneyLabsConfidence, TI_urlEntity, SourceIP, DestinationIP, DeviceName, DeviceAction,\n  SourceUserName, RequestClientApplication\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
-        "severity": "High",
-        "queryFrequency": "1h",
-        "name": "HoneyLabs TI Map URL Entity to CommonSecurityLog"
+        "description": "'Identifies requests in CommonSecurityLog to malware loader or command-and-control URLs that HoneyLabs pulled out of payloads captured by its honeypot sensors. A hit usually means a host inside your estate reached out to attacker-controlled infrastructure, so treat it as post-compromise until proven otherwise. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'\n"
       }
     }
   ]
