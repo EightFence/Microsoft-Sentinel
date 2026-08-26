@@ -14,10 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "severity": "High",
+        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| extend d = parse_json(Details)\n| extend\n    DeviceId = tostring(d.deviceId),\n    HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat(\"cte-device-\", substring(EntityId, 0, 8))),\n    Pattern = tostring(d.pattern),\n    Url = tostring(d.url),\n    IsIoc = tobool(d.ioc),\n    ClientIp = tostring(split(tostring(d.clientIp), \":\")[0])\n| summarize DeviceCount=dcount(DeviceId), AffectedHosts=make_set(HostName, 50), SampleIps=make_set(ClientIp, 20), AnyIoc=max(IsIoc), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Pattern, Url, TenantId\n| where DeviceCount >= 3\n| extend ClientIp = tostring(SampleIps[0])\n",
         "tactics": [
           "CommandAndControl",
           "LateralMovement"
         ],
+        "queryFrequency": "30m",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -38,13 +41,10 @@
             "entityType": "IP"
           }
         ],
-        "query": "CybereinforceCTE_CL\n| where EventType == \"block.url\"\n| extend d = parse_json(Details)\n| extend\n    DeviceId = tostring(d.deviceId),\n    HostName = iff(isnotempty(tostring(d.hostname)), tostring(d.hostname), strcat(\"cte-device-\", substring(EntityId, 0, 8))),\n    Pattern = tostring(d.pattern),\n    Url = tostring(d.url),\n    IsIoc = tobool(d.ioc),\n    ClientIp = tostring(split(tostring(d.clientIp), \":\")[0])\n| summarize DeviceCount=dcount(DeviceId), AffectedHosts=make_set(HostName, 50), SampleIps=make_set(ClientIp, 20), AnyIoc=max(IsIoc), FirstSeen=min(TimeGenerated), LastSeen=max(TimeGenerated) by Pattern, Url, TenantId\n| where DeviceCount >= 3\n| extend ClientIp = tostring(SampleIps[0])\n",
-        "name": "CTE - Possible Company-Wide C2 Campaign (Multiple Devices, Same Destination)",
         "queryPeriod": "1d",
-        "queryFrequency": "30m",
-        "severity": "High",
         "triggerThreshold": 0,
         "description": "Multiple distinct devices within the same tenant were blocked attempting to reach the same URL/domain within a 24-hour window. Isolated blocks are usually just one user's browsing; several independent devices converging on the same destination is a strong signal of a coordinated malware/C2 campaign spreading across the company (e.g. a phishing link opened by several employees, or malware propagating internally).\n",
+        "name": "CTE - Possible Company-Wide C2 Campaign (Multiple Devices, Same Destination)",
         "triggerOperator": "gt"
       }
     }

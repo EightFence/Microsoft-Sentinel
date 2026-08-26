@@ -14,9 +14,12 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "name": "Whisper Security - Domain Registrar Change Anomaly",
         "tactics": [
           "ResourceDevelopment"
         ],
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -28,29 +31,26 @@
             "entityType": "DNS"
           }
         ],
-        "queryFrequency": "1h",
-        "query": "// MITRE ATT&CK: T1584 - Compromise Infrastructure\n// Tactic: Resource Development\n// Detects registrar changes across WHOIS history snapshots\nlet lookbackPeriod = 14d;\nWhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where indicatorType == \"domain\"\n    | where isnotempty(registrar)\n    | summarize Registrars = make_set(registrar), SnapshotCount = count(), EarliestSnapshot = min(snapshotDate), LatestSnapshot = max(snapshotDate) by indicator\n    | where array_length(Registrars) > 1\n    | mv-expand CurrentRegistrar = Registrars\n    | extend CurrentRegistrar = tostring(CurrentRegistrar)\n    | join kind=inner (\n        WhisperHistory_CL\n        | where TimeGenerated > ago(lookbackPeriod)\n        | where indicatorType == \"domain\"\n        | where isnotempty(registrar)\n        | serialize\n        | extend PreviousRegistrar = prev(registrar), PreviousIndicator = prev(indicator)\n        | where indicator == PreviousIndicator\n        | where registrar != PreviousRegistrar\n        | where isnotempty(PreviousRegistrar)\n        | project indicator, OldRegistrar = PreviousRegistrar, NewRegistrar = registrar, ChangeDate = snapshotDate\n    ) on indicator\n    | project TimeGenerated = ChangeDate, DnsDomain = indicator, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n    | distinct TimeGenerated, DnsDomain, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n",
-        "name": "Whisper Security - Domain Registrar Change Anomaly",
         "queryPeriod": "14d",
-        "status": "Available",
         "severity": "Medium",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "lookbackDuration": "PT5H"
+          }
+        },
+        "triggerThreshold": 0,
+        "description": "Detects domains whose registrar has changed across WHOIS history snapshots within the last 30 days. Registrar changes may indicate domain hijacking or adversary infrastructure acquisition.\n",
         "customDetails": {
           "NewRegistrar": "NewRegistrar",
           "OldRegistrar": "OldRegistrar",
           "ChangeDate": "ChangeDate"
         },
-        "triggerThreshold": 0,
-        "description": "Detects domains whose registrar has changed across WHOIS history snapshots within the last 30 days. Registrar changes may indicate domain hijacking or adversary infrastructure acquisition.\n",
-        "triggerOperator": "gt",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "reopenClosedIncident": false
-          }
-        }
+        "query": "// MITRE ATT&CK: T1584 - Compromise Infrastructure\n// Tactic: Resource Development\n// Detects registrar changes across WHOIS history snapshots\nlet lookbackPeriod = 14d;\nWhisperHistory_CL\n    | where TimeGenerated > ago(lookbackPeriod)\n    | where indicatorType == \"domain\"\n    | where isnotempty(registrar)\n    | summarize Registrars = make_set(registrar), SnapshotCount = count(), EarliestSnapshot = min(snapshotDate), LatestSnapshot = max(snapshotDate) by indicator\n    | where array_length(Registrars) > 1\n    | mv-expand CurrentRegistrar = Registrars\n    | extend CurrentRegistrar = tostring(CurrentRegistrar)\n    | join kind=inner (\n        WhisperHistory_CL\n        | where TimeGenerated > ago(lookbackPeriod)\n        | where indicatorType == \"domain\"\n        | where isnotempty(registrar)\n        | serialize\n        | extend PreviousRegistrar = prev(registrar), PreviousIndicator = prev(indicator)\n        | where indicator == PreviousIndicator\n        | where registrar != PreviousRegistrar\n        | where isnotempty(PreviousRegistrar)\n        | project indicator, OldRegistrar = PreviousRegistrar, NewRegistrar = registrar, ChangeDate = snapshotDate\n    ) on indicator\n    | project TimeGenerated = ChangeDate, DnsDomain = indicator, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n    | distinct TimeGenerated, DnsDomain, OldRegistrar, NewRegistrar, ChangeDate, SnapshotCount\n",
+        "triggerOperator": "gt"
       }
     }
   ]

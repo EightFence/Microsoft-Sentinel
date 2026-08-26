@@ -14,10 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "status": "Available",
+        "name": "Tailscale Premium: Subnet router throughput anomaly",
         "tactics": [
           "Exfiltration",
           "CommandAndControl"
         ],
+        "queryFrequency": "1h",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -38,24 +41,21 @@
             "entityType": "Account"
           }
         ],
-        "queryFrequency": "1h",
-        "query": "let baselineDays = 7d;\nlet recent = 1h;\nlet multiplier = 3.0;\nlet recentTraffic =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags);\nlet baseline =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize TotalBaselineBytes = sum(Bytes) by NodeId\n    | extend BaselineHourlyBytes = TotalBaselineBytes / 168.0;\nrecentTraffic\n| join kind=inner baseline on NodeId\n| where RecentBytes > BaselineHourlyBytes * multiplier\n| extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)\n| project NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags, RecentMB, BaselineHourlyMB, Multiplier\n| order by Multiplier desc\n",
-        "name": "Tailscale Premium: Subnet router throughput anomaly",
         "queryPeriod": "8d",
-        "status": "Available",
         "severity": "Low",
-        "triggerThreshold": 0,
-        "description": "Identifies when a subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handles 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate exfiltration or scanning. Requires Tailscale Premium or Enterprise.\n",
-        "triggerOperator": "gt",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
             "matchingMethod": "AllEntities",
-            "lookbackDuration": "P1D",
+            "reopenClosedIncident": false,
             "enabled": true,
-            "reopenClosedIncident": false
+            "lookbackDuration": "P1D"
           }
-        }
+        },
+        "triggerThreshold": 0,
+        "description": "Identifies when a subnet router (gateway node bridging the tailnet to an on-prem or cloud subnet) handles 3x or more its 7-day baseline traffic in the last hour. Spikes can indicate exfiltration or scanning. Requires Tailscale Premium or Enterprise.\n",
+        "query": "let baselineDays = 7d;\nlet recent = 1h;\nlet multiplier = 3.0;\nlet recentTraffic =\n    Tailscale_Network_CL\n    | where TimeGenerated > ago(recent)\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize RecentBytes = sum(Bytes) by NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags=tostring(SrcTags);\nlet baseline =\n    Tailscale_Network_CL\n    | where TimeGenerated between (ago(baselineDays + recent) .. ago(recent))\n    | where HasSubnetTraffic\n    | mv-expand t = SubnetTraffic\n    | extend Bytes = tolong(t.txBytes) + tolong(t.rxBytes)\n    | summarize TotalBaselineBytes = sum(Bytes) by NodeId\n    | extend BaselineHourlyBytes = TotalBaselineBytes / 168.0;\nrecentTraffic\n| join kind=inner baseline on NodeId\n| where RecentBytes > BaselineHourlyBytes * multiplier\n| extend Multiplier = round(RecentBytes / BaselineHourlyBytes, 1), RecentMB = round(RecentBytes / 1024.0 / 1024.0, 2), BaselineHourlyMB = round(BaselineHourlyBytes / 1024.0 / 1024.0, 2)\n| project NodeId, SrcNodeName, SrcUser, SrcOs, SrcTags, RecentMB, BaselineHourlyMB, Multiplier\n| order by Multiplier desc\n",
+        "triggerOperator": "gt"
       }
     }
   ]
