@@ -14,12 +14,34 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "name": "PROD (TM005.1) - GPO - Linked, Unlinked, or Enforced at Tier Level OU",
         "tactics": [
           "DefenseEvasion"
         ],
-        "queryFrequency": "5m",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "(TM005.1) A GPO was {{ActivityType}} at the following {{ObjectTier}} {{ObjectName}} OU",
+          "alertDescriptionFormat": "This will alert when a GPO is linked, unlinked, or enforced at any of the Tier Model OUs."
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "ObjectTier": "ObjectTier",
+          "EventID": "EventID",
+          "AttributeLDAP": "AttributeLDAP",
+          "EventData": "EventData",
+          "Account": "Account",
+          "ActivityType": "ActivityType",
+          "Domain": "Domain",
+          "Channel": "Channel",
+          "ObjectName": "ObjectName",
+          "Computer": "Computer",
+          "ObjectClass": "ObjectClass"
+        },
+        "severity": "High",
+        "queryPeriod": "5m",
+        "status": "Available",
+        "query": "SecurityEvent \n| where EventID == 5136 \n    and (EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Devices\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Groups\"\n        or EventData matches regex @\"(?i)OU=Tier Model Administration\"\n        or EventData matches regex @\"(?i)OU=Tier Model Computer Quarantine\")\n    and Activity has \"modified\" \n    and EventData has '\"ObjectClass\">organizationalUnit'\n    and EventData has '<Data Name=\"AttributeLDAPDisplayName\">gPLink</Data>' \n    and (EventData has ';0]' \n        or EventData has ';1]' \n        or EventData has ';2]')\n    and EventData has '\"OperationType\">%%14674'\n| extend ObjectName = extract(\"<Data Name=\\\"ObjectDN\\\">(((?i)OU=[^,]+,?)+),(?i)DC=\", 1, EventData)\n| extend ObjectTier = case(\n    ObjectName has \"Tier 0\", \"Tier 0\",\n    ObjectName has \"Tier 1\", \"Tier 1\",\n    ObjectName has \"Tier 2\", \"Tier 2\",\n    ObjectName has \"Tier Model Administration\", \"Tier 0\",\n    ObjectName has \"Tier Model Computer Quarantine\", \"Tier 0\",\n    ObjectName has \"Domain Controllers\", \"Tier 0\",\n    \"Unknown\")\n| extend AttributeLDAP = extract(\"<Data Name=\\\"AttributeLDAPDisplayName\\\">([^<]+)</Data>\", 1, EventData)\n| extend AttributeValue = extract(\"\\\\[([^\\\\]]+)\\\\]\", 1, EventData)\n| extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)\n| extend AttributeValueDescription = case(\n    LastThreeChars == \";0\", \"Linked\",\n    LastThreeChars == \";1\", \"Unlinked\",\n    LastThreeChars == \";2\", \"Enforced\",\n    \"Unknown\")\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , ActivityType = AttributeValueDescription\n   , AttributeLDAP\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
+        "name": "PROD (TM005.1) - GPO - Linked, Unlinked, or Enforced at Tier Level OU",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -49,41 +71,19 @@
             "entityType": "Account"
           }
         ],
-        "queryPeriod": "5m",
-        "severity": "High",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "enabled": false,
-            "lookbackDuration": "PT5H"
-          }
-        },
-        "triggerThreshold": 0,
         "description": "Linking, Unlinking, or Enforcing of a GPO within the Tier Level OU structure\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {
-          "ObjectName": "ObjectName",
-          "ObjectTier": "ObjectTier",
-          "ActivityType": "ActivityType",
-          "EventID": "EventID",
-          "EventData": "EventData",
-          "AttributeLDAP": "AttributeLDAP",
-          "ObjectClass": "ObjectClass",
-          "Domain": "Domain",
-          "Account": "Account",
-          "Channel": "Channel",
-          "Computer": "Computer"
-        },
-        "query": "SecurityEvent \n| where EventID == 5136 \n    and (EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Devices\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Groups\"\n        or EventData matches regex @\"(?i)OU=Tier Model Administration\"\n        or EventData matches regex @\"(?i)OU=Tier Model Computer Quarantine\")\n    and Activity has \"modified\" \n    and EventData has '\"ObjectClass\">organizationalUnit'\n    and EventData has '<Data Name=\"AttributeLDAPDisplayName\">gPLink</Data>' \n    and (EventData has ';0]' \n        or EventData has ';1]' \n        or EventData has ';2]')\n    and EventData has '\"OperationType\">%%14674'\n| extend ObjectName = extract(\"<Data Name=\\\"ObjectDN\\\">(((?i)OU=[^,]+,?)+),(?i)DC=\", 1, EventData)\n| extend ObjectTier = case(\n    ObjectName has \"Tier 0\", \"Tier 0\",\n    ObjectName has \"Tier 1\", \"Tier 1\",\n    ObjectName has \"Tier 2\", \"Tier 2\",\n    ObjectName has \"Tier Model Administration\", \"Tier 0\",\n    ObjectName has \"Tier Model Computer Quarantine\", \"Tier 0\",\n    ObjectName has \"Domain Controllers\", \"Tier 0\",\n    \"Unknown\")\n| extend AttributeLDAP = extract(\"<Data Name=\\\"AttributeLDAPDisplayName\\\">([^<]+)</Data>\", 1, EventData)\n| extend AttributeValue = extract(\"\\\\[([^\\\\]]+)\\\\]\", 1, EventData)\n| extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)\n| extend AttributeValueDescription = case(\n    LastThreeChars == \";0\", \"Linked\",\n    LastThreeChars == \";1\", \"Unlinked\",\n    LastThreeChars == \";2\", \"Enforced\",\n    \"Unknown\")\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , ActivityType = AttributeValueDescription\n   , AttributeLDAP\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "(TM005.1) A GPO was {{ActivityType}} at the following {{ObjectTier}} {{ObjectName}} OU",
-          "alertDescriptionFormat": "This will alert when a GPO is linked, unlinked, or enforced at any of the Tier Model OUs."
-        },
-        "triggerOperator": "gt"
+        "queryFrequency": "5m",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": false
+          },
+          "createIncident": true
+        }
       }
     }
   ]

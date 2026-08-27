@@ -14,12 +14,18 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "name": "Whisper Security - SPF Record Unauthorized Include Detection",
         "tactics": [
           "InitialAccess"
         ],
-        "queryFrequency": "1h",
+        "customDetails": {
+          "UnauthorizedInclude": "UnauthorizedInclude",
+          "Domain": "DnsDomain"
+        },
+        "severity": "High",
+        "queryPeriod": "1d",
+        "status": "Available",
+        "query": "// MITRE ATT&CK: T1566.001 - Phishing: Spearphishing Attachment\n// Tactic: Initial Access\n// Detects unauthorized SPF include directives not seen in previous scans\n// Configure authorized_spf_includes with your organization's known SPF providers\nlet authorized_spf_includes = dynamic([\"_spf.google.com\", \"spf.protection.outlook.com\", \"amazonses.com\", \"sendgrid.net\", \"mailgun.org\"]);\nlet previousIncludes = WhisperInfraContext_CL\n    | where TimeGenerated between (ago(1d) .. ago(1h))\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | summarize PreviousIncludes = make_set(SpfInclude) by indicator;\nlet currentIncludes = WhisperInfraContext_CL\n    | where TimeGenerated > ago(1h)\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | project indicator, SpfInclude, TimeGenerated;\ncurrentIncludes\n    | join kind=leftanti (previousIncludes | mv-expand PrevInclude = PreviousIncludes | extend SpfInclude = tostring(PrevInclude) | project indicator, SpfInclude) on indicator, SpfInclude\n    | where SpfInclude !in (authorized_spf_includes)\n    | project TimeGenerated, DnsDomain = indicator, UnauthorizedInclude = SpfInclude\n",
+        "name": "Whisper Security - SPF Record Unauthorized Include Detection",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -31,25 +37,19 @@
             "entityType": "DNS"
           }
         ],
-        "queryPeriod": "1d",
-        "severity": "High",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "lookbackDuration": "PT5H"
-          }
-        },
-        "triggerThreshold": 0,
         "description": "Detects new SPF include directives on monitored domains that were not seen in the previous scan window. Unauthorized SPF modifications may allow adversaries to send phishing emails that pass SPF checks.\n",
-        "customDetails": {
-          "UnauthorizedInclude": "UnauthorizedInclude",
-          "Domain": "DnsDomain"
-        },
-        "query": "// MITRE ATT&CK: T1566.001 - Phishing: Spearphishing Attachment\n// Tactic: Initial Access\n// Detects unauthorized SPF include directives not seen in previous scans\n// Configure authorized_spf_includes with your organization's known SPF providers\nlet authorized_spf_includes = dynamic([\"_spf.google.com\", \"spf.protection.outlook.com\", \"amazonses.com\", \"sendgrid.net\", \"mailgun.org\"]);\nlet previousIncludes = WhisperInfraContext_CL\n    | where TimeGenerated between (ago(1d) .. ago(1h))\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | summarize PreviousIncludes = make_set(SpfInclude) by indicator;\nlet currentIncludes = WhisperInfraContext_CL\n    | where TimeGenerated > ago(1h)\n    | where isnotempty(spfIncludes)\n    | mv-expand SpfInclude = split(spfIncludes, \",\")\n    | extend SpfInclude = tostring(SpfInclude)\n    | project indicator, SpfInclude, TimeGenerated;\ncurrentIncludes\n    | join kind=leftanti (previousIncludes | mv-expand PrevInclude = PreviousIncludes | extend SpfInclude = tostring(PrevInclude) | project indicator, SpfInclude) on indicator, SpfInclude\n    | where SpfInclude !in (authorized_spf_includes)\n    | project TimeGenerated, DnsDomain = indicator, UnauthorizedInclude = SpfInclude\n",
-        "triggerOperator": "gt"
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        }
       }
     }
   ]

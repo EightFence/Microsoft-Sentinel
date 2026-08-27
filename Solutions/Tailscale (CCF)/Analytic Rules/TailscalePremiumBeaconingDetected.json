@@ -14,13 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
-        "name": "Tailscale Premium: Network flow beaconing detected",
         "tactics": [
           "CommandAndControl",
           "Exfiltration"
         ],
-        "queryFrequency": "1h",
+        "severity": "Medium",
+        "queryPeriod": "2d",
+        "status": "Available",
+        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
+        "name": "Tailscale Premium: Network flow beaconing detected",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -59,21 +61,19 @@
             "entityType": "IP"
           }
         ],
-        "queryPeriod": "2d",
-        "severity": "Medium",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "lookbackDuration": "P1D"
-          }
-        },
-        "triggerThreshold": 0,
         "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n",
-        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
-        "triggerOperator": "gt"
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        }
       }
     }
   ]
