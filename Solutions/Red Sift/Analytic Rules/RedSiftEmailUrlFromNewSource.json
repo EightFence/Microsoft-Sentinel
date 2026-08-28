@@ -17,26 +17,10 @@
         "tactics": [
           "InitialAccess"
         ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "RedSift - New URL-bearing email source for {{EmailFrom}}",
-          "alertDescriptionFormat": "Email from {{EmailFrom}} contains {{UrlCount}} URL(s) and originated from previously unseen source IP {{SrcIp}}."
-        },
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "suppressionEnabled": false,
-        "customDetails": {
-          "ReturnPath": "EmailReturnPath",
-          "UrlCount": "UrlCount",
-          "EmailSubject": "EmailSubject",
-          "UrlList": "UrlList",
-          "CorrelationUid": "CorrelationUid"
-        },
-        "severity": "Medium",
-        "queryPeriod": "14d",
-        "status": "Available",
-        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSources = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom) and isnotempty(SrcIp)\n| summarize by EmailFrom, SrcIp;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", \"[]\"))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom) and isnotempty(SrcIp)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSources) on EmailFrom, SrcIp\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
-        "name": "Red Sift - New email with URL from previously unseen source",
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -66,14 +50,20 @@
             "entityType": "DNS"
           }
         ],
-        "description": "'Detects email forensics events that contain one or more URLs where the sender is using a source IP address not seen in the previous 14 days, which may indicate suspicious infrastructure changes or phishing activity.'\n",
+        "severity": "Medium",
+        "query": "let lookback = 14d;\nlet recentWindow = 1h;\nlet historicalSources = RedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\"))\n| where TimeGenerated between (ago(lookback) .. ago(recentWindow))\n| where isnotempty(EmailFrom) and isnotempty(SrcIp)\n| summarize by EmailFrom, SrcIp;\nRedSiftEmailForensics_CL\n| extend\n    EmailFrom = tostring(column_ifexists(\"EmailFrom\", \"\")),\n    EmailSubject = tostring(column_ifexists(\"EmailSubject\", \"\")),\n    EmailReturnPath = tostring(column_ifexists(\"EmailReturnPath\", \"\")),\n    EmailMessageUid = tostring(column_ifexists(\"EmailMessageUid\", \"\")),\n    SrcIp = tostring(column_ifexists(\"SrcIp\", \"\")),\n    DstHostname = tostring(column_ifexists(\"DstHostname\", \"\")),\n    Severity = tostring(column_ifexists(\"Severity\", \"\")),\n    Message = tostring(column_ifexists(\"Message\", \"\")),\n    CorrelationUid = tostring(column_ifexists(\"CorrelationUid\", \"\")),\n    EmailUrls = todynamic(column_ifexists(\"EmailUrls\", \"[]\"))\n| where TimeGenerated >= ago(recentWindow)\n| where isnotempty(EmailFrom) and isnotempty(SrcIp)\n| extend UrlCount = array_length(EmailUrls)\n| where UrlCount > 0\n| mv-apply Url = EmailUrls on (\n    summarize UrlSet = make_set(tostring(Url.url_string), 50)\n  )\n| extend UrlList = strcat_array(UrlSet, \", \")\n| join kind=leftanti (historicalSources) on EmailFrom, SrcIp\n| project\n    TimeGenerated,\n    EmailFrom,\n    EmailSubject,\n    EmailReturnPath,\n    EmailMessageUid,\n    SrcIp,\n    DstHostname,\n    UrlCount,\n    UrlList,\n    Severity,\n    Message,\n    CorrelationUid\n",
         "queryFrequency": "1h",
+        "name": "Red Sift - New email with URL from previously unseen source",
         "triggerThreshold": 0,
+        "suppressionEnabled": false,
+        "status": "Available",
+        "queryPeriod": "14d",
+        "description": "'Detects email forensics events that contain one or more URLs where the sender is using a source IP address not seen in the previous 14 days, which may indicate suspicious infrastructure changes or phishing activity.'\n",
         "suppressionDuration": "PT1H",
-        "triggerOperator": "gt",
         "incidentConfiguration": {
           "groupingConfiguration": {
             "reopenClosedIncident": false,
+            "matchingMethod": "Selected",
             "lookbackDuration": "P1D",
             "enabled": true,
             "groupByCustomDetails": [
@@ -82,10 +72,20 @@
             "groupByEntities": [
               "Account",
               "IP"
-            ],
-            "matchingMethod": "Selected"
+            ]
           },
           "createIncident": true
+        },
+        "customDetails": {
+          "ReturnPath": "EmailReturnPath",
+          "UrlCount": "UrlCount",
+          "UrlList": "UrlList",
+          "CorrelationUid": "CorrelationUid",
+          "EmailSubject": "EmailSubject"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Email from {{EmailFrom}} contains {{UrlCount}} URL(s) and originated from previously unseen source IP {{SrcIp}}.",
+          "alertDisplayNameFormat": "RedSift - New URL-bearing email source for {{EmailFrom}}"
         }
       }
     }
