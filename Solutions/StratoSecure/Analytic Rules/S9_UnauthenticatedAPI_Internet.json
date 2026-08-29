@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/479bc6ef-ecb3-496f-9a2a-38c9635d77d3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/479bc6ef-ecb3-496f-9a2a-38c9635d77d3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "query": "let sensitiveDataClasses = dynamic([\"PII\", \"Financial\", \"PHI\", \"Confidential\"]);\nStratoSecure_ApiInventory_CL\n    | where TimeGenerated >= ago(6h)\n    | where InternetExposure == true\n    | where AuthType =~ \"none\" or isempty(AuthType)\n    | where DataClassification has_any (sensitiveDataClasses)\n    | summarize EndpointCount = count(), Endpoints = make_set(Path, 50),\n        Methods = make_set(Method), DataClasses = make_set(DataClassification),\n        EndTime = max(TimeGenerated)\n        by ApplicationId = ServiceName, StraTenantId\n    | project TimeGenerated = EndTime, ApplicationId, StraTenantId,\n        EndpointCount, Endpoints, Methods, DataClasses\n",
+        "queryPeriod": "375m",
+        "name": "Unauthenticated API Endpoint with Sensitive Data",
+        "severity": "High",
+        "description": "Detects internet-facing API endpoints with no authentication that handle\nsensitive data classifications (PII, Financial, PHI, Confidential).\nUses StratoSecure_ApiInventory_CL from Phase 6 API inventory discovery.\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "6h",
+        "triggerOperator": "gt",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "ApplicationId"
+              }
+            ]
+          }
+        ],
+        "status": "Available"
+      }
+    }
+  ]
+}

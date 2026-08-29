@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0457b577-3864-42c9-9779-1c9441d86429')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0457b577-3864-42c9-9779-1c9441d86429')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "query": "let auditWindowDays = 30;\nlet PCIApps = _GetWatchlist(\"PCIApplications\")\n    | project WL_ApplicationId = column_ifexists(\"ApplicationId\", \"\"),\n        WL_AppName = column_ifexists(\"AppName\", \"\"),\n        WL_AuditDate = column_ifexists(\"AuditDate\", \"\"),\n        WL_Owner = column_ifexists(\"Owner\", \"\");\nlet AuditCalendar = _GetWatchlist(\"AuditCalendar\")\n    | where column_ifexists(\"Framework\", \"\") =~ \"PCI-DSS\"\n    | extend UpcomingAudit = todatetime(column_ifexists(\"AuditDate\", \"\"))\n    | where UpcomingAudit between (now() .. now() + auditWindowDays * 1d)\n    | project WL_Cal_ApplicationId = column_ifexists(\"ApplicationId\", \"\"),\n        Framework = column_ifexists(\"Framework\", \"\"), UpcomingAudit;\nStratoSecure_Findings_CL\n    | where FixStatus =~ \"open\"\n    | where Severity in (\"Critical\", \"High\")\n    | join kind=inner PCIApps on $left.ApplicationId == $right.WL_ApplicationId\n    | join kind=inner AuditCalendar on $left.ApplicationId == $right.WL_Cal_ApplicationId\n    | summarize TotalOpenFindings = count(), MaxSeverityInt = max(SeverityInt),\n        RuleIds = make_set(RuleId, 20), EndTime = max(TimeGenerated)\n        by ApplicationId, WL_AppName, WL_Owner, Framework, UpcomingAudit, StraTenantId\n    | extend MaxSeverity = case(\n        MaxSeverityInt >= 9, \"Critical\",\n        MaxSeverityInt >= 7, \"High\",\n        MaxSeverityInt >= 4, \"Medium\",\n        \"Low\")\n    | project TimeGenerated = EndTime, ApplicationId, AppName = WL_AppName, Owner = WL_Owner,\n        StraTenantId, Framework, UpcomingAudit, TotalOpenFindings, MaxSeverity, RuleIds\n",
+        "queryPeriod": "1455m",
+        "name": "PCI App with Open Findings Before Audit Window",
+        "severity": "High",
+        "description": "Detects PCI-scoped applications with open Critical/High findings when an\nupcoming PCI-DSS audit is within 30 days. Correlates PCIApplications and\nAuditCalendar watchlists to surface compliance risk before audit deadlines.\n",
+        "triggerThreshold": 0,
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Impact"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "CloudApplication",
+            "fieldMappings": [
+              {
+                "identifier": "AppId",
+                "columnName": "ApplicationId"
+              }
+            ]
+          }
+        ],
+        "status": "Available"
+      }
+    }
+  ]
+}

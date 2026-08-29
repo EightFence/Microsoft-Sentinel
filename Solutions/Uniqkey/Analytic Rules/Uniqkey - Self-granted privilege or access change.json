@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4b1fefb3-419a-4bbe-8a74-ef8288a8d8d0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4b1fefb3-419a-4bbe-8a74-ef8288a8d8d0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "query": "UniqkeyEvents_CL\n| where Category in (\"privilege_management\", \"sharing\", \"group_management\")\n| where TargetType == \"employee\"\n| where (isnotempty(TargetId) and TargetId == ActorId) or (isnotempty(TargetName) and TargetName =~ ActorEmail)\n| project TimeGenerated, ActorEmail, ActorType, Category, Action, ActionId, TargetType, TargetName, ClientSystem, SrcIpAddr",
+        "suppressionDuration": "5h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "suppressionEnabled": false,
+        "name": "Uniqkey - Self-granted privilege or access change",
+        "queryPeriod": "1h",
+        "description": "Identifies privilege, sharing or group-membership changes in Uniqkey where the actor and the target of the change are the same person. In a healthy administrative process, access changes are made by a different administrator, so a self-referential grant is a strong indicator of insider privilege escalation or a compromised administrator account expanding its own reach.",
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "queryFrequency": "1h",
+        "triggerOperator": "gt",
+        "tactics": [
+          "PrivilegeEscalation",
+          "Persistence"
+        ],
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "ActorEmail"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "SrcIpAddr"
+              }
+            ]
+          }
+        ],
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "1h",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        }
+      }
+    }
+  ]
+}
