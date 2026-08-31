@@ -14,22 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "gt",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "groupByCustomDetails": [
-              "ObjectName"
-            ],
-            "lookbackDuration": "PT5M",
-            "enabled": false,
-            "groupByEntities": [
-              "Account"
-            ],
-            "reopenClosedIncident": false
-          }
-        },
+        "status": "Available",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -68,38 +53,53 @@
             "entityType": "Host"
           }
         ],
-        "status": "Available",
+        "queryFrequency": "5m",
+        "triggerThreshold": 0,
+        "description": "Added an object to a member of a Tier Model group that is outside of the same Tier. Example a Tier 0 user added to a Tier 1 group.\n",
+        "queryPeriod": "5m",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "(TM001.1) A {{ObjectTier}} object was added to non-{{ObjectTier}} group {{GroupName}}",
           "alertDescriptionFormat": "Tier Model Alert TM001 - A {{ObjectTier}} object was added to non-{{ObjectTier}} group {{GroupName}}.\n\nResolution - Remove the object from the group\n"
         },
+        "triggerOperator": "gt",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "lookbackDuration": "PT5M",
+            "reopenClosedIncident": false,
+            "groupByCustomDetails": [
+              "ObjectName"
+            ],
+            "enabled": false,
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "query": "SecurityEvent \n| where EventID == 5136\n    and Activity has \"modified\"\n    and (EventData matches regex @\"(?i)OU=Tier 0 Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 1 Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 2 Accounts\"\n         or EventData matches regex @\"(?i)OU=Tier 0 Service Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 1 Service Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 2 Service Accounts\"\n         or EventData matches regex @\"(?i)OU=Tier 0 Groups\"\n         or EventData matches regex @\"(?i)OU=Tier 1 Groups\"\n         or EventData matches regex @\"(?i)OU=Tier 2 Groups\"\n         or EventData matches regex @\"(?i)OU=Tier 0 PAW\"\n         or EventData matches regex @\"(?i)OU=Tier 1 PAW\"\n         or EventData matches regex @\"(?i)OU=Tier 2 PAW\")\n    and EventData has '\"AttributeLDAPDisplayName\">member'\n    and EventData has 'OperationType\">%%14674'\n| extend GroupName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend GroupName = extract(\"(?i)CN=([^,]+)\", 1, GroupName_e)\n| where GroupName != \"Protected Users\"\n| where GroupName != \"Allowed RODC Password Replication Group\"\n| extend GroupTier_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend GroupTier = extract(\"(?i)OU=(Tier [^ ]+)\", 1, GroupTier_e)\n| extend GroupTier = iff(isempty(GroupTier), \"Outside Tier Model\", GroupTier)\n| extend ObjectName_e = extract(\"<Data Name=\\\"AttributeValue\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectName_e)\n| extend ObjectTier_e = extract(\"<Data Name=\\\"AttributeValue\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectTier = extract(\"(?i)OU=(Tier [^ ]+)\", 1, ObjectTier_e)\n| extend ObjectTier = iff(isempty(ObjectTier), \"Outside Tier Model\", ObjectTier)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend OperationType = iff(EventData has 'OperationType\">%%14674', \"Added\", tostring(OperationType))\n| where GroupTier != ObjectTier\n| project TimeGenerated \n        , ObjectName\n        , ObjectTier\n        , ObjectType = AccountType\n        , GroupName\n        , GroupTier\n        , ActivityType\n        , OperationType\n        , Account\n        , Domain\n        , Computer\n        , Channel\n        , EventID\n        , EventData\n",
+        "severity": "High",
+        "name": "PROD (TM001.1) - GROUP - Added to Group Outside the Object Tier Level",
+        "customDetails": {
+          "ObjectName": "ObjectName",
+          "EventData": "EventData",
+          "ObjectType": "ObjectType",
+          "Account": "Account",
+          "Domain": "Domain",
+          "GroupName": "GroupName",
+          "GroupTier": "GroupTier",
+          "ActivityType": "ActivityType",
+          "EventID": "EventID",
+          "OperationType": "OperationType",
+          "ObjectTier": "ObjectTier",
+          "Channel": "Channel"
+        },
         "tactics": [
           "PrivilegeEscalation"
         ],
-        "triggerThreshold": 0,
-        "queryFrequency": "5m",
-        "customDetails": {
-          "Account": "Account",
-          "GroupName": "GroupName",
-          "EventID": "EventID",
-          "ActivityType": "ActivityType",
-          "ObjectTier": "ObjectTier",
-          "EventData": "EventData",
-          "Domain": "Domain",
-          "ObjectName": "ObjectName",
-          "OperationType": "OperationType",
-          "ObjectType": "ObjectType",
-          "GroupTier": "GroupTier",
-          "Channel": "Channel"
-        },
-        "description": "Added an object to a member of a Tier Model group that is outside of the same Tier. Example a Tier 0 user added to a Tier 1 group.\n",
-        "queryPeriod": "5m",
-        "name": "PROD (TM001.1) - GROUP - Added to Group Outside the Object Tier Level",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
-        },
-        "severity": "High",
-        "query": "SecurityEvent \n| where EventID == 5136\n    and Activity has \"modified\"\n    and (EventData matches regex @\"(?i)OU=Tier 0 Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 1 Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 2 Accounts\"\n         or EventData matches regex @\"(?i)OU=Tier 0 Service Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 1 Service Accounts\" \n         or EventData matches regex @\"(?i)OU=Tier 2 Service Accounts\"\n         or EventData matches regex @\"(?i)OU=Tier 0 Groups\"\n         or EventData matches regex @\"(?i)OU=Tier 1 Groups\"\n         or EventData matches regex @\"(?i)OU=Tier 2 Groups\"\n         or EventData matches regex @\"(?i)OU=Tier 0 PAW\"\n         or EventData matches regex @\"(?i)OU=Tier 1 PAW\"\n         or EventData matches regex @\"(?i)OU=Tier 2 PAW\")\n    and EventData has '\"AttributeLDAPDisplayName\">member'\n    and EventData has 'OperationType\">%%14674'\n| extend GroupName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend GroupName = extract(\"(?i)CN=([^,]+)\", 1, GroupName_e)\n| where GroupName != \"Protected Users\"\n| where GroupName != \"Allowed RODC Password Replication Group\"\n| extend GroupTier_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend GroupTier = extract(\"(?i)OU=(Tier [^ ]+)\", 1, GroupTier_e)\n| extend GroupTier = iff(isempty(GroupTier), \"Outside Tier Model\", GroupTier)\n| extend ObjectName_e = extract(\"<Data Name=\\\"AttributeValue\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectName_e)\n| extend ObjectTier_e = extract(\"<Data Name=\\\"AttributeValue\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectTier = extract(\"(?i)OU=(Tier [^ ]+)\", 1, ObjectTier_e)\n| extend ObjectTier = iff(isempty(ObjectTier), \"Outside Tier Model\", ObjectTier)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend OperationType = iff(EventData has 'OperationType\">%%14674', \"Added\", tostring(OperationType))\n| where GroupTier != ObjectTier\n| project TimeGenerated \n        , ObjectName\n        , ObjectTier\n        , ObjectType = AccountType\n        , GroupName\n        , GroupTier\n        , ActivityType\n        , OperationType\n        , Account\n        , Domain\n        , Computer\n        , Channel\n        , EventID\n        , EventData\n"
+        }
       }
     }
   ]
