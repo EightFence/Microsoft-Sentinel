@@ -14,7 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
+        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
+        "customDetails": {
+          "ThreatLevel": "threatLevel",
+          "FeedNames": "feedNames",
+          "ThreatScore": "threatScore"
+        },
+        "triggerOperator": "gt",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -45,30 +52,23 @@
           }
         ],
         "queryFrequency": "5m",
+        "status": "Available",
         "triggerThreshold": 0,
-        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
+        "name": "Whisper Security - C2 Communication Detection",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
             "reopenClosedIncident": false,
             "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT5H",
             "enabled": true
           }
         },
-        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
-        "severity": "High",
-        "name": "Whisper Security - C2 Communication Detection",
-        "customDetails": {
-          "ThreatLevel": "threatLevel",
-          "FeedNames": "feedNames",
-          "ThreatScore": "threatScore"
-        },
         "tactics": [
           "CommandAndControl"
-        ]
+        ],
+        "severity": "High",
+        "queryPeriod": "1h"
       }
     }
   ]
