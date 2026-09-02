@@ -14,6 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "customDetails": {
+          "detection_id": "detection_id_s"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "severity": "High",
         "tactics": [
           "Collection",
           "CommandAndControl",
@@ -28,25 +35,22 @@
           "Persistence",
           "PrivilegeEscalation"
         ],
-        "description": "Triggers Incidents using detection data assembled by Red Canary.",
-        "customDetails": {
-          "detection_id": "detection_id_s"
-        },
         "triggerOperator": "gt",
+        "query": "let detectionLookback = 1d;\nlet newDetectionWindow = 5m;\nRedCanaryDetections_CL\n| where TimeGenerated >= ago(detectionLookback)\n| where isnotempty(detection_id_s)\n| summarize FirstSeen = min(TimeGenerated), arg_max(TimeGenerated, *) by detection_id_s\n| where FirstSeen >= ago(newDetectionWindow)\n| extend    process_iocs_raw = column_ifexists('process_iocs_s', '[]'),\n            child_process_iocs_raw = column_ifexists('child_process_iocs_s', '[]'),\n            cross_process_iocs_raw = column_ifexists('cross_process_iocs_s', '[]'),\n            file_modification_iocs_raw = column_ifexists('file_modification_iocs_s', '[]'),\n            identities_raw = column_ifexists('identities_s', '[]')\n| extend    process_ioc_array = todynamic(iff(isempty(process_iocs_raw), '[]', process_iocs_raw)),\n            child_process_ioc_array = todynamic(iff(isempty(child_process_iocs_raw), '[]', child_process_iocs_raw)),\n            cross_process_ioc_array = todynamic(iff(isempty(cross_process_iocs_raw), '[]', cross_process_iocs_raw)),\n            file_mod_ioc_array = todynamic(iff(isempty(file_modification_iocs_raw), '[]', file_modification_iocs_raw)),\n            identities_array = todynamic(iff(isempty(identities_raw), '[]', identities_raw))\n| extend    evidence_array = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array)\n| extend    evidence = todynamic(evidence_array[0]),\n            identity = todynamic(identities_array[0])\n| extend    file_hash_array = todynamic(evidence.file_hashes)\n| extend    file_hash = todynamic(file_hash_array[0])\n| project   detection_id_s,\n            detection_url_s = column_ifexists('detection_url_s', ''),\n            detection_headline_s = column_ifexists('detection_headline_s', ''),\n            detection_details_s = column_ifexists('detection_details_s', ''),\n            detection_severity_s = column_ifexists('detection_severity_s', ''),\n            host_name_s = column_ifexists('host_name_s', ''),\n            host_full_name_s = column_ifexists('host_full_name_s', ''),\n            host_os_family_s = column_ifexists('host_os_family_s', ''),\n            host_os_version_s = column_ifexists('host_os_version_s', ''),\n            tactics_s = column_ifexists('tactics_s', ''),\n            process_id = tostring(evidence.process_id),\n            process_command_line = tostring(evidence.process_command_line),\n            process_creation_time_utc = tostring(evidence.process_creation_time_utc),\n            file_hash_algorithm = tostring(file_hash.algorithm),\n            file_hash_value = tostring(file_hash.value),\n            file_directory = tostring(evidence.file_directory),\n            file_name = tostring(evidence.file_name),\n            user_name = tostring(identity.user_name),\n            user_uid = tostring(identity.user_uid)\n",
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "process_id",
-                "identifier": "ProcessId"
+                "identifier": "ProcessId",
+                "columnName": "process_id"
               },
               {
-                "columnName": "process_command_line",
-                "identifier": "CommandLine"
+                "identifier": "CommandLine",
+                "columnName": "process_command_line"
               },
               {
-                "columnName": "process_creation_time_utc",
-                "identifier": "CreationTimeUtc"
+                "identifier": "CreationTimeUtc",
+                "columnName": "process_creation_time_utc"
               }
             ],
             "entityType": "Process"
@@ -54,16 +58,16 @@
           {
             "fieldMappings": [
               {
-                "columnName": "user_name",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "user_name"
               },
               {
-                "columnName": "user_uid",
-                "identifier": "Sid"
+                "identifier": "Sid",
+                "columnName": "user_uid"
               },
               {
-                "columnName": "user_name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "user_name"
               }
             ],
             "entityType": "Account"
@@ -71,12 +75,12 @@
           {
             "fieldMappings": [
               {
-                "columnName": "file_directory",
-                "identifier": "Directory"
+                "identifier": "Directory",
+                "columnName": "file_directory"
               },
               {
-                "columnName": "file_name",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "file_name"
               }
             ],
             "entityType": "File"
@@ -84,16 +88,16 @@
           {
             "fieldMappings": [
               {
-                "columnName": "host_name_s",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "host_name_s"
               },
               {
-                "columnName": "host_full_name_s",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "host_full_name_s"
               },
               {
-                "columnName": "host_os_family_s",
-                "identifier": "OSFamily"
+                "identifier": "OSFamily",
+                "columnName": "host_os_family_s"
               }
             ],
             "entityType": "Host"
@@ -101,46 +105,42 @@
           {
             "fieldMappings": [
               {
-                "columnName": "file_hash_algorithm",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "file_hash_algorithm"
               },
               {
-                "columnName": "file_hash_value",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "file_hash_value"
               }
             ],
             "entityType": "FileHash"
           }
         ],
-        "queryFrequency": "5m",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "description": "Triggers Incidents using detection data assembled by Red Canary.",
+        "queryPeriod": "1d",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Red Canary has published a {{detection_severity_s}} severity detection with details:\n\n{{detection_details_s}}\n\nView the Detection at: {{detection_url_s}}\n",
+          "alertSeverityColumnName": "detection_severity_s",
+          "alertTacticsColumnName": "tactics_s",
+          "alertDisplayNameFormat": "Red Canary has published Detection-{{detection_id_s}}"
         },
-        "query": "let detectionLookback = 1d;\nlet newDetectionWindow = 5m;\nRedCanaryDetections_CL\n| where TimeGenerated >= ago(detectionLookback)\n| where isnotempty(detection_id_s)\n| summarize FirstSeen = min(TimeGenerated), arg_max(TimeGenerated, *) by detection_id_s\n| where FirstSeen >= ago(newDetectionWindow)\n| extend    process_iocs_raw = column_ifexists('process_iocs_s', '[]'),\n            child_process_iocs_raw = column_ifexists('child_process_iocs_s', '[]'),\n            cross_process_iocs_raw = column_ifexists('cross_process_iocs_s', '[]'),\n            file_modification_iocs_raw = column_ifexists('file_modification_iocs_s', '[]'),\n            identities_raw = column_ifexists('identities_s', '[]')\n| extend    process_ioc_array = todynamic(iff(isempty(process_iocs_raw), '[]', process_iocs_raw)),\n            child_process_ioc_array = todynamic(iff(isempty(child_process_iocs_raw), '[]', child_process_iocs_raw)),\n            cross_process_ioc_array = todynamic(iff(isempty(cross_process_iocs_raw), '[]', cross_process_iocs_raw)),\n            file_mod_ioc_array = todynamic(iff(isempty(file_modification_iocs_raw), '[]', file_modification_iocs_raw)),\n            identities_array = todynamic(iff(isempty(identities_raw), '[]', identities_raw))\n| extend    evidence_array = array_concat(process_ioc_array, child_process_ioc_array, cross_process_ioc_array, file_mod_ioc_array)\n| extend    evidence = todynamic(evidence_array[0]),\n            identity = todynamic(identities_array[0])\n| extend    file_hash_array = todynamic(evidence.file_hashes)\n| extend    file_hash = todynamic(file_hash_array[0])\n| project   detection_id_s,\n            detection_url_s = column_ifexists('detection_url_s', ''),\n            detection_headline_s = column_ifexists('detection_headline_s', ''),\n            detection_details_s = column_ifexists('detection_details_s', ''),\n            detection_severity_s = column_ifexists('detection_severity_s', ''),\n            host_name_s = column_ifexists('host_name_s', ''),\n            host_full_name_s = column_ifexists('host_full_name_s', ''),\n            host_os_family_s = column_ifexists('host_os_family_s', ''),\n            host_os_version_s = column_ifexists('host_os_version_s', ''),\n            tactics_s = column_ifexists('tactics_s', ''),\n            process_id = tostring(evidence.process_id),\n            process_command_line = tostring(evidence.process_command_line),\n            process_creation_time_utc = tostring(evidence.process_creation_time_utc),\n            file_hash_algorithm = tostring(file_hash.algorithm),\n            file_hash_value = tostring(file_hash.value),\n            file_directory = tostring(evidence.file_directory),\n            file_name = tostring(evidence.file_name),\n            user_name = tostring(identity.user_name),\n            user_uid = tostring(identity.user_uid)\n",
-        "triggerThreshold": 0,
-        "name": "Red Canary Threat Detection",
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
             "groupByEntities": [],
-            "groupByAlertDetails": [],
-            "lookbackDuration": "7d",
-            "reopenClosedIncident": false,
             "groupByCustomDetails": [
               "detection_id"
             ],
-            "matchingMethod": "Selected",
-            "enabled": true
-          }
+            "enabled": true,
+            "groupByAlertDetails": [],
+            "lookbackDuration": "7d",
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected"
+          },
+          "createIncident": true
         },
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Red Canary has published a {{detection_severity_s}} severity detection with details:\n\n{{detection_details_s}}\n\nView the Detection at: {{detection_url_s}}\n",
-          "alertTacticsColumnName": "tactics_s",
-          "alertDisplayNameFormat": "Red Canary has published Detection-{{detection_id_s}}",
-          "alertSeverityColumnName": "detection_severity_s"
-        },
-        "severity": "High",
-        "queryPeriod": "1d"
+        "triggerThreshold": 0,
+        "name": "Red Canary Threat Detection",
+        "queryFrequency": "5m"
       }
     }
   ]

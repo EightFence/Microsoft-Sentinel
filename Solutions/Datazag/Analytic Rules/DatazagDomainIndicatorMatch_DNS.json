@@ -14,23 +14,51 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "Matches active Datazag impersonation indicators against DNS activity normalized by the ASIM\nDns schema, so the rule works across any normalized DNS source without modification. A match\nmeans a host inside the estate resolved a domain Datazag scored as brand impersonation,\nplatform impersonation or attacker infrastructure. Requires the ASIM DNS parsers.\n",
-        "customDetails": {
-          "DatazagEvidence": "IndicatorEvidence",
-          "IndicatorExpiry": "IndicatorValidUntil",
-          "DatazagIndicatorRef": "IndicatorStixId",
-          "ResolutionCount": "QueryCount",
-          "DatazagAlertRef": "DatazagAlertRef",
-          "DatazagConfidence": "Confidence",
-          "ObservedBy": "SeenBy"
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{IndicatorDomain}} was resolved from inside the estate. Datazag scored this indicator\nat confidence {{Confidence}}. Supporting evidence: {{IndicatorEvidence}}\n",
+          "alertDisplayNameFormat": "Datazag: {{IndicatorDomain}} resolved from inside the estate"
         },
-        "triggerOperator": "gt",
+        "suppressionEnabled": false,
+        "suppressionDuration": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "severity": "High",
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "status": "Available",
+        "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet ioc_lookback = 14d;\nlet dns_lookback = 1h;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookback)\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where isempty(ValidUntil) or ValidUntil > now()\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        IndicatorStixId     = tostring(Data.id),\n        IndicatorRecordId   = Id,\n        DatazagAlertRef     = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence   = tostring(Data.labels),\n        IndicatorValidUntil = ValidUntil;\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        DnsQuery,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\"),\n        EventVendor     = column_ifexists(\"EventVendor\", \"\"),\n        EventProduct    = column_ifexists(\"EventProduct\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstSeen   = min(DnsTime),\n    LastSeen    = max(DnsTime),\n    QueryCount  = count(),\n    SourceIps   = make_set(SrcIpAddr, 50),\n    SourceHosts = make_set(SrcHostname, 50),\n    Upns        = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 50),\n    SeenBy      = make_set(strcat(EventVendor, \" \", EventProduct), 10)\n    by\n    IndicatorDomain, IndicatorStixId, IndicatorRecordId, DatazagAlertRef,\n    Confidence, IndicatorEvidence, IndicatorValidUntil\n| extend\n    SourceIp   = tostring(SourceIps[0]),\n    SourceHost = tostring(SourceHosts[0]),\n    AccountUpn = tostring(Upns[0])\n| order by LastSeen desc\n",
+        "customDetails": {
+          "IndicatorExpiry": "IndicatorValidUntil",
+          "ResolutionCount": "QueryCount",
+          "DatazagEvidence": "IndicatorEvidence",
+          "DatazagIndicatorRef": "IndicatorStixId",
+          "DatazagAlertRef": "DatazagAlertRef",
+          "ObservedBy": "SeenBy",
+          "DatazagConfidence": "Confidence"
+        },
+        "description": "Matches active Datazag impersonation indicators against DNS activity normalized by the ASIM\nDns schema, so the rule works across any normalized DNS source without modification. A match\nmeans a host inside the estate resolved a domain Datazag scored as brand impersonation,\nplatform impersonation or attacker infrastructure. Requires the ASIM DNS parsers.\n",
+        "queryPeriod": "14d",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "1d",
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "DNS"
+            ],
+            "enabled": true
+          },
+          "createIncident": true
+        },
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "columnName": "IndicatorDomain",
-                "identifier": "DomainName"
+                "identifier": "DomainName",
+                "columnName": "IndicatorDomain"
               }
             ],
             "entityType": "DNS"
@@ -38,8 +66,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SourceIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SourceIp"
               }
             ],
             "entityType": "IP"
@@ -47,8 +75,8 @@
           {
             "fieldMappings": [
               {
-                "columnName": "SourceHost",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "SourceHost"
               }
             ],
             "entityType": "Host"
@@ -56,45 +84,17 @@
           {
             "fieldMappings": [
               {
-                "columnName": "AccountUpn",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "AccountUpn"
               }
             ],
             "entityType": "Account"
           }
         ],
-        "queryFrequency": "1h",
-        "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "query": "let datazag_identity = \"identity--55a5a448-c6f1-5128-bc71-4d85b719131e\";\nlet ioc_lookback = 14d;\nlet dns_lookback = 1h;\nlet confidence_floor = 85;\nlet DatazagDomains =\n    ThreatIntelIndicators\n    | where TimeGenerated >= ago(ioc_lookback)\n    | where tostring(Data.created_by_ref) == datazag_identity\n    | where ObservableKey == \"domain-name:value\"\n    | where isnotempty(ObservableValue)\n    | summarize arg_max(TimeGenerated, *) by Id\n    | where IsDeleted == false\n    | where tostring(Data.revoked) != \"true\"\n    | where isempty(ValidUntil) or ValidUntil > now()\n    | where Confidence >= confidence_floor\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", ObservableValue))\n    | project\n        IndicatorDomain,\n        IndicatorStixId     = tostring(Data.id),\n        IndicatorRecordId   = Id,\n        DatazagAlertRef     = tostring(Data.external_references[0].external_id),\n        Confidence,\n        IndicatorEvidence   = tostring(Data.labels),\n        IndicatorValidUntil = ValidUntil;\nlet DnsActivity =\n    _Im_Dns\n    | where TimeGenerated >= ago(dns_lookback)\n    | where isnotempty(DnsQuery)\n    | extend IndicatorDomain = tolower(trim_end(@\"\\.\", DnsQuery))\n    | project\n        DnsTime         = TimeGenerated,\n        IndicatorDomain,\n        DnsQuery,\n        SrcIpAddr       = column_ifexists(\"SrcIpAddr\", \"\"),\n        SrcHostname     = column_ifexists(\"SrcHostname\", \"\"),\n        SrcUsername     = column_ifexists(\"SrcUsername\", \"\"),\n        SrcUsernameType = column_ifexists(\"SrcUsernameType\", \"\"),\n        EventVendor     = column_ifexists(\"EventVendor\", \"\"),\n        EventProduct    = column_ifexists(\"EventProduct\", \"\");\nDatazagDomains\n| join kind=innerunique DnsActivity on IndicatorDomain\n| summarize\n    FirstSeen   = min(DnsTime),\n    LastSeen    = max(DnsTime),\n    QueryCount  = count(),\n    SourceIps   = make_set(SrcIpAddr, 50),\n    SourceHosts = make_set(SrcHostname, 50),\n    Upns        = make_set_if(SrcUsername, SrcUsernameType == \"UPN\", 50),\n    SeenBy      = make_set(strcat(EventVendor, \" \", EventProduct), 10)\n    by\n    IndicatorDomain, IndicatorStixId, IndicatorRecordId, DatazagAlertRef,\n    Confidence, IndicatorEvidence, IndicatorValidUntil\n| extend\n    SourceIp   = tostring(SourceIps[0]),\n    SourceHost = tostring(SourceHosts[0]),\n    AccountUpn = tostring(Upns[0])\n| order by LastSeen desc\n",
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl"
-        ],
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
-        "suppressionDuration": "1h",
         "name": "Datazag - impersonation domain resolved in DNS",
-        "suppressionEnabled": false,
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "DNS"
-            ],
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected",
-            "lookbackDuration": "1d",
-            "enabled": true
-          }
-        },
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Datazag: {{IndicatorDomain}} resolved from inside the estate",
-          "alertDescriptionFormat": "{{IndicatorDomain}} was resolved from inside the estate. Datazag scored this indicator\nat confidence {{Confidence}}. Supporting evidence: {{IndicatorEvidence}}\n"
-        },
-        "severity": "High",
-        "queryPeriod": "14d"
+        "queryFrequency": "1h"
       }
     }
   ]
