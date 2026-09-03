@@ -14,39 +14,39 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "LoginName"
-              }
-            ],
-            "entityType": "Account"
-          }
-        ],
+        "description": "Identifies when a user's tailnet role changes from a lower-privilege role to admin, network-admin, or owner between consecutive snapshots. Privilege escalation is a high-value attacker objective and warrants prompt review.\n",
         "severity": "High",
+        "query": "let elevated = dynamic([\"admin\", \"network-admin\", \"owner\"]);\nlet recent =\n    Tailscale_Users_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by UserId\n    | where Role in (elevated)\n    | project UserId, LoginName, RoleNow = Role;\nlet prior =\n    Tailscale_Users_CL\n    | where TimeGenerated between (ago(2d) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by UserId\n    | project UserId, RolePrior = Role;\nrecent\n| join kind=inner prior on UserId\n| where RoleNow != RolePrior\n| where RolePrior !in (elevated)\n| project TimeGenerated = now(), UserId, LoginName, RolePrior, RoleNow\n",
         "tactics": [
           "PrivilegeEscalation",
           "Persistence"
         ],
         "status": "Available",
-        "query": "let elevated = dynamic([\"admin\", \"network-admin\", \"owner\"]);\nlet recent =\n    Tailscale_Users_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by UserId\n    | where Role in (elevated)\n    | project UserId, LoginName, RoleNow = Role;\nlet prior =\n    Tailscale_Users_CL\n    | where TimeGenerated between (ago(2d) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by UserId\n    | project UserId, RolePrior = Role;\nrecent\n| join kind=inner prior on UserId\n| where RoleNow != RolePrior\n| where RolePrior !in (elevated)\n| project TimeGenerated = now(), UserId, LoginName, RolePrior, RoleNow\n",
-        "queryPeriod": "2d",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "P1D",
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false,
-            "enabled": true
-          },
-          "createIncident": true
-        },
-        "description": "Identifies when a user's tailnet role changes from a lower-privilege role to admin, network-admin, or owner between consecutive snapshots. Privilege escalation is a high-value attacker objective and warrants prompt review.\n",
-        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "LoginName",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "queryFrequency": "1h",
         "triggerThreshold": 0,
         "name": "Tailscale: User role elevated to admin or owner",
-        "queryFrequency": "1h"
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "triggerOperator": "gt",
+        "queryPeriod": "2d"
       }
     }
   ]
