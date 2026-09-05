@@ -14,10 +14,42 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Abnormal Security - Vendor compromise case detected",
+        "queryPeriod": "1h",
+        "description": "'Creates an incident when Abnormal Security opens a vendor case indicating a\ncompromised or impersonated vendor domain (vendor email compromise). Surfaces the\nvendor domain and Abnormal insights so analysts can review related correspondence.'\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "VendorDomain"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ],
+        "suppressionDuration": "PT5H",
+        "queryFrequency": "1h",
+        "query": "ABNORMAL_SECURITY_VENDOR_CASE_CL\n| where isnotempty(abx_body_abx_body_vendorCaseId_g)\n// Collapse to one row per vendor case (earliest event in the window) so repeated\n// events for the same case do not raise duplicate alerts.\n| summarize arg_min(TimeGenerated, *) by CaseId = abx_body_abx_body_vendorCaseId_g\n| extend\n    VendorDomain = abx_body_abx_body_vendorDomain_s,\n    Insights = abx_body_abx_body_insights_s,\n    FirstObserved = abx_body_abx_body_firstObservedTime_t\n| project TimeGenerated, VendorDomain, CaseId, Insights, FirstObserved\n",
+        "suppressionEnabled": false,
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "description": "'Creates an incident when Abnormal Security opens a vendor case indicating a\ncompromised or impersonated vendor domain (vendor email compromise). Surfaces the\nvendor domain and Abnormal insights so analysts can review related correspondence.'\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Abnormal Security opened vendor case {{CaseId}} for the domain {{VendorDomain}}. Review related correspondence for vendor email compromise.",
+          "alertDisplayNameFormat": "Abnormal Security: vendor compromise case for {{VendorDomain}}"
+        },
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "VendorCaseId": "CaseId",
+          "VendorDomain": "VendorDomain"
+        },
+        "status": "Available",
+        "severity": "Medium",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
@@ -26,39 +58,7 @@
             "matchingMethod": "AllEntities",
             "lookbackDuration": "PT5H"
           }
-        },
-        "entityMappings": [
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "VendorDomain"
-              }
-            ]
-          }
-        ],
-        "customDetails": {
-          "VendorCaseId": "CaseId",
-          "VendorDomain": "VendorDomain"
-        },
-        "triggerThreshold": 0,
-        "suppressionDuration": "PT5H",
-        "severity": "Medium",
-        "name": "Abnormal Security - Vendor compromise case detected",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Abnormal Security: vendor compromise case for {{VendorDomain}}",
-          "alertDescriptionFormat": "Abnormal Security opened vendor case {{CaseId}} for the domain {{VendorDomain}}. Review related correspondence for vendor email compromise."
-        },
-        "suppressionEnabled": false,
-        "query": "ABNORMAL_SECURITY_VENDOR_CASE_CL\n| where isnotempty(abx_body_abx_body_vendorCaseId_g)\n// Collapse to one row per vendor case (earliest event in the window) so repeated\n// events for the same case do not raise duplicate alerts.\n| summarize arg_min(TimeGenerated, *) by CaseId = abx_body_abx_body_vendorCaseId_g\n| extend\n    VendorDomain = abx_body_abx_body_vendorDomain_s,\n    Insights = abx_body_abx_body_insights_s,\n    FirstObserved = abx_body_abx_body_firstObservedTime_t\n| project TimeGenerated, VendorDomain, CaseId, Insights, FirstObserved\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "status": "Available",
-        "queryPeriod": "1h"
+        }
       }
     }
   ]

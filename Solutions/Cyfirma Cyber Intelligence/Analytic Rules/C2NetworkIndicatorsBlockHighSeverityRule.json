@@ -17,7 +17,6 @@
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "description": "\"This analytics rule detects network-based indicators identified by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure.\nThese may represent attacker-controlled endpoints used to maintain persistence, exfiltrate data, or receive commands from malware-infected hosts.\"\n",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
@@ -27,73 +26,59 @@
             "lookbackDuration": "PT5H"
           }
         },
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPv4"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "IPv6"
-              }
-            ]
-          },
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "Domain"
-              }
-            ]
-          },
-          {
-            "entityType": "URL",
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "URL"
-              }
-            ]
-          }
-        ],
-        "customDetails": {
-          "Modified": "modified",
-          "Description": "Description",
-          "TimeGenerated": "TimeGenerated",
-          "ThreatType": "ThreatType",
-          "Tags": "Tags",
-          "SecurityVendors": "SecurityVendors",
-          "Country": "Country",
-          "Created": "created",
-          "IndicatorID": "IndicatorID",
-          "ConfidenceScore": "ConfidenceScore",
-          "Roles": "Roles",
-          "ValidFrom": "valid_from",
-          "Sources": "Sources",
-          "ThreatActors": "ThreatActors",
-          "RecommendedActions": "RecommendedActions",
-          "IPAbuse": "IPAbuse"
-        },
-        "enabled": false,
-        "triggerThreshold": 0,
-        "suppressionDuration": "5m",
-        "severity": "High",
-        "name": "CYFIRMA - High severity Command & Control Network Indicators with Block Recommendation Rule",
         "tactics": [
           "CommandAndControl",
           "InitialAccess",
           "Exfiltration"
         ],
+        "enabled": false,
+        "severity": "High",
+        "description": "\"This analytics rule detects network-based indicators identified by CYFIRMA threat intelligence as associated with Command & Control (C2) infrastructure.\nThese may represent attacker-controlled endpoints used to maintain persistence, exfiltrate data, or receive commands from malware-infected hosts.\"\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPv4"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPv6"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "DomainName",
+                "columnName": "Domain"
+              }
+            ],
+            "entityType": "DNS"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Url",
+                "columnName": "URL"
+              }
+            ],
+            "entityType": "URL"
+          }
+        ],
+        "queryPeriod": "5m",
+        "queryFrequency": "5m",
+        "query": "// Network Indicators query with Block Recommended Action and C2 Roles\nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where ConfidenceScore >= 80\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Block' and (Roles contains 'c2' or Roles contains 'Command & Control')\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
+        "suppressionEnabled": true,
+        "name": "CYFIRMA - High severity Command & Control Network Indicators with Block Recommendation Rule",
         "alertDetailsOverride": {
+          "alertDisplayNameFormat": "High-Confidence Command & Control Network Indicators with Block Recommendation Rule - {{name}} ",
           "alertDynamicProperties": [
             {
               "alertProperty": "ProductName",
@@ -104,14 +89,29 @@
               "value": "ProviderName"
             }
           ],
-          "alertDescriptionFormat": "{{Description}} - {{name}} ",
-          "alertDisplayNameFormat": "High-Confidence Command & Control Network Indicators with Block Recommendation Rule - {{name}} "
+          "alertDescriptionFormat": "{{Description}} - {{name}} "
         },
-        "suppressionEnabled": true,
-        "query": "// Network Indicators query with Block Recommended Action and C2 Roles\nlet timeFrame= 5m;\nCyfirmaIndicators_CL \n| where ConfidenceScore >= 80\n    and TimeGenerated between (ago(timeFrame) .. now())\n    and pattern !contains 'file:hashes' and RecommendedActions has 'Block' and (Roles contains 'c2' or Roles contains 'Command & Control')\n| extend IPv4 = extract(@\"ipv4-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend IPv6 = extract(@\"ipv6-addr:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend URL = extract(@\"url:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend Domain = extract(@\"domain-name:value\\s*=\\s*'([^']+)'\", 1, pattern)\n| extend parsed = parse_json(extensions)\n| extend extensionKeys = bag_keys(parsed)\n| mv-expand extensionKeys\n| extend extensionKeyStr = tostring(extensionKeys)\n| extend ext = parsed[extensionKeyStr]\n| extend props = ext.properties\n| extend \n    extension_id = extensionKeyStr,\n    ASN_Owner = props.asn_owner,\n    ASN = props.asn,\n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| project\n    IPv4,\n    IPv6,\n    URL,\n    Domain,\n    ThreatActors,\n    RecommendedActions,\n    Sources,\n    Roles,\n    Country,\n    IPAbuse,\n    name,\n    Description,\n    ConfidenceScore,\n    IndicatorID,\n    created,\n    modified,\n    valid_from,\n    Tags,\n    ThreatType,\n    TimeGenerated,\n    SecurityVendors,\n    ProductName,\n    ProviderName\n",
         "triggerOperator": "gt",
-        "queryFrequency": "5m",
-        "queryPeriod": "5m"
+        "triggerThreshold": 0,
+        "customDetails": {
+          "ValidFrom": "valid_from",
+          "IndicatorID": "IndicatorID",
+          "ConfidenceScore": "ConfidenceScore",
+          "RecommendedActions": "RecommendedActions",
+          "ThreatActors": "ThreatActors",
+          "IPAbuse": "IPAbuse",
+          "Description": "Description",
+          "Tags": "Tags",
+          "Modified": "modified",
+          "Created": "created",
+          "TimeGenerated": "TimeGenerated",
+          "ThreatType": "ThreatType",
+          "Roles": "Roles",
+          "Country": "Country",
+          "SecurityVendors": "SecurityVendors",
+          "Sources": "Sources"
+        },
+        "suppressionDuration": "5m"
       }
     }
   ]

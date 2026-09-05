@@ -14,10 +14,66 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "name": "PROD (TM010.1) - BITLOCKER - Stored Bitlocker Recovery Key to Tier Level Computer Object",
+        "queryPeriod": "5h",
+        "description": "A Bitlocker recovery key was stored within a Tier Model computer object.\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "ObjectName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Computer"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Account"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "queryFrequency": "5h",
+        "query": "SecurityEvent\n| where EventID == 5137\n    and (EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 1 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 2 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\")\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| where ObjectClass has \"msFVE-RecoveryInformation\"\n| extend ObjectBitName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectFullName = extract(\"(?i)(CN=[^,]+,(?i)OU=[^,]+)\", 1, ObjectBitName_e)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectFullName)\n| extend ObjectTier = case(\n    ObjectFullName has \"Tier 0\", \"Tier 0\",\n    ObjectFullName has \"Tier 1\", \"Tier 1\",\n    ObjectFullName has \"Tier Model Administration\", \"Tier 0\",\n    ObjectFullName has \"Tier Model Computer Quarantine\", \"Tier 0\",\n    ObjectFullName has \"Domain Controllers\", \"Tier 0\",\n    \"Unknown\")\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , ActivityType\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "description": "A Bitlocker recovery key was stored within a Tier Model computer object.\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "A Tier Model object Bitlocker Key was stored in AD. This Informational alert is generated as part of reporting.",
+          "alertDisplayNameFormat": "(TM010.1) A {{ObjectTier}} Bitlocker Recovery Key was stored in AD"
+        },
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "EventID": "EventID",
+          "EventData": "EventData",
+          "Account": "Account",
+          "Computer": "Computer",
+          "ObjectClass": "ObjectClass",
+          "Domain": "Domain",
+          "ObjectTier": "ObjectTier",
+          "ActivityType": "ActivityType",
+          "ObjectName": "ObjectName",
+          "Channel": "Channel"
+        },
+        "status": "Available",
+        "severity": "Informational",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
@@ -26,63 +82,7 @@
             "matchingMethod": "AllEntities",
             "lookbackDuration": "PT5H"
           }
-        },
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "ObjectName"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "Computer"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "Account"
-              }
-            ]
-          }
-        ],
-        "customDetails": {
-          "Account": "Account",
-          "Channel": "Channel",
-          "ObjectTier": "ObjectTier",
-          "ObjectClass": "ObjectClass",
-          "Domain": "Domain",
-          "EventData": "EventData",
-          "Computer": "Computer",
-          "ActivityType": "ActivityType",
-          "ObjectName": "ObjectName",
-          "EventID": "EventID"
-        },
-        "triggerThreshold": 0,
-        "severity": "Informational",
-        "name": "PROD (TM010.1) - BITLOCKER - Stored Bitlocker Recovery Key to Tier Level Computer Object",
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "(TM010.1) A {{ObjectTier}} Bitlocker Recovery Key was stored in AD",
-          "alertDescriptionFormat": "A Tier Model object Bitlocker Key was stored in AD. This Informational alert is generated as part of reporting."
-        },
-        "query": "SecurityEvent\n| where EventID == 5137\n    and (EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 1 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 2 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\")\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| where ObjectClass has \"msFVE-RecoveryInformation\"\n| extend ObjectBitName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectFullName = extract(\"(?i)(CN=[^,]+,(?i)OU=[^,]+)\", 1, ObjectBitName_e)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectFullName)\n| extend ObjectTier = case(\n    ObjectFullName has \"Tier 0\", \"Tier 0\",\n    ObjectFullName has \"Tier 1\", \"Tier 1\",\n    ObjectFullName has \"Tier Model Administration\", \"Tier 0\",\n    ObjectFullName has \"Tier Model Computer Quarantine\", \"Tier 0\",\n    ObjectFullName has \"Domain Controllers\", \"Tier 0\",\n    \"Unknown\")\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , ActivityType\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "5h",
-        "status": "Available",
-        "queryPeriod": "5h"
+        }
       }
     }
   ]

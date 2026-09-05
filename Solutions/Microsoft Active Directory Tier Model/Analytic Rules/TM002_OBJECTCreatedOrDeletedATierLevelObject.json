@@ -14,81 +14,81 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "PROD (TM002.1) - OBJECT - Created or Deleted a Tier Level Object",
+        "queryPeriod": "30m",
         "description": "A Tier Model object was created or deleted\n",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Account"
-            ],
-            "lookbackDuration": "PT5M",
-            "enabled": false,
-            "groupByCustomDetails": [
-              "ObjectName"
-            ],
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected"
-          }
-        },
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "ObjectName"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "Host",
             "fieldMappings": [
               {
                 "identifier": "HostName",
                 "columnName": "Computer"
               }
-            ]
+            ],
+            "entityType": "Host"
           },
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "FullName",
                 "columnName": "Account"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
+        "queryFrequency": "30m",
+        "query": "SecurityEvent \n| where (EventID == 5137\n    or EventID == 5141)\n    and (EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 1 Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 2 Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Service Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 1 Service Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 2 Service Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Groups\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Groups\"\n        or EventData matches regex @\"(?i)OU=Tier 2 Groups\"\n        or EventData matches regex @\"(?i)OU=Tier 0 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 1 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 2 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\"\n        or EventData matches regex @\"(?i)CN=Builtin\"\n        or EventData matches regex @\"(?i)CN=Computers\"\n        or EventData matches regex @\"(?i)CN=Users\")\n| extend ObjectName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectName_e)\n| extend ObjectTier_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectTier = extract(\"(?i)OU=(Tier [^ ,]+)\", 1, ObjectTier_e)\n| extend ObjectTier = iff(ObjectTier == \"\", \"Outside Tier Model\", ObjectTier)\n| extend ObjectTier = iff(ObjectTier_e has \"OU=Domain Controllers\", \"Tier 0\", ObjectTier)\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| where ObjectClass !has \"organizationalUnit\" and ObjectClass !has \"msFVE-RecoveryInformation\"\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend SubjectUserName = extract(\"<Data Name=\\\"SubjectUserName\\\">([^<]+)</Data>\", 1, EventData)\n| extend SubjectDomainName = extract(\"<Data Name=\\\"SubjectDomainName\\\">([^<]+)</Data>\", 1, EventData)\n| extend Account = strcat(SubjectDomainName, \"\\\\\", SubjectUserName)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n        , ObjectName\n        , ObjectTier\n        , ObjectClass\n        , ActivityType\n        , Account\n        , Domain\n        , Computer\n        , Channel\n        , EventID\n        , EventData\n",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Tier Model TM002 - A Tier Model object was created or deleted.",
+          "alertDisplayNameFormat": "(TM002.1) A {{ObjectTier}} {{ObjectClass}} was {{ActivityType}}"
+        },
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "customDetails": {
+          "EventID": "EventID",
+          "EventData": "EventData",
           "Account": "Account",
-          "Channel": "Channel",
-          "ObjectTier": "ObjectTier",
+          "Computer": "Computer",
           "ObjectClass": "ObjectClass",
           "Domain": "Domain",
-          "EventData": "EventData",
-          "Computer": "Computer",
+          "ObjectTier": "ObjectTier",
           "ActivityType": "ActivityType",
           "ObjectName": "ObjectName",
-          "EventID": "EventID"
+          "Channel": "Channel"
         },
-        "triggerThreshold": 0,
-        "severity": "Low",
-        "name": "PROD (TM002.1) - OBJECT - Created or Deleted a Tier Level Object",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "(TM002.1) A {{ObjectTier}} {{ObjectClass}} was {{ActivityType}}",
-          "alertDescriptionFormat": "Tier Model TM002 - A Tier Model object was created or deleted."
-        },
-        "query": "SecurityEvent \n| where (EventID == 5137\n    or EventID == 5141)\n    and (EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 1 Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 2 Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Service Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 1 Service Accounts\" \n        or EventData matches regex @\"(?i)OU=Tier 2 Service Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Groups\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Groups\"\n        or EventData matches regex @\"(?i)OU=Tier 2 Groups\"\n        or EventData matches regex @\"(?i)OU=Tier 0 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 1 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 2 PAW\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\"\n        or EventData matches regex @\"(?i)CN=Builtin\"\n        or EventData matches regex @\"(?i)CN=Computers\"\n        or EventData matches regex @\"(?i)CN=Users\")\n| extend ObjectName_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectName = extract(\"(?i)CN=([^,]+)\", 1, ObjectName_e)\n| extend ObjectTier_e = extract(\"<Data Name=\\\"ObjectDN\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectTier = extract(\"(?i)OU=(Tier [^ ,]+)\", 1, ObjectTier_e)\n| extend ObjectTier = iff(ObjectTier == \"\", \"Outside Tier Model\", ObjectTier)\n| extend ObjectTier = iff(ObjectTier_e has \"OU=Domain Controllers\", \"Tier 0\", ObjectTier)\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| where ObjectClass !has \"organizationalUnit\" and ObjectClass !has \"msFVE-RecoveryInformation\"\n| extend ActivityType = extract(\"([a-zA-Z]+)\\\\.$\", 1, Activity)\n| extend SubjectUserName = extract(\"<Data Name=\\\"SubjectUserName\\\">([^<]+)</Data>\", 1, EventData)\n| extend SubjectDomainName = extract(\"<Data Name=\\\"SubjectDomainName\\\">([^<]+)</Data>\", 1, EventData)\n| extend Account = strcat(SubjectDomainName, \"\\\\\", SubjectUserName)\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n        , ObjectName\n        , ObjectTier\n        , ObjectClass\n        , ActivityType\n        , Account\n        , Domain\n        , Computer\n        , Channel\n        , EventID\n        , EventData\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "30m",
         "status": "Available",
-        "queryPeriod": "30m"
+        "severity": "Low",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "groupByCustomDetails": [
+              "ObjectName"
+            ],
+            "groupByEntities": [
+              "Account"
+            ],
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "Selected",
+            "enabled": false
+          }
+        }
       }
     }
   ]

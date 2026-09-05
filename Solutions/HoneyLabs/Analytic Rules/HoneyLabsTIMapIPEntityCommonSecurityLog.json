@@ -14,29 +14,29 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess",
+          "CommandAndControl"
+        ],
+        "name": "HoneyLabs TI Map IP Entity to CommonSecurityLog",
+        "severity": "Medium",
         "description": "'Identifies source-IP matches in CommonSecurityLog (firewall, proxy and other CEF sources) against IP indicators from HoneyLabs honeypot telemetry. A match means a source IP that ran exploit or loader commands against HoneyLabs sensors also appeared as a source in your own logs. Only the structured SourceIP field is matched; destination IPs and IPs merely mentioned inside the free-text Message are ignored, because those are frequently unrelated and generate false positives. Indicator Confidence reflects how much evidence HoneyLabs holds (90 = 100+ observed attacks, 60 = a single sighting); raise the threshold in the query to trade coverage for precision.'\n",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "CS_ipEntity"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "name": "HoneyLabs TI Map IP Entity to CommonSecurityLog",
-        "tactics": [
-          "InitialAccess",
-          "CommandAndControl"
-        ],
+        "queryPeriod": "14d",
+        "queryFrequency": "1h",
         "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet HoneyLabs_IPs = ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where IsActive == true and ValidUntil > now()\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n  | where SourceSystem startswith 'HoneyLabs'\n  | where ObservableKey == 'ipv4-addr:value'\n  | extend TI_ipEntity = tostring(ObservableValue),\n           HoneyLabsConfidence = Confidence,\n           HoneyLabsLabels = tostring(Data.labels),\n           IndicatorDescription = tostring(Data.description),\n           HoneyLabsReport = strcat('https://honeylabs.net/lookup/', tostring(ObservableValue));\nHoneyLabs_IPs\n| join kind=innerunique (\n    CommonSecurityLog\n    | where TimeGenerated >= ago(dt_lookBack)\n    | where isnotempty(SourceIP)\n    | extend CS_ipEntity = SourceIP\n    | extend CommonSecurityLog_TimeGenerated = TimeGenerated\n) on $left.TI_ipEntity == $right.CS_ipEntity\n| where CommonSecurityLog_TimeGenerated < ValidUntil\n| summarize CommonSecurityLog_TimeGenerated = arg_max(CommonSecurityLog_TimeGenerated, *) by Id, CS_ipEntity\n| project CommonSecurityLog_TimeGenerated, IndicatorDescription, Id, ValidUntil,\n  HoneyLabsConfidence, HoneyLabsLabels, HoneyLabsReport, TI_ipEntity, CS_ipEntity, LogSeverity,\n  DeviceAction, SourceIP, DestinationIP, DeviceName, SourceUserName\n| extend timestamp = CommonSecurityLog_TimeGenerated\n",
         "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "queryPeriod": "14d"
+        "triggerThreshold": 0
       }
     }
   ]

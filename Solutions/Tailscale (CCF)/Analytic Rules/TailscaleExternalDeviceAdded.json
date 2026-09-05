@@ -14,7 +14,38 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "InitialAccess"
+        ],
+        "name": "Tailscale: External (shared-in) device added",
+        "queryPeriod": "2d",
         "description": "Identifies new external (shared-in) devices joining the tailnet that were not present in the prior 24-hour baseline. Each shared-in device expands the trust boundary - confirm the share matches a documented agreement and ACL scope.\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Hostname"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "User"
+              }
+            ],
+            "entityType": "Account"
+          }
+        ],
+        "queryFrequency": "1h",
+        "query": "let recent =\n    Tailscale_Devices_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where IsExternal == true\n    | project DeviceId, DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags;\nlet prior =\n    Tailscale_Devices_CL\n    | where TimeGenerated between (ago(2d) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where IsExternal == true\n    | distinct DeviceId;\nrecent\n| join kind=leftanti prior on DeviceId\n| project TimeGenerated = now(), DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "status": "Available",
+        "severity": "Medium",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
@@ -23,38 +54,7 @@
             "matchingMethod": "AllEntities",
             "lookbackDuration": "P1D"
           }
-        },
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "Hostname"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "User"
-              }
-            ]
-          }
-        ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "name": "Tailscale: External (shared-in) device added",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "query": "let recent =\n    Tailscale_Devices_CL\n    | where TimeGenerated > ago(1h)\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where IsExternal == true\n    | project DeviceId, DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags;\nlet prior =\n    Tailscale_Devices_CL\n    | where TimeGenerated between (ago(2d) .. ago(1h))\n    | summarize arg_max(TimeGenerated, *) by DeviceId\n    | where IsExternal == true\n    | distinct DeviceId;\nrecent\n| join kind=leftanti prior on DeviceId\n| project TimeGenerated = now(), DeviceName, Hostname, User, Os, ClientVersion, Created, LastSeen, Tags\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "status": "Available",
-        "queryPeriod": "2d"
+        }
       }
     }
   ]

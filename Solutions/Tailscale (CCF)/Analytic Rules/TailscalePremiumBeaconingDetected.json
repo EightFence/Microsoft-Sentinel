@@ -14,7 +14,57 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "CommandAndControl",
+          "Exfiltration"
+        ],
+        "name": "Tailscale Premium: Network flow beaconing detected",
+        "queryPeriod": "2d",
         "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "SrcNodeName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "DstNodeName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "SrcUser"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "Src"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "queryFrequency": "1h",
+        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "status": "Available",
+        "severity": "Medium",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
@@ -23,57 +73,7 @@
             "matchingMethod": "AllEntities",
             "lookbackDuration": "P1D"
           }
-        },
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "SrcNodeName"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "DstNodeName"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "SrcUser"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "Src"
-              }
-            ]
-          }
-        ],
-        "triggerThreshold": 0,
-        "severity": "Medium",
-        "name": "Tailscale Premium: Network flow beaconing detected",
-        "tactics": [
-          "CommandAndControl",
-          "Exfiltration"
-        ],
-        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1h",
-        "status": "Available",
-        "queryPeriod": "2d"
+        }
       }
     }
   ]

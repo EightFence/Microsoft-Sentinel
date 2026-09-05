@@ -14,10 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "name": "AWSCloudTrail - Failed Attempts to Change AWS CloudTrail Logs",
+        "queryPeriod": "1d",
         "description": "Identifies FAILED or denied attempts to manipulate AWS CloudTrail, CloudWatch/EventBridge, or VPC Flow Logs.\nSuccessful manipulation is covered by the higher-severity 'AWSCloudTrail - Successful Tampering with AWS CloudTrail Logs' rule.\nThese failed attempts can indicate reconnaissance or an actor probing for insufficient permissions as part of defense evasion.\nFor more information, visit: \n\nAWS CloudTrail API: https://docs.aws.amazon.com/awscloudtrail/latest/APIReference/API_Operations.html \n\nAWS CloudWatch/EventBridge API: https://docs.aws.amazon.com/eventbridge/latest/APIReference/API_Operations.html \n\nAWS DeleteFlowLogs API: https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DeleteFlowLogs.html\n",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -31,40 +35,36 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
+        "queryFrequency": "1d",
+        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\",\"DeleteLogGroup\"]);\nAWSCloudTrail\n| where (EventName in~ (EventNameList) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and (isnotempty(ErrorMessage) or isnotempty(ErrorCode))\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Failed event {{EventName}} occurred in {{AWSRegion}} for account {{RecipientAccountId}}",
+          "alertDisplayNameFormat": "AWS CloudTrail log manipulation FAILED attempt: {{EventName}} by {{AccountName}} from {{SourceIpAddress}}"
+        },
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
         "customDetails": {
+          "AWSRegion": "AWSRegion",
           "UserAgent": "UserAgent",
           "EventName": "EventName",
           "EventTypeName": "EventTypeName",
-          "AWSRegion": "AWSRegion",
           "EventSource": "EventSource"
         },
-        "triggerThreshold": 0,
-        "severity": "Low",
-        "name": "AWSCloudTrail - Failed Attempts to Change AWS CloudTrail Logs",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS CloudTrail log manipulation FAILED attempt: {{EventName}} by {{AccountName}} from {{SourceIpAddress}}",
-          "alertDescriptionFormat": "Failed event {{EventName}} occurred in {{AWSRegion}} for account {{RecipientAccountId}}"
-        },
-        "query": "let EventNameList = dynamic([\"UpdateTrail\",\"DeleteTrail\",\"StopLogging\",\"DeleteFlowLogs\",\"DeleteEventBus\",\"DeleteLogGroup\"]);\nAWSCloudTrail\n| where (EventName in~ (EventNameList) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == \"UpdateTrail\" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and (isnotempty(ErrorMessage) or isnotempty(ErrorCode))\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource\n",
-        "triggerOperator": "gt",
-        "queryFrequency": "1d",
         "status": "Available",
-        "queryPeriod": "1d"
+        "severity": "Low"
       }
     }
   ]
