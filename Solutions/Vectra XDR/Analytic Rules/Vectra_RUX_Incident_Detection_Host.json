@@ -14,29 +14,11 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerOperator": "GreaterThan",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "groupByAlertDetails": [
-              "DisplayName"
-            ],
-            "enabled": true,
-            "lookbackDuration": "P7D",
-            "matchingMethod": "Selected",
-            "groupByEntities": [
-              "Host"
-            ],
-            "reopenClosedIncident": false
-          }
-        },
-        "name": "Vectra RUX - Create Incident for Escalated Host Detection or Unresolved Priority Host",
-        "severity": "High",
-        "description": "This query creates a Microsoft Sentinel incident when a detection on a host entity has been escalated in Vectra\n(investigation_status = escalated). Escalation indicates that a human analyst or MDR service\nhas reviewed the detection and determined it requires immediate host attention or notification.\nOne incident is created per detection - grouping is based on alert display name so that\nrepeated rule evaluations against the same detection do not create duplicate incidents.\n\nThis query creates a Microsoft Sentinel incident when Vectra AI identifies a host entity with one or more detections\nmarked as unresolved and prioritized (unresolved_priority = true). Vectra's AI engine assigns\npriority based on attack rating, velocity, breadth, and host privilege level. This rule surfaces\nhost-based threats that require analyst attention.\n\nIncidents are grouped per host entity and remain open while the threat persists. Once all associated\ndetections are resolved in Vectra, the incident can be closed in Microsoft Sentinel.\n",
+        "queryFrequency": "10m",
+        "status": "Available",
+        "suppressionDuration": "PT1H",
         "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "severity": "High",
         "tactics": [
           "Discovery",
           "LateralMovement",
@@ -45,9 +27,41 @@
           "CommandAndControl",
           "Persistence"
         ],
+        "triggerOperator": "GreaterThan",
+        "queryPeriod": "10m",
         "query": "VectraDetectionsCombined\n| where [\"Entity Type\"] == \"host\"\n| summarize arg_max(TimeGenerated, *) by [\"Detection ID\"]\n| where [\"Investigation Status\"] == \"escalated\" or [\"Unresolved Priority\"] == true\n| extend\n    detection_name     = [\"D Type Vname\"],\n    detection_category = [\"Detection Category\"],\n    entity_url         = replace_string(replace_string(URL, \"api/v3.4/\", \"\"), \"api/v3.5/\", \"\"),\n    mitre_techniques   = tostring(Mitre),\n    detection_tags     = tostring(Tags),\n    assigned_to        = [\"Assigned To\"],\n    entity_name = [\"Entity Name\"],\n    entity_uid = [\"Entity UID\"],\n    entity_id = [\"Entity ID\"],\n    detection_id = [\"Detection ID\"],\n    external_reference = [\"External Reference ID\"],\n    investigation_status = [\"Investigation Status\"],\n    entity_type = [\"Entity Type\"]\n",
+        "customDetails": {
+          "investigation_status": "investigation_status",
+          "entity_uid": "entity_uid",
+          "external_reference": "external_reference",
+          "entity_id": "entity_id",
+          "assigned_to": "assigned_to",
+          "entity_type": "entity_type",
+          "category": "detection_category",
+          "detection_name": "detection_name",
+          "detection_id": "detection_id",
+          "entity_url": "entity_url",
+          "tags": "detection_tags",
+          "mitre_techniques": "mitre_techniques"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "name": "Vectra RUX - Create Incident for Escalated Host Detection or Unresolved Priority Host",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "entity_name"
+              }
+            ]
+          }
+        ],
+        "suppressionEnabled": false,
+        "description": "This query creates a Microsoft Sentinel incident when a detection on a host entity has been escalated in Vectra\n(investigation_status = escalated). Escalation indicates that a human analyst or MDR service\nhas reviewed the detection and determined it requires immediate host attention or notification.\nOne incident is created per detection - grouping is based on alert display name so that\nrepeated rule evaluations against the same detection do not create duplicate incidents.\n\nThis query creates a Microsoft Sentinel incident when Vectra AI identifies a host entity with one or more detections\nmarked as unresolved and prioritized (unresolved_priority = true). Vectra's AI engine assigns\npriority based on attack rating, velocity, breadth, and host privilege level. This rule surfaces\nhost-based threats that require analyst attention.\n\nIncidents are grouped per host entity and remain open while the threat persists. Once all associated\ndetections are resolved in Vectra, the incident can be closed in Microsoft Sentinel.\n",
         "alertDetailsOverride": {
-          "alertDescriptionFormat": "Vectra AI has escalated detection {{detection_name}} ({{detection_category}}) on host or identified host {{entity_name}} as a priority threat. See custom details for full context.\n",
           "alertDisplayNameFormat": "Vectra AI - {{detection_name}} on {{entity_name}}",
           "alertDynamicProperties": [
             {
@@ -58,38 +72,24 @@
               "alertProperty": "Techniques",
               "value": "mitre_techniques"
             }
-          ]
+          ],
+          "alertDescriptionFormat": "Vectra AI has escalated detection {{detection_name}} ({{detection_category}}) on host or identified host {{entity_name}} as a priority threat. See custom details for full context.\n"
         },
-        "suppressionDuration": "PT1H",
-        "status": "Available",
-        "queryPeriod": "10m",
-        "entityMappings": [
-          {
-            "fieldMappings": [
-              {
-                "columnName": "entity_name",
-                "identifier": "HostName"
-              }
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "groupByEntities": [
+              "Host"
             ],
-            "entityType": "Host"
-          }
-        ],
-        "customDetails": {
-          "entity_type": "entity_type",
-          "entity_url": "entity_url",
-          "mitre_techniques": "mitre_techniques",
-          "detection_id": "detection_id",
-          "entity_id": "entity_id",
-          "category": "detection_category",
-          "detection_name": "detection_name",
-          "investigation_status": "investigation_status",
-          "external_reference": "external_reference",
-          "entity_uid": "entity_uid",
-          "tags": "detection_tags",
-          "assigned_to": "assigned_to"
-        },
-        "queryFrequency": "10m",
-        "suppressionEnabled": false
+            "reopenClosedIncident": false,
+            "groupByAlertDetails": [
+              "DisplayName"
+            ],
+            "enabled": true,
+            "lookbackDuration": "P7D",
+            "matchingMethod": "Selected"
+          },
+          "createIncident": true
+        }
       }
     }
   ]
