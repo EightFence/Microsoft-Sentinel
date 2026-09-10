@@ -14,66 +14,66 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1h",
-        "entityMappings": [
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "SrcNodeName"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "DstNodeName"
-              }
-            ]
-          },
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "SrcUser"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "Src"
-              }
-            ]
-          }
-        ],
-        "triggerThreshold": 0,
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "P1D",
-            "matchingMethod": "AllEntities",
-            "enabled": true,
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
-        "severity": "Medium",
         "tactics": [
           "CommandAndControl",
           "Exfiltration"
         ],
-        "status": "Available",
-        "triggerOperator": "gt",
-        "queryPeriod": "2d",
         "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
+        "triggerThreshold": 0,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "P1D",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n",
+        "queryPeriod": "2d",
+        "triggerOperator": "gt",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SrcNodeName",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "DstNodeName",
+                "identifier": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "SrcUser",
+                "identifier": "FullName"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Src",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "status": "Available",
+        "severity": "Medium",
         "name": "Tailscale Premium: Network flow beaconing detected",
-        "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n"
+        "queryFrequency": "1h"
       }
     }
   ]
