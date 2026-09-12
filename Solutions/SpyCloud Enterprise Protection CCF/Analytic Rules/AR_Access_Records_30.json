@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cd8ec49c-b654-49be-b040-e552b8eba7c8')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cd8ec49c-b654-49be-b040-e552b8eba7c8')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "name": "SpyCloud identity access record exposure",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CredentialAccess",
+          "DefenseEvasion"
+        ],
+        "description": "#DONT_CORR#\n'Identifies exposure of identity access material such as session cookies, OAuth tokens,\nor SSO credentials. This material can grant direct account access without a password,\nso it bypasses password resets and single-factor controls. Revoking active sessions is\nthe primary containment action.'\n",
+        "severity": "High",
+        "queryPeriod": "1h",
+        "query": "// Human-readable constant for the severity threshold used below\nlet severityThreshold = 30;\nSpyCloudBreachWatchlistV2_CL\n| where Severity == severityThreshold\n| extend AccountName = Username, AccountEmail = Email, HostName = UserHostName,\n    AccountUpn = iff(isnotempty(Email), Email, Username),\n    // Under AlertPerResult every row becomes its own alert, so mv-expand on IPAddresses\n    // would raise one alert per IP for the same identity. Take the first address instead.\n    IPAddress = tostring(IPAddresses[0])\n// One alert per exposed identity. Session revocation acts per user, so a user appearing\n// several times in the same window would otherwise be revoked repeatedly. Deduplication is\n// per rule execution, so a reappearance in a later window correctly raises a new alert.\n| summarize arg_max(TimeGenerated, *) by AccountUpn\n| project TimeGenerated, DocumentId, SourceId, SpyCloudPublishDate, AccountEmail,\n    AccountName, AccountUpn, HostName, TargetDomain, TargetUrl, AccountType, PasswordType,\n    InfectedMachineId, InfectedTime, UserOS, IPAddress\n",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SpyCloud identity access record exposure - {{AccountUpn}}"
+        },
+        "customDetails": {
+          "SpyCloudPublishDate": "SpyCloudPublishDate",
+          "InfectedMachineId": "InfectedMachineId",
+          "InfectedTime": "InfectedTime",
+          "DocumentID": "DocumentId"
+        },
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "AccountUpn"
+              }
+            ]
+          },
+          {
+            "entityType": "Mailbox",
+            "fieldMappings": [
+              {
+                "identifier": "MailboxPrimaryAddress",
+                "columnName": "AccountEmail"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPAddress"
+              }
+            ]
+          }
+        ],
+        "triggerOperator": "gt"
+      }
+    }
+  ]
+}
