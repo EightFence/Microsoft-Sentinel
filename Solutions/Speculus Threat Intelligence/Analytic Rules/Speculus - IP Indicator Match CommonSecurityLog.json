@@ -14,52 +14,52 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerOperator": "gt",
+        "suppressionEnabled": false,
         "incidentConfiguration": {
           "groupingConfiguration": {
-            "groupByEntities": [
-              "IP"
-            ],
             "enabled": true,
             "lookbackDuration": "1d",
+            "reopenClosedIncident": false,
             "matchingMethod": "Selected",
-            "reopenClosedIncident": false
+            "groupByEntities": [
+              "IP"
+            ]
           },
           "createIncident": true
         },
-        "suppressionEnabled": false,
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
+        "queryPeriod": "14d",
+        "description": "'Matches network events in CommonSecurityLog against high-risk Speculus IP indicators (risk score >= 75)\nreceived in the last 14 days. These IPs are associated with malicious activity such as command and control,\nbotnets, ransomware infrastructure, or brute-force campaigns.'\n",
+        "suppressionDuration": "1h",
         "tactics": [
           "CommandAndControl",
           "InitialAccess"
         ],
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "columnName": "MatchIP",
-                "identifier": "Address"
-              }
-            ]
-          }
-        ],
-        "triggerOperator": "gt",
-        "severity": "High",
+        "customDetails": {
+          "Attribution": "Attribution",
+          "RiskScore": "RiskScore",
+          "Labels": "Labels"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "query": "let indicators = Speculus_Indicators_CL\n    | where TimeGenerated > ago(14d)\n    | where isnotempty(IndicatorValue)\n    | where RiskScore >= 75\n    | summarize arg_max(Modified, *) by IndicatorValue\n    | project\n        IndicatorValue,\n        RiskScore,\n        SpeculusActivity = Activity,\n        Attribution,\n        Labels,\n        IndicatorDescription = Description;\nCommonSecurityLog\n| where TimeGenerated > ago(1h)\n| where isnotempty(SourceIP) or isnotempty(DestinationIP)\n| extend MatchIP = iff(isnotempty(DestinationIP), DestinationIP, SourceIP)\n| join kind=inner indicators on $left.MatchIP == $right.IndicatorValue\n| project\n    TimeGenerated,\n    MatchIP,\n    SourceIP,\n    DestinationIP,\n    DeviceVendor,\n    DeviceProduct,\n    RiskScore,\n    SpeculusActivity,\n    Attribution,\n    Labels,\n    IndicatorDescription\n",
-        "queryPeriod": "14d",
+        "severity": "High",
+        "name": "Speculus - Network traffic to or from high-risk IP indicator",
+        "triggerThreshold": 0,
         "queryFrequency": "1h",
         "status": "Available",
-        "description": "'Matches network events in CommonSecurityLog against high-risk Speculus IP indicators (risk score >= 75)\nreceived in the last 14 days. These IPs are associated with malicious activity such as command and control,\nbotnets, ransomware infrastructure, or brute-force campaigns.'\n",
-        "customDetails": {
-          "Labels": "Labels",
-          "RiskScore": "RiskScore",
-          "Attribution": "Attribution"
-        },
-        "suppressionDuration": "1h",
-        "triggerThreshold": 0,
-        "name": "Speculus - Network traffic to or from high-risk IP indicator"
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "MatchIP"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
       }
     }
   ]
