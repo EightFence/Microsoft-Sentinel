@@ -14,27 +14,33 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "severity": "Medium",
         "queryPeriod": "7d",
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "enabled": true,
             "reopenClosedIncident": false,
-            "lookbackDuration": "PT12H"
-          }
+            "enabled": true,
+            "lookbackDuration": "PT12H",
+            "matchingMethod": "AllEntities"
+          },
+          "createIncident": true
         },
-        "subTechniques": [
-          "T1562.001"
-        ],
         "tactics": [
           "DefenseEvasion"
         ],
+        "subTechniques": [
+          "T1562.001"
+        ],
+        "queryFrequency": "6h",
         "name": "UniFi Site Manager: IPS signature count dropped >50%",
+        "description": "Identifies when the IPS signature ruleset count drops by more than half versus the 7-day maximum, indicating broken threat-intel feeds or rollback.\n",
         "triggerOperator": "gt",
+        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(7d)\n| extend rulesCount = toint(SiteStatistics.gateway.ipsSignature.rulesCount)\n      | where isnotnull(rulesCount)\n      | summarize MaxCount = max(rulesCount), arg_max(TimeGenerated, rulesCount) by SiteId, SiteName\n      | where MaxCount > 100 and toreal(rulesCount) / MaxCount < 0.5\n      | extend DropPct = round(100.0 * (1 - toreal(rulesCount) / MaxCount), 1)\n      | extend Activity = strcat('IPS rules dropped to ', rulesCount, ' (from ', MaxCount, ', -', DropPct, '%)')\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentRules = rulesCount, PeakRules = MaxCount, DropPct\n",
+        "status": "Available",
+        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "SiteId",
@@ -44,15 +50,9 @@
                 "columnName": "SiteName",
                 "identifier": "DnsDomain"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
-        ],
-        "severity": "Medium",
-        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(7d)\n| extend rulesCount = toint(SiteStatistics.gateway.ipsSignature.rulesCount)\n      | where isnotnull(rulesCount)\n      | summarize MaxCount = max(rulesCount), arg_max(TimeGenerated, rulesCount) by SiteId, SiteName\n      | where MaxCount > 100 and toreal(rulesCount) / MaxCount < 0.5\n      | extend DropPct = round(100.0 * (1 - toreal(rulesCount) / MaxCount), 1)\n      | extend Activity = strcat('IPS rules dropped to ', rulesCount, ' (from ', MaxCount, ', -', DropPct, '%)')\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentRules = rulesCount, PeakRules = MaxCount, DropPct\n",
-        "triggerThreshold": 0,
-        "queryFrequency": "6h",
-        "description": "Identifies when the IPS signature ruleset count drops by more than half versus the 7-day maximum, indicating broken threat-intel feeds or rollback.\n"
+        ]
       }
     }
   ]
