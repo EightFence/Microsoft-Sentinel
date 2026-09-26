@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/04e36dfa-05b3-45bd-b39f-28b6fac71337')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/04e36dfa-05b3-45bd-b39f-28b6fac71337')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "severity": "High",
+        "description": "Detects Netskope DLP (Data Loss Prevention) alerts raised with high or critical severity.\nThese alerts indicate sensitive data (e.g. PII, source code, financial records) matched a\nDLP policy during upload, download, or sharing and may represent data exfiltration.\n",
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "queryPeriod": "1h",
+        "name": "Netskope - High Severity DLP Alert",
+        "status": "Available",
+        "query": "NetskopeAlerts_CL\n| where TimeGenerated > ago(1h)\n| where alert_type =~ \"dlp\"\n| where severity has_any (\"high\", \"critical\")\n| summarize\n    AlertCount = count(),\n    DlpRules = make_set(dlp_rule, 20),\n    DlpProfiles = make_set(dlp_profile, 20),\n    Apps = make_set(app, 20),\n    FilePaths = make_set(file_path, 20),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated)\n    by User = user, UserIp = userip, HostName = hostname, AlertName = alert_name, Severity = severity\n| order by AlertCount desc\n| project\n    LastSeen,\n    AlertName,\n    Severity,\n    User,\n    UserIp,\n    HostName,\n    AlertCount,\n    Apps,\n    DlpRules,\n    DlpProfiles,\n    FilePaths,\n    FirstSeen\n",
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Name",
+                "columnName": "User"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "UserIp"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              }
+            ],
+            "entityType": "Host"
+          }
+        ],
+        "queryFrequency": "1h"
+      }
+    }
+  ]
+}

@@ -14,49 +14,49 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "47h",
-        "query": "let ArrivalWindow = 20m;\nlet Lookback = 47h;\nlet SeenBefore = argsentdc_CL\n    | where TimeGenerated > ago(Lookback)\n    | where ingestion_time() <= ago(ArrivalWindow)\n    | where status in (\"open\", \"acknowledged\")\n    | distinct ref_id = tostring(ref_id);\nargsentdc_CL\n| where TimeGenerated > ago(Lookback)\n| where ingestion_time() > ago(ArrivalWindow)\n| summarize arg_max(TimeGenerated, *) by ref_id = tostring(ref_id)\n| where status in (\"open\", \"acknowledged\")\n| where todatetime(created_date) > ago(Lookback)\n| join kind=leftanti SeenBefore on ref_id\n| extend SentinelSeverity = case(\n    severity in (\"very_high\", \"critical\"), \"High\",\n    severity == \"high\", \"High\",\n    severity == \"medium\", \"Medium\",\n    severity == \"low\", \"Low\",\n    \"Informational\")\n| project TimeGenerated,\n          RefId = ref_id,\n          AlertTitle = tostring(event_title),\n          AlertDescription = tostring(description),\n          OriginalSeverity = tostring(severity),\n          SentinelSeverity,\n          Confidence = tostring(confidence),\n          EventType = tostring(event_type),\n          Category = tostring(category),\n          Recommendation = tostring(recommendation)\n",
-        "customDetails": {
-          "event_type": "EventType",
-          "category": "Category",
-          "recommendation": "Recommendation",
-          "ref_id": "RefId",
-          "confidence": "Confidence",
-          "argos_severity": "OriginalSeverity"
-        },
-        "queryFrequency": "5m",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "{{AlertTitle}}",
-          "alertDescriptionFormat": "{{AlertDescription}}",
-          "alertSeverityColumnName": "SentinelSeverity"
-        },
-        "suppressionDuration": "5h",
-        "status": "Available",
+        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "suppressionEnabled": false,
         "severity": "Medium",
+        "customDetails": {
+          "ref_id": "RefId",
+          "recommendation": "Recommendation",
+          "confidence": "Confidence",
+          "category": "Category",
+          "argos_severity": "OriginalSeverity",
+          "event_type": "EventType"
+        },
+        "description": "Creates a Microsoft Sentinel incident for each Check Point Exposure Management alert that\nreaches the argsentdc_CL table as open or acknowledged for the first time. Each result becomes\nits own alert, and ref_id is surfaced as a Custom Detail so the Exporter, ManualStatusUpdate\nand InboundStatusSync playbooks can map the incident back to the originating Argos alert.\n\nThe CCP data connector polls on update_date, so every change to an Argos alert adds a new row\nfor the same ref_id. Only the first open or acknowledged row creates an incident; later rows\nare status updates, which the Check_Point_EM_InboundStatusSync playbook applies to the\nexisting incident. An alert counts as already seen when it had an open or acknowledged row\ningested more than 20 minutes earlier.\n\nOnly alerts created within the 47-hour lookback are considered, which is the longest lookback\nMicrosoft Sentinel allows for a rule that runs every 5 minutes. Every earlier row of such an\nalert falls inside the same lookback, so the already-seen check is complete and an update can\nnever open a second incident. An alert created more than 47 hours before it first reaches the\ntable does not get an incident.\n\nThe ingestion_time bound limits each row to the few runs its arrival window covers, because\nthe DCR maps update_date into TimeGenerated and a row becomes queryable several minutes after\nthat timestamp. Repeats within that window are folded into one incident by grouping on the\nref_id custom detail.\n",
+        "suppressionDuration": "5h",
         "tactics": [
           "InitialAccess",
           "DefenseEvasion"
         ],
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "incidentConfiguration": {
           "groupingConfiguration": {
             "groupByCustomDetails": [
               "ref_id"
             ],
-            "lookbackDuration": "1d",
             "reopenClosedIncident": false,
+            "enabled": true,
             "matchingMethod": "Selected",
-            "enabled": true
+            "lookbackDuration": "1d"
           },
           "createIncident": true
         },
-        "triggerThreshold": 0,
-        "description": "Creates a Microsoft Sentinel incident for each Check Point Exposure Management alert that\nreaches the argsentdc_CL table as open or acknowledged for the first time. Each result becomes\nits own alert, and ref_id is surfaced as a Custom Detail so the Exporter, ManualStatusUpdate\nand InboundStatusSync playbooks can map the incident back to the originating Argos alert.\n\nThe CCP data connector polls on update_date, so every change to an Argos alert adds a new row\nfor the same ref_id. Only the first open or acknowledged row creates an incident; later rows\nare status updates, which the Check_Point_EM_InboundStatusSync playbook applies to the\nexisting incident. An alert counts as already seen when it had an open or acknowledged row\ningested more than 20 minutes earlier.\n\nOnly alerts created within the 47-hour lookback are considered, which is the longest lookback\nMicrosoft Sentinel allows for a rule that runs every 5 minutes. Every earlier row of such an\nalert falls inside the same lookback, so the already-seen check is complete and an update can\nnever open a second incident. An alert created more than 47 hours before it first reaches the\ntable does not get an incident.\n\nThe ingestion_time bound limits each row to the few runs its arrival window covers, because\nthe DCR maps update_date into TimeGenerated and a row becomes queryable several minutes after\nthat timestamp. Repeats within that window are folded into one incident by grouping on the\nref_id custom detail.\n",
-        "name": "Check Point Exposure Management - Argos alerts to incidents",
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "queryPeriod": "47h",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "{{AlertTitle}}",
+          "alertSeverityColumnName": "SentinelSeverity",
+          "alertDescriptionFormat": "{{AlertDescription}}"
         },
-        "suppressionEnabled": false
+        "name": "Check Point Exposure Management - Argos alerts to incidents",
+        "status": "Available",
+        "query": "let ArrivalWindow = 20m;\nlet Lookback = 47h;\nlet SeenBefore = argsentdc_CL\n    | where TimeGenerated > ago(Lookback)\n    | where ingestion_time() <= ago(ArrivalWindow)\n    | where status in (\"open\", \"acknowledged\")\n    | distinct ref_id = tostring(ref_id);\nargsentdc_CL\n| where TimeGenerated > ago(Lookback)\n| where ingestion_time() > ago(ArrivalWindow)\n| summarize arg_max(TimeGenerated, *) by ref_id = tostring(ref_id)\n| where status in (\"open\", \"acknowledged\")\n| where todatetime(created_date) > ago(Lookback)\n| join kind=leftanti SeenBefore on ref_id\n| extend SentinelSeverity = case(\n    severity in (\"very_high\", \"critical\"), \"High\",\n    severity == \"high\", \"High\",\n    severity == \"medium\", \"Medium\",\n    severity == \"low\", \"Low\",\n    \"Informational\")\n| project TimeGenerated,\n          RefId = ref_id,\n          AlertTitle = tostring(event_title),\n          AlertDescription = tostring(description),\n          OriginalSeverity = tostring(severity),\n          SentinelSeverity,\n          Confidence = tostring(confidence),\n          EventType = tostring(event_type),\n          Category = tostring(category),\n          Recommendation = tostring(recommendation)\n",
+        "queryFrequency": "5m"
       }
     }
   ]
