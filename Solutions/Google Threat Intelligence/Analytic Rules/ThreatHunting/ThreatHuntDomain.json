@@ -14,26 +14,23 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryPeriod": "1d",
-        "queryFrequency": "30m",
-        "entityMappings": [
-          {
-            "entityType": "DNS",
-            "fieldMappings": [
-              {
-                "identifier": "DomainName",
-                "columnName": "Domain"
-              }
-            ]
-          }
-        ],
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Google Threat Intelligence Match",
-          "alertDescriptionFormat": "Correlation found from the {{Type}} table."
+          "alertDescriptionFormat": "Correlation found from the {{Type}} table.",
+          "alertDisplayNameFormat": "Google Threat Intelligence Match"
         },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "query": "let ioc_lookBack = 1d;\n_Im_Dns\n| where isnotempty(DnsQuery)\n| extend lowerDomain=tolower(DnsQuery)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey == 'domain-name:value'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n| extend lowerDomain=tolower(ObservableValue)\n) on lowerDomain\n| project Domain=ObservableValue, Description=Data.description, Type, TimeGenerated\n",
         "triggerOperator": "gt",
         "name": "Google Threat Intelligence - Threat Hunting Domain",
-        "query": "let ioc_lookBack = 1d;\n_Im_Dns\n| where isnotempty(DnsQuery)\n| extend lowerDomain=tolower(DnsQuery)\n| join kind=inner (\nThreatIntelIndicators\n| where ObservableKey == 'domain-name:value'\n| where isnotempty(ObservableValue)\n| where SourceSystem == \"Google Threat Intelligence\"\n| where TimeGenerated >= ago(ioc_lookBack)\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by Id\n| where IsActive == true and (isnull(ValidUntil) or ValidUntil > now())\n| extend lowerDomain=tolower(ObservableValue)\n) on lowerDomain\n| project Domain=ObservableValue, Description=Data.description, Type, TimeGenerated\n",
+        "queryPeriod": "1d",
+        "description": "'Google Threat Intelligence domain correlation.'\n",
+        "queryFrequency": "30m",
+        "triggerThreshold": 0,
         "incidentConfiguration": {
           "groupingConfiguration": {
             "enabled": true,
@@ -44,14 +41,17 @@
           "createIncident": true
         },
         "severity": "Medium",
-        "tactics": [
-          "CommandAndControl"
-        ],
-        "description": "'Google Threat Intelligence domain correlation.'\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerThreshold": 0
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "Domain",
+                "identifier": "DomainName"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ]
       }
     }
   ]

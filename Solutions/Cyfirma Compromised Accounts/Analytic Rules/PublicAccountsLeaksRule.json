@@ -14,9 +14,8 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "suppressionEnabled": true,
-        "queryPeriod": "5m",
         "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{description}}",
           "alertDynamicProperties": [
             {
               "value": "ProductName",
@@ -27,75 +26,35 @@
               "alertProperty": "ProviderName"
             }
           ],
-          "alertDisplayNameFormat": "Public Leak - {{user_name}} - {{email}}",
-          "alertDescriptionFormat": "{{description}}"
+          "alertDisplayNameFormat": "Public Leak - {{user_name}} - {{email}}"
         },
-        "queryFrequency": "5m",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "user_name"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "email"
-              }
-            ]
-          },
-          {
-            "entityType": "Host",
-            "fieldMappings": [
-              {
-                "identifier": "HostName",
-                "columnName": "computer_name"
-              },
-              {
-                "identifier": "OSVersion",
-                "columnName": "operating_system"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "ip"
-              }
-            ]
-          },
-          {
-            "entityType": "URL",
-            "fieldMappings": [
-              {
-                "identifier": "Url",
-                "columnName": "url"
-              }
-            ]
-          }
-        ],
-        "customDetails": {
-          "UID": "uid",
-          "Recommendations": "recommendations",
-          "Impact": "impact",
-          "FirstSeen": "first_seen",
-          "TimeGenerated": "TimeGenerated",
-          "BreachDate": "breach_date",
-          "LastSeen": "last_seen",
-          "Source": "source",
-          "Description": "description"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
+        "suppressionDuration": "6h",
         "tactics": [
           "CredentialAccess",
           "InitialAccess",
           "Discovery"
         ],
+        "query": "// Public Accounts Leaks - Latest per UID\nlet timeFrame = 5m;\nCyfirmaCompromisedAccounts_CL\n| where TimeGenerated between (ago(timeFrame) .. now())\n    and Category has \"Public Accounts Leaks\"\n| extend \n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| summarize arg_max(TimeGenerated, \n    email,\n    user_name,\n    password,\n    url,\n    ip,\n    computer_name,\n    operating_system,\n    breach_date,\n    first_seen,\n    last_seen,\n    impact,\n    recommendations,\n    description,\n    source,\n    ProductName,\n    ProviderName\n) by uid\n| sort by TimeGenerated desc\n",
+        "suppressionEnabled": true,
         "triggerOperator": "gt",
         "name": "CYFIRMA - Public Accounts Leaks Detection Rule",
-        "status": "Available",
+        "customDetails": {
+          "UID": "uid",
+          "FirstSeen": "first_seen",
+          "Impact": "impact",
+          "LastSeen": "last_seen",
+          "Recommendations": "recommendations",
+          "Source": "source",
+          "Description": "description",
+          "TimeGenerated": "TimeGenerated",
+          "BreachDate": "breach_date"
+        },
+        "queryPeriod": "5m",
+        "description": "\"Detects exposed public-facing account credentials as identified in CYFIRMA's threat intelligence feeds.\nThis rule monitors for credentials leaked through third-party breaches, dark web sources, or public repositories that could impact the organization's users or systems.\nIt captures key details such as email, username, IP address, and associated devices. These accounts may not be directly managed by the enterprise but still pose a risk of lateral access, shadow IT, or third-party exposure.\"\n",
+        "queryFrequency": "5m",
         "incidentConfiguration": {
           "groupingConfiguration": {
             "enabled": false,
@@ -105,14 +64,55 @@
           },
           "createIncident": true
         },
-        "query": "// Public Accounts Leaks - Latest per UID\nlet timeFrame = 5m;\nCyfirmaCompromisedAccounts_CL\n| where TimeGenerated between (ago(timeFrame) .. now())\n    and Category has \"Public Accounts Leaks\"\n| extend \n    ProviderName = 'CYFIRMA',\n    ProductName = 'DeCYFIR/DeTCT'\n| summarize arg_max(TimeGenerated, \n    email,\n    user_name,\n    password,\n    url,\n    ip,\n    computer_name,\n    operating_system,\n    breach_date,\n    first_seen,\n    last_seen,\n    impact,\n    recommendations,\n    description,\n    source,\n    ProductName,\n    ProviderName\n) by uid\n| sort by TimeGenerated desc\n",
+        "triggerThreshold": 0,
         "severity": "High",
-        "suppressionDuration": "6h",
-        "description": "\"Detects exposed public-facing account credentials as identified in CYFIRMA's threat intelligence feeds.\nThis rule monitors for credentials leaked through third-party breaches, dark web sources, or public repositories that could impact the organization's users or systems.\nIt captures key details such as email, username, IP address, and associated devices. These accounts may not be directly managed by the enterprise but still pose a risk of lateral access, shadow IT, or third-party exposure.\"\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "triggerThreshold": 0
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "user_name",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "email",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "computer_name",
+                "identifier": "HostName"
+              },
+              {
+                "columnName": "operating_system",
+                "identifier": "OSVersion"
+              }
+            ],
+            "entityType": "Host"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ip",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "url",
+                "identifier": "Url"
+              }
+            ],
+            "entityType": "URL"
+          }
+        ],
+        "status": "Available"
       }
     }
   ]
