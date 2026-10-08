@@ -14,30 +14,13 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "Tailscale Premium: Network flow beaconing detected",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "P1D",
-            "enabled": true
-          },
-          "createIncident": true
-        },
-        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
-        "queryPeriod": "2d",
-        "severity": "Medium",
-        "triggerThreshold": 0,
-        "queryFrequency": "1h",
-        "status": "Available",
-        "triggerOperator": "gt",
         "entityMappings": [
           {
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "SrcNodeName"
+                "columnName": "SrcNodeName",
+                "identifier": "HostName"
               }
             ]
           },
@@ -45,8 +28,8 @@
             "entityType": "Host",
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "DstNodeName"
+                "columnName": "DstNodeName",
+                "identifier": "HostName"
               }
             ]
           },
@@ -54,8 +37,8 @@
             "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "SrcUser"
+                "columnName": "SrcUser",
+                "identifier": "FullName"
               }
             ]
           },
@@ -63,17 +46,34 @@
             "entityType": "IP",
             "fieldMappings": [
               {
-                "identifier": "Address",
-                "columnName": "Src"
+                "columnName": "Src",
+                "identifier": "Address"
               }
             ]
           }
         ],
+        "name": "Tailscale Premium: Network flow beaconing detected",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          },
+          "createIncident": true
+        },
         "tactics": [
           "CommandAndControl",
           "Exfiltration"
         ],
-        "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n"
+        "query": "let lookback = 2d;\nlet minFlows = 10;\nlet beaconPercentThreshold = 80.0;\nTailscale_Network_CL\n| where TimeGenerated > ago(lookback)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto)\n| project TimeGenerated, Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| sort by Src asc, Dst asc, Proto asc, TimeGenerated asc\n| serialize\n| extend NextTime = next(TimeGenerated), NextSrc = next(Src), NextDst = next(Dst), NextProto = next(Proto)\n| where Src == NextSrc and Dst == NextDst and Proto == NextProto\n| extend DeltaSec = datetime_diff('second', NextTime, TimeGenerated)\n| where DeltaSec > 5\n| summarize DeltaCount = count() by Src, Dst, Proto, DeltaSec, SrcNodeName, SrcUser, DstNodeName, DstUser\n| summarize (MostFrequentDeltaCount, MostFrequentDeltaSec) = arg_max(DeltaCount, DeltaSec), TotalFlows = sum(DeltaCount) by Src, Dst, Proto, SrcNodeName, SrcUser, DstNodeName, DstUser\n| where TotalFlows >= minFlows\n| extend BeaconPercent = round(MostFrequentDeltaCount * 100.0 / TotalFlows, 1)\n| where BeaconPercent >= beaconPercentThreshold\n",
+        "triggerThreshold": 0,
+        "queryPeriod": "2d",
+        "severity": "Medium",
+        "description": "Identifies when flows between a src-dst pair recur at a regular interval (80%+ of inter-flow gaps cluster on the same delta over 10+ flows). Signature of C2 beaconing or scheduled exfiltration. Requires Tailscale Premium or Enterprise.\n",
+        "triggerOperator": "gt"
       }
     }
   ]
