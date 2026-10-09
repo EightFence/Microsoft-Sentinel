@@ -14,6 +14,37 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "customDetails": {
+          "BaselineAvg": "BaselineAvg",
+          "TodayAccesses": "TodayAccesses",
+          "DeviationFactor": "DeviationFactor",
+          "DistinctSecrets": "DistinctSecrets",
+          "AnomalyThreshold": "AnomalyThreshold"
+        },
+        "query": "let factor = 3.0;\nlet minDaily = 10;\nlet minBaselineDays = 3;\nlet secretViews = DelineaAuditEvents_CL\n    | where TimeGenerated > ago(14d)\n    | where Level == \"PrivilegedActivity\"\n    | extend d = parse_json(RawData)\n    | where tostring(d.eventType.name) == \"Delinea.Vault.Secret.Viewed\"\n    | extend Actor = tostring(d.actor.name), SrcIP = tostring(d.source.host.network.ipAddress)\n    | where isnotempty(Actor);\nlet baseline = secretViews\n    | where TimeGenerated < ago(1d)\n    | summarize Accesses = count() by Actor, Day = bin(TimeGenerated, 1d)\n    | summarize BaselineAvg = avg(Accesses), BaselineStdev = stdev(Accesses), BaselineMax = max(Accesses), DaysObserved = count() by Actor;\nsecretViews\n| where TimeGenerated >= ago(1d)\n| summarize TodayAccesses = count(), DistinctSecrets = dcount(SecretId), Secrets = make_set(SecretId, 50),\n            SourceIPs = make_set(SrcIP, 20), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor\n| join kind=inner baseline on Actor\n| where DaysObserved >= minBaselineDays\n| extend AnomalyThreshold = round(BaselineAvg + factor * BaselineStdev, 1)\n| where TodayAccesses > AnomalyThreshold and TodayAccesses >= minDaily\n| extend DeviationFactor = round(todouble(TodayAccesses) / (BaselineAvg + 1), 1)\n| extend SrcIP = tostring(SourceIPs[0])\n| project Actor, TodayAccesses, DistinctSecrets, BaselineAvg = round(BaselineAvg, 1), BaselineStdev = round(BaselineStdev, 1),\n          BaselineMax, AnomalyThreshold, DeviationFactor, DaysObserved, Secrets, SrcIP, StartTime, EndTime\n| sort by DeviationFactor desc\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "severity": "Medium",
+        "queryFrequency": "1d",
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "14d",
+        "description": "Detects when a user's secret-access volume for the current day significantly exceeds their own\nrecent baseline (per-user daily average plus a standard-deviation factor over the prior ~14 days).\nA sudden spike relative to a principal's normal behaviour can indicate a compromised privileged\naccount or insider misuse. Tune 'factor' and 'minDaily' to balance noise against coverage.\n",
+        "tactics": [
+          "CredentialAccess"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
@@ -35,39 +66,8 @@
           }
         ],
         "name": "Delinea - Privileged account access anomaly (secret-access volume vs baseline)",
-        "queryFrequency": "1d",
-        "status": "Available",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "P1D",
-            "enabled": true,
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "query": "let factor = 3.0;\nlet minDaily = 10;\nlet minBaselineDays = 3;\nlet secretViews = DelineaAuditEvents_CL\n    | where TimeGenerated > ago(14d)\n    | where Level == \"PrivilegedActivity\"\n    | extend d = parse_json(RawData)\n    | where tostring(d.eventType.name) == \"Delinea.Vault.Secret.Viewed\"\n    | extend Actor = tostring(d.actor.name), SrcIP = tostring(d.source.host.network.ipAddress)\n    | where isnotempty(Actor);\nlet baseline = secretViews\n    | where TimeGenerated < ago(1d)\n    | summarize Accesses = count() by Actor, Day = bin(TimeGenerated, 1d)\n    | summarize BaselineAvg = avg(Accesses), BaselineStdev = stdev(Accesses), BaselineMax = max(Accesses), DaysObserved = count() by Actor;\nsecretViews\n| where TimeGenerated >= ago(1d)\n| summarize TodayAccesses = count(), DistinctSecrets = dcount(SecretId), Secrets = make_set(SecretId, 50),\n            SourceIPs = make_set(SrcIP, 20), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor\n| join kind=inner baseline on Actor\n| where DaysObserved >= minBaselineDays\n| extend AnomalyThreshold = round(BaselineAvg + factor * BaselineStdev, 1)\n| where TodayAccesses > AnomalyThreshold and TodayAccesses >= minDaily\n| extend DeviationFactor = round(todouble(TodayAccesses) / (BaselineAvg + 1), 1)\n| extend SrcIP = tostring(SourceIPs[0])\n| project Actor, TodayAccesses, DistinctSecrets, BaselineAvg = round(BaselineAvg, 1), BaselineStdev = round(BaselineStdev, 1),\n          BaselineMax, AnomalyThreshold, DeviationFactor, DaysObserved, Secrets, SrcIP, StartTime, EndTime\n| sort by DeviationFactor desc\n",
         "triggerThreshold": 0,
-        "customDetails": {
-          "TodayAccesses": "TodayAccesses",
-          "DeviationFactor": "DeviationFactor",
-          "AnomalyThreshold": "AnomalyThreshold",
-          "BaselineAvg": "BaselineAvg",
-          "DistinctSecrets": "DistinctSecrets"
-        },
-        "queryPeriod": "14d",
-        "severity": "Medium",
-        "description": "Detects when a user's secret-access volume for the current day significantly exceeds their own\nrecent baseline (per-user daily average plus a standard-deviation factor over the prior ~14 days).\nA sudden spike relative to a principal's normal behaviour can indicate a compromised privileged\naccount or insider misuse. Tune 'factor' and 'minDaily' to balance noise against coverage.\n",
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        "triggerOperator": "gt"
       }
     }
   ]

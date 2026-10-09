@@ -14,6 +14,35 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "customDetails": {
+          "Failures": "Failures",
+          "DistinctSourceIPs": "DistinctSourceIPs",
+          "FailReasons": "FailReasons"
+        },
+        "query": "let threshold = 10;\n// The data collection rule sets TimeGenerated from the Delinea eventDateTime and the\n// connector polls in 5 minute windows, so events routinely land several minutes after\n// the time they carry. 'lookback' must stay <= queryPeriod and must be wide enough to\n// absorb that lag, otherwise late arriving events are never evaluated by any run.\nlet lookback = 1h;\n// Must equal queryFrequency so every event is counted by exactly one run.\nlet newSince = 15m;\n// Authentication events only. Matched against eventType.name, falling back to\n// internalName, the same way ASimAuditEventDelineaPlatform resolves the event name.\nlet authEventPattern = @\"(?i)mfa|multifactor|\\blogin\\b|\\blogon\\b|signin|authentication\";\nlet failures =\n    DelineaAuditEvents_CL\n    | where TimeGenerated > ago(lookback)\n    | extend IngestedAt = ingestion_time()\n    | extend d = parse_json(RawData)\n    | extend Attr = d.additionalAttributes\n    | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))\n    | where EventName matches regex authEventPattern\n    // The attributes bag carries either scalars or single element arrays depending on\n    // the reporting service, so both shapes are read - see ASimAuditEventDelineaPlatform.\n    | extend Actor = tostring(coalesce(d.actor.email, d.actor.name, d.actor.displayName)),\n             RawSrcIP = tostring(d.source.host.network.ipAddress),\n             MfaResult = tostring(coalesce(Attr.MfaResult[0], Attr.MfaResult)),\n             FactorPassword = tostring(coalesce(Attr.FactorPassword[0], Attr.FactorPassword)),\n             FailReason = tostring(coalesce(Attr.FailReason[0], Attr.FailReason))\n    | where MfaResult =~ \"Failed\" or FactorPassword =~ \"Failed\" or isnotempty(FailReason)\n    | where isnotempty(Actor)\n    // '0.0.0.0' is the placeholder reported for events that have no network origin.\n    | extend SrcIP = iff(RawSrcIP in (\"\", \"0.0.0.0\"), \"\", RawSrcIP);\nlet recentActors = failures | where IngestedAt > ago(newSince) | distinct Actor;\nfailures\n| where Actor in (recentActors)\n| summarize Failures = count(), DistinctSourceIPs = dcountif(SrcIP, isnotempty(SrcIP)),\n            SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),\n            FailReasons = make_set_if(FailReason, isnotempty(FailReason), 10),\n            SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),\n            StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor\n| where Failures >= threshold\n| project Actor, Failures, DistinctSourceIPs, SourceIPs, FailReasons, SrcIP, StartTime, EndTime\n| sort by Failures desc\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "severity": "Medium",
+        "queryFrequency": "15m",
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "1h",
+        "description": "Detects when a single account accumulates an unusually high number of failed authentication\nevents within a short window. Only authentication events - MFA, login and sign-in - are\nconsidered; the service-wide view of every failure lives in the 'Delinea - Failed operations'\nhunting query. A failure is a failed MFA result, a failed password factor, or any login fail\nreason. A burst of failures for one account can indicate brute-force or credential-stuffing\nactivity. Tune 'threshold' to your environment.\n",
+        "tactics": [
+          "CredentialAccess"
+        ],
         "entityMappings": [
           {
             "entityType": "Account",
@@ -35,37 +64,8 @@
           }
         ],
         "name": "Delinea - Failed authentication spike (single account)",
-        "queryFrequency": "15m",
-        "status": "Available",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "P1D",
-            "enabled": true,
-            "groupByEntities": [
-              "Account"
-            ],
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
-        "tactics": [
-          "CredentialAccess"
-        ],
-        "query": "let threshold = 10;\n// The data collection rule sets TimeGenerated from the Delinea eventDateTime and the\n// connector polls in 5 minute windows, so events routinely land several minutes after\n// the time they carry. 'lookback' must stay <= queryPeriod and must be wide enough to\n// absorb that lag, otherwise late arriving events are never evaluated by any run.\nlet lookback = 1h;\n// Must equal queryFrequency so every event is counted by exactly one run.\nlet newSince = 15m;\n// Authentication events only. Matched against eventType.name, falling back to\n// internalName, the same way ASimAuditEventDelineaPlatform resolves the event name.\nlet authEventPattern = @\"(?i)mfa|multifactor|\\blogin\\b|\\blogon\\b|signin|authentication\";\nlet failures =\n    DelineaAuditEvents_CL\n    | where TimeGenerated > ago(lookback)\n    | extend IngestedAt = ingestion_time()\n    | extend d = parse_json(RawData)\n    | extend Attr = d.additionalAttributes\n    | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))\n    | where EventName matches regex authEventPattern\n    // The attributes bag carries either scalars or single element arrays depending on\n    // the reporting service, so both shapes are read - see ASimAuditEventDelineaPlatform.\n    | extend Actor = tostring(coalesce(d.actor.email, d.actor.name, d.actor.displayName)),\n             RawSrcIP = tostring(d.source.host.network.ipAddress),\n             MfaResult = tostring(coalesce(Attr.MfaResult[0], Attr.MfaResult)),\n             FactorPassword = tostring(coalesce(Attr.FactorPassword[0], Attr.FactorPassword)),\n             FailReason = tostring(coalesce(Attr.FailReason[0], Attr.FailReason))\n    | where MfaResult =~ \"Failed\" or FactorPassword =~ \"Failed\" or isnotempty(FailReason)\n    | where isnotempty(Actor)\n    // '0.0.0.0' is the placeholder reported for events that have no network origin.\n    | extend SrcIP = iff(RawSrcIP in (\"\", \"0.0.0.0\"), \"\", RawSrcIP);\nlet recentActors = failures | where IngestedAt > ago(newSince) | distinct Actor;\nfailures\n| where Actor in (recentActors)\n| summarize Failures = count(), DistinctSourceIPs = dcountif(SrcIP, isnotempty(SrcIP)),\n            SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),\n            FailReasons = make_set_if(FailReason, isnotempty(FailReason), 10),\n            SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),\n            StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor\n| where Failures >= threshold\n| project Actor, Failures, DistinctSourceIPs, SourceIPs, FailReasons, SrcIP, StartTime, EndTime\n| sort by Failures desc\n",
         "triggerThreshold": 0,
-        "customDetails": {
-          "DistinctSourceIPs": "DistinctSourceIPs",
-          "Failures": "Failures",
-          "FailReasons": "FailReasons"
-        },
-        "queryPeriod": "1h",
-        "severity": "Medium",
-        "description": "Detects when a single account accumulates an unusually high number of failed authentication\nevents within a short window. Only authentication events - MFA, login and sign-in - are\nconsidered; the service-wide view of every failure lives in the 'Delinea - Failed operations'\nhunting query. A failure is a failed MFA result, a failed password factor, or any login fail\nreason. A burst of failures for one account can indicate brute-force or credential-stuffing\nactivity. Tune 'threshold' to your environment.\n",
-        "triggerOperator": "gt",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        }
+        "triggerOperator": "gt"
       }
     }
   ]
