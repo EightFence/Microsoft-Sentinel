@@ -14,44 +14,44 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n// Fetch GreyNoise IPv4 indicators from the ThreatIntelIndicators (STIX 2.1) table.\n// GreyNoise only publishes ipv4-addr patterns, so a single ObservableKey filter is sufficient.\nlet IP_TI = materialize (\n  ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where SourceSystem == 'GreyNoise'\n  | where ObservableKey == 'ipv4-addr:value'\n  // Take the latest row per indicator first, then evaluate its current state, so an\n  // indicator that has since been deactivated cannot be resurrected by an older row.\n  | summarize arg_max(TimeGenerated, *) by Id\n  | where IsActive == true and IsDeleted == false and ValidUntil > now()\n  | extend TI_ipEntity = ObservableValue\n  | where isnotempty(TI_ipEntity)\n  // Explicit projection keeps TimeGenerated and Type off the left side of the join, avoiding column collisions.\n  // IsActive is retained because the lookups below use it as the match flag.\n  | project IndicatorId = Id, TI_ipEntity, IsActive, ThreatType = tostring(Data.indicator_types[0]), IoCDescription = tostring(Data.description), Tags, Confidence, ValidFrom, ValidUntil\n);\nIP_TI\n  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique\n(\n  _Im_NetworkSession (starttime=ago(dt_lookBack))\n  | where isnotempty(SrcIpAddr)\n  | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor\n  | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.SrcIpAddr == $right.TI_ipEntity\n  | project-rename SrcMatch = IsActive\n  | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.DstIpAddr == $right.TI_ipEntity\n  | project-rename DstMatch = IsActive\n  | where SrcMatch or DstMatch\n  | extend\n      IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),\n      IoCDirection = iff(SrcMatch, \"Source\", \"Destination\")\n)on $left.TI_ipEntity == $right.IoCIP\n| where imNWS_mintime < ValidUntil\n| project imNWS_mintime, imNWS_maxtime, IoCDescription, IndicatorId, ThreatType, ValidFrom, ValidUntil, Confidence, Tags, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct\n",
+        "triggerOperator": "gt",
+        "status": "Available",
         "customDetails": {
-          "IoCIPDirection": "IoCDirection",
-          "IoCDescription": "IoCDescription",
-          "IndicatorId": "IndicatorId",
+          "IoCTags": "Tags",
           "IoCConfidenceScore": "Confidence",
-          "EventEndTime": "imNWS_maxtime",
+          "IoCDescription": "IoCDescription",
           "IoCExpirationTime": "ValidUntil",
           "EventStartTime": "imNWS_mintime",
-          "IoCTags": "Tags",
-          "ThreatType": "ThreatType"
+          "ThreatType": "ThreatType",
+          "IndicatorId": "IndicatorId",
+          "EventEndTime": "imNWS_maxtime",
+          "IoCIPDirection": "IoCDirection"
         },
-        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\n// Fetch GreyNoise IPv4 indicators from the ThreatIntelIndicators (STIX 2.1) table.\n// GreyNoise only publishes ipv4-addr patterns, so a single ObservableKey filter is sufficient.\nlet IP_TI = materialize (\n  ThreatIntelIndicators\n  | where TimeGenerated >= ago(ioc_lookBack)\n  | where SourceSystem == 'GreyNoise'\n  | where ObservableKey == 'ipv4-addr:value'\n  // Take the latest row per indicator first, then evaluate its current state, so an\n  // indicator that has since been deactivated cannot be resurrected by an older row.\n  | summarize arg_max(TimeGenerated, *) by Id\n  | where IsActive == true and IsDeleted == false and ValidUntil > now()\n  | extend TI_ipEntity = ObservableValue\n  | where isnotempty(TI_ipEntity)\n  // Explicit projection keeps TimeGenerated and Type off the left side of the join, avoiding column collisions.\n  // IsActive is retained because the lookups below use it as the match flag.\n  | project IndicatorId = Id, TI_ipEntity, IsActive, ThreatType = tostring(Data.indicator_types[0]), IoCDescription = tostring(Data.description), Tags, Confidence, ValidFrom, ValidUntil\n);\nIP_TI\n  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique\n(\n  _Im_NetworkSession (starttime=ago(dt_lookBack))\n  | where isnotempty(SrcIpAddr)\n  | summarize imNWS_mintime=min(TimeGenerated), imNWS_maxtime=max(TimeGenerated) by SrcIpAddr, DstIpAddr, Dvc, EventProduct, EventVendor\n  | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.SrcIpAddr == $right.TI_ipEntity\n  | project-rename SrcMatch = IsActive\n  | lookup (IP_TI | project TI_ipEntity, IsActive) on $left.DstIpAddr == $right.TI_ipEntity\n  | project-rename DstMatch = IsActive\n  | where SrcMatch or DstMatch\n  | extend\n      IoCIP = iff(SrcMatch, SrcIpAddr, DstIpAddr),\n      IoCDirection = iff(SrcMatch, \"Source\", \"Destination\")\n)on $left.TI_ipEntity == $right.IoCIP\n| where imNWS_mintime < ValidUntil\n| project imNWS_mintime, imNWS_maxtime, IoCDescription, IndicatorId, ThreatType, ValidFrom, ValidUntil, Confidence, Tags, SrcIpAddr, DstIpAddr, IoCDirection, IoCIP, Dvc, EventVendor, EventProduct\n",
-        "severity": "Medium",
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "description": "'This rule identifies a match Network Sessions for which the source or destination IP address is a known GreyNoise IoC.\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'\n",
         "tactics": [
           "CommandAndControl"
         ],
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC.",
-          "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator."
-        },
+        "name": "GreyNoise TI map IP entity to Network Session Events (ASIM Network Session schema)",
+        "description": "'This rule identifies a match Network Sessions for which the source or destination IP address is a known GreyNoise IoC.\nThis analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'\n",
         "entityMappings": [
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "IoCIP",
                 "identifier": "Address"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
         ],
-        "name": "GreyNoise TI map IP entity to Network Session Events (ASIM Network Session schema)",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt"
+        "queryPeriod": "14d",
+        "severity": "Medium",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "A network session {{IoCDirection}} address {{IoCIP}} matched an IoC.",
+          "alertDescriptionFormat": "The {{IoCDirection}} address {{IoCIP}} of a network session  matched a known indicator of compromise of {{ThreatType}}. Consult the threat intelligence blade for more information on the indicator."
+        }
       }
     }
   ]
