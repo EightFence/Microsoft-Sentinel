@@ -14,59 +14,59 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "triggerThreshold": 0,
+        "description": "Detects role assignments, permission or right grants, admin grants and elevation events that\nthe acting user has not performed against the same target in the prior 14 days. Only grant-type actions (added /\nassigned / granted / elevated / approved / created / updated) against role, permission,\nprivilege, admin or entitlement objects are considered; removals and read-only events are\nexcluded, and plain group-membership or ownership events are not matched because they make up\nmost routine directory activity. One alert is produced per actor per run - review the\nFieldChanges column for the before/after of each change.\nTune 'escalationObjects' and 'grantVerbs' to your tenant's event taxonomy, and use\n'excludedEventNames', 'excludedServiceTypes' and 'excludedActors' to silence known-benign\nevents, services (for example directory synchronization) and service accounts.\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "Actor",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "Actor"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "SrcIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "SrcIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
-        "query": "let detectionWindow = 1h;   // must equal queryFrequency\nlet baseline = 14d;         // must stay <= queryPeriod\n// TUNING 1 of 2: the event name must name a privileged object AND end in a grant-type verb.\n// Bare 'member', 'assign', 'owner' and 'group' are deliberately absent - they match\n// routine directory user and group activity.\nlet escalationObjects = @\"(?i)role|permission|privilege|admin|rights|entitlement|elevat|justintime\";\nlet grantVerbs = @\"(?i)(Added|Assigned|Granted|Elevated|Approved|Created|Updated|Modified|Changed)$\";\n// TUNING 2 of 2: tenant specific exclusions, filled in at deployment time. Exact match,\n// case insensitive. Leave empty if unused.\nlet excludedEventNames = dynamic([]);\n//   e.g. dynamic([\"Delinea.Vault.Group.Updated\"]);\nlet excludedServiceTypes = dynamic([]);\n//   e.g. dynamic([\"Identity\"]);\nlet excludedActors = dynamic([]);\n//   e.g. dynamic([\"svc-directory-sync\"]);\nlet grants =\n    DelineaAuditEvents_CL\n    | where TimeGenerated > ago(baseline)\n    | extend IngestedAt = ingestion_time()\n    | extend d = parse_json(RawData)\n    | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))\n    | where EventName matches regex escalationObjects and EventName matches regex grantVerbs\n    | extend Actor = tostring(coalesce(d.actor.name, d.actor.email, d.actor.displayName)),\n             ServiceType = tostring(d.service.type),\n             Target = tostring(coalesce(d.target.displayName, d.target.name)),\n             // ID first - display names can change. Empty when the event carries no target.\n             TargetKey = tostring(coalesce(d.target.id, d.target.platformId, d.target.name, d.target.displayName)),\n             FieldChanges = tostring(d.fieldChanges),\n             RawSrcIP = tostring(d.source.host.network.ipAddress)\n    | where isnotempty(Actor)\n    | where not(EventName in~ (excludedEventNames))\n        and not(ServiceType in~ (excludedServiceTypes))\n        and not(Actor in~ (excludedActors))\n    // '0.0.0.0' is the placeholder reported for events that have no network origin.\n    | extend SrcIP = iff(RawSrcIP in (\"\", \"0.0.0.0\"), \"\", RawSrcIP);\n// Batch by ingestion time so a late arriving event is still evaluated exactly once.\n// The baseline is keyed on the target too, so repeating a grant on the same target is\n// suppressed but the same grant against a new target still alerts.\nlet priorGrants = grants | where IngestedAt <= ago(detectionWindow) | distinct Actor, EventName, TargetKey;\ngrants\n| where IngestedAt > ago(detectionWindow)\n| join kind=leftanti priorGrants on Actor, EventName, TargetKey\n| summarize Changes = count(), EventNames = make_set(EventName, 20),\n            Targets = make_set_if(Target, isnotempty(Target), 20),\n            FieldChanges = make_list_if(FieldChanges, isnotempty(FieldChanges), 10),\n            SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),\n            SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),\n            StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor\n| project StartTime, EndTime, Actor, Changes, EventNames, Targets, FieldChanges, SourceIPs, SrcIP\n| sort by StartTime desc\n",
+        "customDetails": {
+          "Changes": "Changes",
+          "Targets": "Targets",
+          "EventNames": "EventNames"
+        },
+        "queryPeriod": "14d",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "triggerOperator": "gt",
-        "status": "Available",
+        "triggerThreshold": 0,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "Account"
+            ],
+            "lookbackDuration": "P1D",
+            "enabled": true,
+            "matchingMethod": "Selected"
+          }
+        },
+        "queryFrequency": "1h",
+        "severity": "High",
         "tactics": [
           "PrivilegeEscalation",
           "Persistence"
         ],
-        "customDetails": {
-          "Changes": "Changes",
-          "EventNames": "EventNames",
-          "Targets": "Targets"
-        },
-        "description": "Detects role assignments, permission or right grants, admin grants and elevation events that\nthe acting user has not performed against the same target in the prior 14 days. Only grant-type actions (added /\nassigned / granted / elevated / approved / created / updated) against role, permission,\nprivilege, admin or entitlement objects are considered; removals and read-only events are\nexcluded, and plain group-membership or ownership events are not matched because they make up\nmost routine directory activity. One alert is produced per actor per run - review the\nFieldChanges column for the before/after of each change.\nTune 'escalationObjects' and 'grantVerbs' to your tenant's event taxonomy, and use\n'excludedEventNames', 'excludedServiceTypes' and 'excludedActors' to silence known-benign\nevents, services (for example directory synchronization) and service accounts.\n",
         "name": "Delinea - Privilege escalation detected (role / permission changes)",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryFrequency": "1h",
-        "queryPeriod": "14d",
-        "severity": "High",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "groupByEntities": [
-              "Account"
-            ],
-            "reopenClosedIncident": false,
-            "lookbackDuration": "P1D"
-          },
-          "createIncident": true
-        }
+        "query": "let detectionWindow = 1h;   // must equal queryFrequency\nlet baseline = 14d;         // must stay <= queryPeriod\n// TUNING 1 of 2: the event name must name a privileged object AND end in a grant-type verb.\n// Bare 'member', 'assign', 'owner' and 'group' are deliberately absent - they match\n// routine directory user and group activity.\nlet escalationObjects = @\"(?i)role|permission|privilege|admin|rights|entitlement|elevat|justintime\";\nlet grantVerbs = @\"(?i)(Added|Assigned|Granted|Elevated|Approved|Created|Updated|Modified|Changed)$\";\n// TUNING 2 of 2: tenant specific exclusions, filled in at deployment time. Exact match,\n// case insensitive. Leave empty if unused.\nlet excludedEventNames = dynamic([]);\n//   e.g. dynamic([\"Delinea.Vault.Group.Updated\"]);\nlet excludedServiceTypes = dynamic([]);\n//   e.g. dynamic([\"Identity\"]);\nlet excludedActors = dynamic([]);\n//   e.g. dynamic([\"svc-directory-sync\"]);\nlet grants =\n    DelineaAuditEvents_CL\n    | where TimeGenerated > ago(baseline)\n    | extend IngestedAt = ingestion_time()\n    | extend d = parse_json(RawData)\n    | extend EventName = tostring(coalesce(d.eventType.name, d.eventType.internalName))\n    | where EventName matches regex escalationObjects and EventName matches regex grantVerbs\n    | extend Actor = tostring(coalesce(d.actor.name, d.actor.email, d.actor.displayName)),\n             ServiceType = tostring(d.service.type),\n             Target = tostring(coalesce(d.target.displayName, d.target.name)),\n             // ID first - display names can change. Empty when the event carries no target.\n             TargetKey = tostring(coalesce(d.target.id, d.target.platformId, d.target.name, d.target.displayName)),\n             FieldChanges = tostring(d.fieldChanges),\n             RawSrcIP = tostring(d.source.host.network.ipAddress)\n    | where isnotempty(Actor)\n    | where not(EventName in~ (excludedEventNames))\n        and not(ServiceType in~ (excludedServiceTypes))\n        and not(Actor in~ (excludedActors))\n    // '0.0.0.0' is the placeholder reported for events that have no network origin.\n    | extend SrcIP = iff(RawSrcIP in (\"\", \"0.0.0.0\"), \"\", RawSrcIP);\n// Batch by ingestion time so a late arriving event is still evaluated exactly once.\n// The baseline is keyed on the target too, so repeating a grant on the same target is\n// suppressed but the same grant against a new target still alerts.\nlet priorGrants = grants | where IngestedAt <= ago(detectionWindow) | distinct Actor, EventName, TargetKey;\ngrants\n| where IngestedAt > ago(detectionWindow)\n| join kind=leftanti priorGrants on Actor, EventName, TargetKey\n| summarize Changes = count(), EventNames = make_set(EventName, 20),\n            Targets = make_set_if(Target, isnotempty(Target), 20),\n            FieldChanges = make_list_if(FieldChanges, isnotempty(FieldChanges), 10),\n            SourceIPs = make_set_if(SrcIP, isnotempty(SrcIP), 20),\n            SrcIP = take_anyif(SrcIP, isnotempty(SrcIP)),\n            StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Actor\n| project StartTime, EndTime, Actor, Changes, EventNames, Targets, FieldChanges, SourceIPs, SrcIP\n| sort by StartTime desc\n",
+        "status": "Available"
       }
     }
   ]
