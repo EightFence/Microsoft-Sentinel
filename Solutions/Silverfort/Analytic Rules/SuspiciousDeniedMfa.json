@@ -1,0 +1,66 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1b35fc5f-db8c-5fd5-942f-011d208783d0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1b35fc5f-db8c-5fd5-942f-011d208783d0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "UserName",
+                "identifier": "Name"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SourceHost",
+                "identifier": "HostName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "DestinationHost",
+                "identifier": "HostName"
+              }
+            ]
+          }
+        ],
+        "customDetails": {
+          "IncidentKind": "IncidentKind",
+          "IncidentReference": "IncidentId",
+          "IncidentSummary": "IncidentSummary"
+        },
+        "name": "Silverfort - Denied MFA with risk indicators",
+        "queryPeriod": "15m",
+        "queryFrequency": "15m",
+        "description": "Identifies Silverfort incidents involving denied MFA requests accompanied by additional risk indicators, such as a new host or impossible travel. This behavior may indicate a user rejecting an unauthorized authentication attempt.\n",
+        "triggerOperator": "gt",
+        "query": "CommonSecurityLog\n| where DeviceVendor has 'Silverfort'\n| where DeviceProduct has 'Admin Console'\n| where DeviceEventClassID == \"NewIncident\"\n| where Message has \"SuspiciousDeniedMfa\"\n| extend IncidentData = parse_json(replace('^\"\"|\"\"$', '', Message))\n| extend IncidentKind = coalesce(tostring(IncidentData.data.kind), tostring(IncidentData.kind))\n| extend IncidentId = tostring(coalesce(IncidentData.data.id, IncidentData.id))\n| extend IncidentSummary = tostring(coalesce(IncidentData.data.summary, IncidentData.summary))\n| extend UserName = coalesce(\n    tostring(IncidentData.data.users[0].samAccountName),\n    tostring(IncidentData.data.users[0].upn),\n    tostring(IncidentData.data.users[0].displayName),\n    tostring(IncidentData.users[0].displayName)\n)\n| extend SourceHost = coalesce(\n    tostring(IncidentData.data.sources[0].displayName),\n    tostring(IncidentData.sources[0].displayName)\n)\n| extend DestinationHost = coalesce(\n    tostring(IncidentData.data.destinations[0].displayName),\n    tostring(IncidentData.destinations[0].displayName)\n)",
+        "triggerThreshold": 0,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "status": "Available",
+        "severity": "High"
+      }
+    }
+  ]
+}
