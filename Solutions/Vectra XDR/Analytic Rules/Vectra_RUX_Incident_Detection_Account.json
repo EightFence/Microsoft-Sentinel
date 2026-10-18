@@ -14,27 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "customDetails": {
-          "assigned_to": "assigned_to",
-          "entity_url": "entity_url",
-          "external_reference": "external_reference",
-          "detection_id": "detection_id",
-          "entity_id": "entity_id",
-          "entity_type": "entity_type",
-          "detection_name": "detection_name",
-          "investigation_status": "investigation_status",
-          "entity_uid": "entity_uid",
-          "tags": "detection_tags",
-          "mitre_techniques": "mitre_techniques",
-          "category": "detection_category"
-        },
+        "tactics": [
+          "Discovery",
+          "LateralMovement",
+          "CredentialAccess",
+          "Exfiltration",
+          "CommandAndControl",
+          "Persistence"
+        ],
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "severity": "High",
+        "queryFrequency": "10m",
+        "name": "Vectra RUX - Create Incident for Escalated Account Detection or Unresolved Priority Account",
+        "query": "VectraDetectionsCombined\n| where [\"Entity Type\"] == \"account\"\n| summarize arg_max(TimeGenerated, *) by [\"Detection ID\"]\n| where [\"Investigation Status\"] == \"escalated\" or [\"Unresolved Priority\"] == true\n| extend\n    detection_name     = [\"D Type Vname\"],\n    detection_category = [\"Detection Category\"],\n    entity_url         = replace_string(replace_string(URL, \"api/v3.4/\", \"\"), \"api/v3.5/\", \"\"),\n    mitre_techniques   = tostring(Mitre),\n    detection_tags     = tostring(Tags),\n    assigned_to        = [\"Assigned To\"],\n    entity_name = [\"Entity Name\"],\n    entity_uid = [\"Entity UID\"],\n    entity_id = [\"Entity ID\"],\n    detection_id = [\"Detection ID\"],\n    external_reference = [\"External Reference ID\"],\n    investigation_status = [\"Investigation Status\"],\n    entity_type = [\"Entity Type\"]\n",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "groupByAlertDetails": [
+              "DisplayName"
+            ],
+            "lookbackDuration": "P7D",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "Account"
+            ]
+          }
+        },
+        "customDetails": {
+          "entity_url": "entity_url",
+          "external_reference": "external_reference",
+          "entity_uid": "entity_uid",
+          "assigned_to": "assigned_to",
+          "entity_id": "entity_id",
+          "investigation_status": "investigation_status",
+          "detection_id": "detection_id",
+          "tags": "detection_tags",
+          "detection_name": "detection_name",
+          "mitre_techniques": "mitre_techniques",
+          "category": "detection_category",
+          "entity_type": "entity_type"
+        },
         "suppressionEnabled": false,
-        "suppressionDuration": "PT1H",
+        "description": "This query creates a Microsoft Sentinel incident when a detection on an account entity has been escalated in Vectra\n(investigation_status = escalated). Escalation indicates that a human analyst or MDR service\nhas reviewed the detection and determined it requires immediate customer attention or notification.\nOne incident is created per detection - grouping is based on alert display name so that\nrepeated rule evaluations against the same detection do not create duplicate incidents.\n\nThis query creates a Microsoft Sentinel incident when Vectra AI identifies an account entity with one or more detections\nmarked as unresolved and prioritized (unresolved_priority = true). Vectra's AI engine assigns\npriority based on attack rating, velocity, breadth, and identity privilege level. This rule surfaces\naccount-based threats that require analyst attention.\n\nIncidents are grouped per account entity and remain open while the threat persists. Once all associated\ndetections are resolved in Vectra, the incident can be closed in Microsoft Sentinel.\n",
+        "status": "Available",
         "alertDetailsOverride": {
+          "alertDescriptionFormat": "Vectra AI has escalated detection {{detection_name}} ({{detection_category}}) on account or identified account {{entity_name}} as a priority threat. See custom details for full context.\n",
           "alertDynamicProperties": [
             {
               "alertProperty": "AlertLink",
@@ -45,55 +72,28 @@
               "value": "mitre_techniques"
             }
           ],
-          "alertDisplayNameFormat": "Vectra AI - {{detection_name}} on {{entity_name}}",
-          "alertDescriptionFormat": "Vectra AI has escalated detection {{detection_name}} ({{detection_category}}) on account or identified account {{entity_name}} as a priority threat. See custom details for full context.\n"
+          "alertDisplayNameFormat": "Vectra AI - {{detection_name}} on {{entity_name}}"
         },
-        "triggerThreshold": 0,
-        "name": "Vectra RUX - Create Incident for Escalated Account Detection or Unresolved Priority Account",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "matchingMethod": "Selected",
-            "lookbackDuration": "P7D",
-            "groupByEntities": [
-              "Account"
-            ],
-            "groupByAlertDetails": [
-              "DisplayName"
-            ],
-            "enabled": true
-          },
-          "createIncident": true
-        },
-        "queryFrequency": "10m",
-        "triggerOperator": "GreaterThan",
-        "tactics": [
-          "Discovery",
-          "LateralMovement",
-          "CredentialAccess",
-          "Exfiltration",
-          "CommandAndControl",
-          "Persistence"
-        ],
-        "description": "This query creates a Microsoft Sentinel incident when a detection on an account entity has been escalated in Vectra\n(investigation_status = escalated). Escalation indicates that a human analyst or MDR service\nhas reviewed the detection and determined it requires immediate customer attention or notification.\nOne incident is created per detection - grouping is based on alert display name so that\nrepeated rule evaluations against the same detection do not create duplicate incidents.\n\nThis query creates a Microsoft Sentinel incident when Vectra AI identifies an account entity with one or more detections\nmarked as unresolved and prioritized (unresolved_priority = true). Vectra's AI engine assigns\npriority based on attack rating, velocity, breadth, and identity privilege level. This rule surfaces\naccount-based threats that require analyst attention.\n\nIncidents are grouped per account entity and remain open while the threat persists. Once all associated\ndetections are resolved in Vectra, the incident can be closed in Microsoft Sentinel.\n",
-        "status": "Available",
+        "suppressionDuration": "PT1H",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
-                "identifier": "Name",
-                "columnName": "entity_name"
+                "columnName": "entity_name",
+                "identifier": "Name"
               },
               {
-                "identifier": "UPNSuffix",
-                "columnName": "entity_uid"
+                "columnName": "entity_uid",
+                "identifier": "UPNSuffix"
               }
-            ]
+            ],
+            "entityType": "Account"
           }
         ],
-        "query": "VectraDetectionsCombined\n| where [\"Entity Type\"] == \"account\"\n| summarize arg_max(TimeGenerated, *) by [\"Detection ID\"]\n| where [\"Investigation Status\"] == \"escalated\" or [\"Unresolved Priority\"] == true\n| extend\n    detection_name     = [\"D Type Vname\"],\n    detection_category = [\"Detection Category\"],\n    entity_url         = replace_string(replace_string(URL, \"api/v3.4/\", \"\"), \"api/v3.5/\", \"\"),\n    mitre_techniques   = tostring(Mitre),\n    detection_tags     = tostring(Tags),\n    assigned_to        = [\"Assigned To\"],\n    entity_name = [\"Entity Name\"],\n    entity_uid = [\"Entity UID\"],\n    entity_id = [\"Entity ID\"],\n    detection_id = [\"Detection ID\"],\n    external_reference = [\"External Reference ID\"],\n    investigation_status = [\"Investigation Status\"],\n    entity_type = [\"Entity Type\"]\n",
-        "queryPeriod": "10m"
+        "queryPeriod": "10m",
+        "severity": "High",
+        "triggerThreshold": 0,
+        "triggerOperator": "GreaterThan"
       }
     }
   ]
