@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/68ff493b-de53-472b-9a34-15b1453060a1')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/68ff493b-de53-472b-9a34-15b1453060a1')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "High",
+        "status": "Available",
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ThreatUrl",
+                "identifier": "Url"
+              }
+            ],
+            "entityType": "URL"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ThreatIp",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ThreatDomain",
+                "identifier": "DomainName"
+              }
+            ],
+            "entityType": "DNS"
+          }
+        ],
+        "tactics": [
+          "ResourceDevelopment",
+          "InitialAccess"
+        ],
+        "queryFrequency": "15m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "name": "Netcraft Takedown - New takedown",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Netcraft Takedown - {{AttackType}} ({{TakedownId}})",
+          "alertDescriptionFormat": "Takedown {{TakedownId}} ({{AttackType}}): {{Threat}}."
+        },
+        "customDetails": {
+          "CustomerLabel": "CustomerLabel",
+          "IsAuthorized": "IsAuthorized",
+          "IsMaliciousDomain": "IsMaliciousDomain",
+          "GroupId": "GroupId",
+          "AttackType": "AttackType",
+          "IsMaliciousHostname": "IsMaliciousHostname",
+          "ActionRequired": "ActionRequired",
+          "ChangeType": "ChangeType",
+          "IsEscalated": "IsEscalated"
+        },
+        "query": "NetcraftTakedown_Unique\n| where IngestedAt > ago(15m)\n| where EventType == \"takedown\"\n| where ChangeType == \"new\"\n| extend\n    ThreatUrl = iff(Threat matches regex @\"(?i)^https?://\", Threat, \"\"),\n    ThreatIp = iff(isnotempty(parse_ipv4(Threat)) or isnotempty(parse_ipv6(Threat)), Threat, \"\")\n| extend\n    ThreatDomain = iff(isempty(ThreatUrl) and isempty(ThreatIp) and Threat !has \"@\" and Threat matches regex @\"^[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$\", Threat, \"\")\n| project\n    TimeGenerated,\n    EventId,\n    ChangeType,\n    Subject,\n    TakedownId,\n    GroupId,\n    AttackType,\n    Threat,\n    ThreatUrl,\n    ThreatIp,\n    ThreatDomain,\n    IsAuthorized,\n    IsEscalated,\n    IsMaliciousDomain,\n    IsMaliciousHostname,\n    Status,\n    CustomerLabel,\n    ActionRequired\n",
+        "triggerOperator": "gt",
+        "description": "Identifies new Netcraft Takedown records from the Integration Gateway (`EventType == \"takedown\"` and `ChangeType == \"new\"`).\nUpdates to an existing takedown do not alert; use the Takedown workbook to follow status changes. `IsAuthorized` and `IsEscalated` are booleans.\n",
+        "queryPeriod": "4h"
+      }
+    }
+  ]
+}
