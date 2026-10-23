@@ -1,0 +1,102 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bb3b1339-c1fa-473a-8663-3fea78c2e7e2')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bb3b1339-c1fa-473a-8663-3fea78c2e7e2')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "suppressionDuration": "5h",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "matchingMethod": "Selected",
+            "enabled": true,
+            "groupByCustomDetails": [
+              "Customer",
+              "Sensor"
+            ],
+            "reopenClosedIncident": false,
+            "lookbackDuration": "4h",
+            "groupByEntities": [
+              "IP"
+            ]
+          }
+        },
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "HoneyForge: {{EventType}} from {{SrcIpAddr}} on {{SensorName}}",
+          "alertDescriptionFormat": "HoneyForge detected {{EventCount}} event(s) targeting {{DstIpAddr}}\nusing {{ProtocolList}}. Treat this activity as unauthorised until validated.\n"
+        },
+        "name": "HoneyForge - Deception Sensor Interaction",
+        "suppressionEnabled": false,
+        "severity": "High",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryFrequency": "5m",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Reconnaissance",
+          "InitialAccess"
+        ],
+        "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    SrcIpAddr = tostring(SourceIP),\n    DstIpAddr = tostring(DestinationIP),\n    SensorID = tostring(DeviceCustomString1),\n    CustomerID = tostring(DeviceCustomString2),\n    SensorName = iff(\n        isempty(tostring(DeviceCustomString3)),\n        tostring(Computer),\n        tostring(DeviceCustomString3)\n    ),\n    EventType = iff(\n        isempty(tostring(DeviceEventClassID)),\n        \"unknown\",\n        tostring(DeviceEventClassID)\n    ),\n    EventActivity = tostring(Activity),\n    EventProtocol = tostring(Protocol)\n| where isnotempty(SrcIpAddr)\n| where isnotempty(DstIpAddr)\n| summarize\n    TimeGenerated = max(TimeGenerated),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    EventCount = count(),\n    SourcePorts = make_set(tostring(SourcePort), 20),\n    DestinationPorts = make_set(tostring(DestinationPort), 20),\n    Protocols = make_set(EventProtocol, 10),\n    Activities = make_set(EventActivity, 20),\n    CEFSeverities = make_set(tostring(LogSeverity), 10),\n    DeviceVersions = make_set(tostring(DeviceVersion), 10),\n    Collectors = make_set(tostring(Computer), 10)\n    by\n        SrcIpAddr,\n        DstIpAddr,\n        SensorID,\n        CustomerID,\n        SensorName,\n        EventType\n| extend\n    SourcePortList = strcat_array(SourcePorts, \", \"),\n    DestinationPortList = strcat_array(DestinationPorts, \", \"),\n    ProtocolList = strcat_array(Protocols, \", \"),\n    ActivityList = strcat_array(Activities, \", \"),\n    CEFSeverityList = strcat_array(CEFSeverities, \", \"),\n    DeviceVersionList = strcat_array(DeviceVersions, \", \"),\n    CollectorList = strcat_array(Collectors, \", \")\n| project\n    TimeGenerated,\n    FirstSeen,\n    LastSeen,\n    EventCount,\n    SrcIpAddr,\n    DstIpAddr,\n    SourcePortList,\n    DestinationPortList,\n    ProtocolList,\n    SensorID,\n    SensorName,\n    CustomerID,\n    EventType,\n    ActivityList,\n    CEFSeverityList,\n    DeviceVersionList,\n    CollectorList\n",
+        "status": "Available",
+        "customDetails": {
+          "SensorName": "SensorName",
+          "EventCount": "EventCount",
+          "Sensor": "SensorID",
+          "DeviceVersion": "DeviceVersionList",
+          "Customer": "CustomerID",
+          "EventType": "EventType",
+          "LastSeen": "LastSeen",
+          "Protocol": "ProtocolList",
+          "Activity": "ActivityList",
+          "SourcePorts": "SourcePortList",
+          "Collector": "CollectorList",
+          "DestinationPorts": "DestinationPortList",
+          "FirstSeen": "FirstSeen"
+        },
+        "description": "Detects an interaction with a HoneyForge deception sensor. Any activity\ninvolving a HoneyForge sensor must be treated as potentially unauthorised\nuntil validated by the security operations team.\n\nHoneyForge sensors are passive decoy devices  - legitimate systems and users\nshould never communicate with them. Any detected interaction may indicate\nnetwork scanning, lateral movement, or an actively compromised device.\n",
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "SrcIpAddr",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "DstIpAddr",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "SensorName",
+                "identifier": "HostName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "queryPeriod": "5m"
+      }
+    }
+  ]
+}

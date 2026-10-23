@@ -14,11 +14,9 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Low",
-        "status": "Available",
-        "triggerThreshold": 0,
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
                 "columnName": "AccountName",
@@ -32,41 +30,43 @@
                 "columnName": "RecipientAccountId",
                 "identifier": "CloudAppAccountId"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SourceIpAddress",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           }
         ],
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS Management Console sign-in without MFA: {{AccountName}} from {{SourceIpAddress}}",
+          "alertDescriptionFormat": "Successful ConsoleLogin without MFA for {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}."
+        },
+        "name": "AWSCloudTrail - Login to AWS Management Console without MFA",
+        "severity": "Low",
+        "queryFrequency": "1d",
+        "triggerOperator": "gt",
         "tactics": [
           "DefenseEvasion",
           "PrivilegeEscalation",
           "Persistence",
           "InitialAccess"
         ],
-        "queryFrequency": "1d",
-        "name": "AWSCloudTrail - Login to AWS Management Console without MFA",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS Management Console sign-in without MFA: {{AccountName}} from {{SourceIpAddress}}",
-          "alertDescriptionFormat": "Successful ConsoleLogin without MFA for {{AccountName}} from {{SourceIpAddress}} in account {{RecipientAccountId}}."
-        },
+        "query": "AWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),\":\")\n| where MFAUsed !~ \"Yes\" and LoginResult !~ \"Failure\"\n| where SessionIssuerUserName !contains \"AWSReservedSSO\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId\n",
+        "status": "Available",
         "customDetails": {
           "UserAgent": "UserAgent",
           "LoginResult": "LoginResult",
-          "AWSRegion": "AWSRegion",
           "EventName": "EventName",
-          "MFAUsed": "MFAUsed"
+          "MFAUsed": "MFAUsed",
+          "AWSRegion": "AWSRegion"
         },
-        "query": "AWSCloudTrail\n| where EventName =~ \"ConsoleLogin\"\n| extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed), LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin), indexId = indexof(tostring(UserIdentityPrincipalid),\":\")\n| where MFAUsed !~ \"Yes\" and LoginResult !~ \"Failure\"\n| where SessionIssuerUserName !contains \"AWSReservedSSO\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, LoginResult, MFAUsed, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId,  UserIdentityPrincipalid, UserAgent,\nUserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, indexId\n",
-        "triggerOperator": "gt",
         "description": "Identifies successful AWS Management Console sign-ins where CloudTrail records a ConsoleLogin event without\nmulti-factor authentication. The rule looks for logins where MFAUsed is not Yes and the console response is not\nFailure, which can indicate credential misuse or weak account protection.\n",
+        "triggerThreshold": 0,
         "queryPeriod": "1d"
       }
     }
