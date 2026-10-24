@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9b4306d2-af4a-4d68-8db3-8ff15f56b4a3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9b4306d2-af4a-4d68-8db3-8ff15f56b4a3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "query": "let detectionWindow = 1h;\nlet signinLookback = 1h;\nlet baselineEnd = detectionWindow + signinLookback;\nlet UserBaseline = SigninLogs\n| where TimeGenerated between (ago(14d) .. ago(baselineEnd))\n| where ResultType == 0\n| extend Country = tostring(LocationDetails.countryOrRegion)\n| where isnotempty(Country)\n| summarize UsualCountries = make_set(Country) by UserPrincipalName;\nlet PIMActivations = AuditLogs\n| where TimeGenerated > ago(detectionWindow)\n| where OperationName == \"Add member to role completed (PIM activation)\"\n| extend Actor = tostring(InitiatedBy.user.userPrincipalName)\n| where isnotempty(Actor)\n| extend Role = tostring(TargetResources[0].displayName),\n        ActivationIP = tostring(InitiatedBy.user.ipAddress)\n| project ActivationTime = TimeGenerated, Actor, Role, ActivationIP;\nlet CandidateSignins = SigninLogs\n| where TimeGenerated > ago(baselineEnd)\n| where ResultType == 0\n| project SigninTime = TimeGenerated, UserPrincipalName, AuthenticationRequirement,\n    Country = tostring(LocationDetails.countryOrRegion), IPAddress;\nPIMActivations\n| join kind=inner CandidateSignins on $left.Actor == $right.UserPrincipalName\n| where SigninTime between ((ActivationTime - signinLookback) .. ActivationTime)\n| extend MatchScore = iff(isnotempty(ActivationIP) and IPAddress == ActivationIP, 1, 0)\n| summarize arg_max(SigninTime, AuthenticationRequirement, Country, IPAddress) by ActivationTime, Actor, Role, MatchScore\n| summarize arg_max(MatchScore, *) by ActivationTime, Actor, Role\n| extend CorrelationMethod = iff(MatchScore == 1, \"Same IP as activation\", \"Time-window heuristic\")\n| join kind=leftouter UserBaseline on $left.Actor == $right.UserPrincipalName\n| where AuthenticationRequirement != \"multiFactorAuthentication\"\n    or (isnotempty(Country) and array_length(UsualCountries) > 0 and not(set_has_element(UsualCountries, Country)))\n| project ActivationTime, Actor, Role, SigninTime, Country, IPAddress, AuthenticationRequirement, CorrelationMethod, UsualCountries\n",
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "triggerThreshold": 0,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "Actor"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "IPAddress"
+              }
+            ]
+          }
+        ],
+        "description": "'Detects Privileged Identity Management (PIM) role activations where the\npreceding sign-in did not use MFA, or came from a country not seen for that\nuser in the prior 14 days. Either condition alone triggers the alert.\nThe sign-in is linked to the activation heuristically: the sign-in from the\nsame IP as the activation is preferred, otherwise the user''s most recent\nsuccessful sign-in in the hour before the activation is used. The\nCorrelationMethod column shows which was applied. Users with no location\nbaseline, or a sign-in with no country, are not evaluated for the location condition.'\n",
+        "queryPeriod": "14d",
+        "name": "PIM Role Activation After Sign-In Without MFA or From New Country",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "status": "Available",
+        "severity": "High"
+      }
+    }
+  ]
+}
