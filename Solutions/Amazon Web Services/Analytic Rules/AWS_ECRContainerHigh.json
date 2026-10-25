@@ -14,14 +14,30 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "AWSCloudTrail\n| where EventName == \"DescribeImageScanFindings\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend repoName = tostring(parse_json(ResponseElements).repositoryName)\n| extend imageId = tostring(parse_json(ResponseElements).imageId.imageDigest)\n| extend Critical = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.CRITICAL)\n| extend High = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.HIGH)\n| where Critical > 0 or High > 0\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
+        "queryFrequency": "1d",
         "tactics": [
           "Discovery"
         ],
+        "query": "AWSCloudTrail\n| where EventName == \"DescribeImageScanFindings\" and isempty(ErrorCode) and isempty(ErrorMessage)\n| extend repoName = tostring(parse_json(ResponseElements).repositoryName)\n| extend imageId = tostring(parse_json(ResponseElements).imageId.imageDigest)\n| extend Critical = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.CRITICAL)\n| extend High = toint(parse_json(ResponseElements).imageScanFindings.findingSeverityCounts.HIGH)\n| where Critical > 0 or High > 0\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n",
         "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryPeriod": "1d",
+        "name": "AWSCloudTrail - ECR image scan findings high or critical",
+        "severity": "High",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "AWS ECR image scan findings with high or critical Vulnerabilities in {{repoName}}",
+          "alertDescriptionFormat": "ECR image {{imageId}} in repository {{repoName}} returned critical and high findings."
+        },
+        "customDetails": {
+          "ImageDigest": "imageId",
+          "Repository": "repoName",
+          "HighFindings": "High",
+          "CriticalFindings": "Critical"
+        },
+        "description": "Identifies Amazon ECR image scan findings that report high or critical severity vulnerabilities. These findings indicate container images that should be reviewed and remediated before deployment or continued use.\n",
+        "status": "Available",
         "entityMappings": [
           {
-            "entityType": "Account",
             "fieldMappings": [
               {
                 "identifier": "Name",
@@ -35,35 +51,19 @@
                 "identifier": "CloudAppAccountId",
                 "columnName": "RecipientAccountId"
               }
-            ]
+            ],
+            "entityType": "Account"
           },
           {
-            "entityType": "IP",
             "fieldMappings": [
               {
                 "identifier": "Address",
                 "columnName": "SourceIpAddress"
               }
-            ]
+            ],
+            "entityType": "IP"
           }
-        ],
-        "description": "Identifies Amazon ECR image scan findings that report high or critical severity vulnerabilities. These findings indicate container images that should be reviewed and remediated before deployment or continued use.\n",
-        "queryPeriod": "1d",
-        "name": "AWSCloudTrail - ECR image scan findings high or critical",
-        "triggerOperator": "gt",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "AWS ECR image scan findings with high or critical Vulnerabilities in {{repoName}}",
-          "alertDescriptionFormat": "ECR image {{imageId}} in repository {{repoName}} returned critical and high findings."
-        },
-        "customDetails": {
-          "ImageDigest": "imageId",
-          "Repository": "repoName",
-          "CriticalFindings": "Critical",
-          "HighFindings": "High"
-        },
-        "queryFrequency": "1d",
-        "status": "Available",
-        "severity": "High"
+        ]
       }
     }
   ]
