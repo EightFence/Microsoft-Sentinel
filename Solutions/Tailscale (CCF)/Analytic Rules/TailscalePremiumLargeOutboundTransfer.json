@@ -14,7 +14,24 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
+        "query": "let bytesThreshold = 100 * 1024 * 1024;\nTailscale_Network_CL\n| where TimeGenerated > ago(1h)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto), Bytes = tolong(t.txBytes) + tolong(t.rxBytes), Pkts = tolong(t.txPkts) + tolong(t.rxPkts)\n| summarize TotalBytes = sum(Bytes), TotalPackets = sum(Pkts) by NodeId, SrcNodeName, SrcUser, DstNodeName, DstUser, Src, Dst, Proto\n| where TotalBytes > bytesThreshold\n| extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)\n| order by TotalBytes desc\n",
+        "triggerThreshold": 0,
+        "description": "Identifies when a single src-dst pair transfers more than 100 MB over the tailnet within a 1-hour window. Large bursts can indicate data staging, exfiltration, or a misconfigured backup. Requires Tailscale Premium or Enterprise.\n",
+        "triggerOperator": "gt",
+        "tactics": [
+          "Exfiltration",
+          "Collection"
+        ],
+        "queryPeriod": "1h",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "matchingMethod": "AllEntities",
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true
+          },
+          "createIncident": true
+        },
         "entityMappings": [
           {
             "fieldMappings": [
@@ -53,27 +70,10 @@
             "entityType": "IP"
           }
         ],
-        "tactics": [
-          "Exfiltration",
-          "Collection"
-        ],
-        "triggerOperator": "gt",
-        "name": "Tailscale Premium: Large outbound transfer over tailnet",
-        "query": "let bytesThreshold = 100 * 1024 * 1024;\nTailscale_Network_CL\n| where TimeGenerated > ago(1h)\n| where HasVirtualTraffic\n| mv-expand t = VirtualTraffic\n| extend Src = tostring(t.src), Dst = tostring(t.dst), Proto = toint(t.proto), Bytes = tolong(t.txBytes) + tolong(t.rxBytes), Pkts = tolong(t.txPkts) + tolong(t.rxPkts)\n| summarize TotalBytes = sum(Bytes), TotalPackets = sum(Pkts) by NodeId, SrcNodeName, SrcUser, DstNodeName, DstUser, Src, Dst, Proto\n| where TotalBytes > bytesThreshold\n| extend TotalMB = round(TotalBytes / 1024.0 / 1024.0, 2)\n| order by TotalBytes desc\n",
         "queryFrequency": "1h",
-        "triggerThreshold": 0,
-        "status": "Available",
-        "queryPeriod": "1h",
-        "description": "Identifies when a single src-dst pair transfers more than 100 MB over the tailnet within a 1-hour window. Large bursts can indicate data staging, exfiltration, or a misconfigured backup. Requires Tailscale Premium or Enterprise.\n",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        }
+        "severity": "Medium",
+        "name": "Tailscale Premium: Large outbound transfer over tailnet",
+        "status": "Available"
       }
     }
   ]
