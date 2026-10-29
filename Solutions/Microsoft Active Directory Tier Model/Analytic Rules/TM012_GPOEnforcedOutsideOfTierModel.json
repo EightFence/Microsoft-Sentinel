@@ -14,45 +14,17 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "query": "SecurityEvent \n| where EventID == 5136 \n    and not(EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Devices\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Groups\"\n        or EventData matches regex @\"(?i)OU=Tier Model Administration\"\n        or EventData matches regex @\"(?i)OU=Tier Model Computer Quarantine\")\n    and Activity has \"modified\" \n    and EventData has '\"ObjectClass\">organizationalUnit'\n    and EventData has '<Data Name=\"AttributeLDAPDisplayName\">gPLink</Data>' \n    and (EventData has ';0]' \n        or EventData has ';1]' \n        or EventData has ';2]')\n    and EventData has '\"OperationType\">%%14674'\n| extend ObjectName = extract(\"<Data Name=\\\"ObjectDN\\\">((?i)OU=[^,]+(,OU=[^,]+)*),(?i)DC=\", 1, EventData)\n| extend AttributeLDAP = extract(\"<Data Name=\\\"AttributeLDAPDisplayName\\\">([^<]+)</Data>\", 1, EventData)\n| extend AttributeValue = extract(\"\\\\[([^\\\\]]+)\\\\]\", 1, EventData)\n| extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)\n| extend AttributeValueDescription = case(\n    LastThreeChars == \";0\", \"Linked\",\n    LastThreeChars == \";1\", \"Unlinked\",\n    LastThreeChars == \";2\", \"Enforced\",\n    \"Unknown\")\n| where AttributeValueDescription == \"Enforced\"\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectTier = \"Outside Tier Model\"\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , ActivityType = AttributeValueDescription\n   , AttributeLDAP\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n",
-        "triggerThreshold": 0,
-        "description": "Enforcing of a GPO could bypass or override Tier Model GPOs.\n",
-        "triggerOperator": "gt",
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "queryPeriod": "5m",
+        "name": "PROD (TM012.1) - GPO - Enforced Outside of Tier Model",
+        "severity": "High",
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
-        },
-        "customDetails": {
-          "Domain": "Domain",
-          "AttributeLDAP": "AttributeLDAP",
-          "EventData": "EventData",
-          "Channel": "Channel",
-          "ActivityType": "ActivityType",
-          "ObjectClass": "ObjectClass",
-          "ObjectTier": "ObjectTier",
-          "Computer": "Computer",
-          "EventID": "EventID",
-          "Account": "Account",
-          "ObjectName": "ObjectName"
-        },
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "AllEntities",
-            "lookbackDuration": "PT5H",
-            "reopenClosedIncident": false,
-            "enabled": false
-          },
-          "createIncident": true
         },
         "entityMappings": [
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "ObjectName"
+                "columnName": "ObjectName",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
@@ -60,8 +32,8 @@
           {
             "fieldMappings": [
               {
-                "identifier": "HostName",
-                "columnName": "Computer"
+                "columnName": "Computer",
+                "identifier": "HostName"
               }
             ],
             "entityType": "Host"
@@ -69,21 +41,49 @@
           {
             "fieldMappings": [
               {
-                "identifier": "FullName",
-                "columnName": "Account"
+                "columnName": "Account",
+                "identifier": "FullName"
               }
             ],
             "entityType": "Account"
           }
         ],
-        "queryFrequency": "5m",
-        "severity": "High",
-        "name": "PROD (TM012.1) - GPO - Enforced Outside of Tier Model",
-        "status": "Available",
+        "description": "Enforcing of a GPO could bypass or override Tier Model GPOs.\n",
+        "tactics": [
+          "DefenseEvasion"
+        ],
+        "triggerThreshold": 0,
+        "queryPeriod": "5m",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities"
+          }
+        },
+        "triggerOperator": "gt",
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "(TM012.1) A GPO was enforced and is overwriting the Tier Model GPOs",
           "alertDescriptionFormat": "Enforcing a GPO outside the Tier Model can overwrite and bypass Tier Model GPO with security controls."
-        }
+        },
+        "status": "Available",
+        "customDetails": {
+          "Computer": "Computer",
+          "AttributeLDAP": "AttributeLDAP",
+          "ObjectName": "ObjectName",
+          "Channel": "Channel",
+          "EventData": "EventData",
+          "ObjectTier": "ObjectTier",
+          "Domain": "Domain",
+          "EventID": "EventID",
+          "ObjectClass": "ObjectClass",
+          "ActivityType": "ActivityType",
+          "Account": "Account"
+        },
+        "queryFrequency": "5m",
+        "query": "SecurityEvent \n| where EventID == 5136 \n    and not(EventData matches regex @\"(?i)OU=Domain Controllers\"\n        or EventData matches regex @\"(?i)OU=Tier 0 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 1 Member Servers\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Accounts\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Devices\"\n        or EventData matches regex @\"(?i)OU=Tier 2 End-User Groups\"\n        or EventData matches regex @\"(?i)OU=Tier Model Administration\"\n        or EventData matches regex @\"(?i)OU=Tier Model Computer Quarantine\")\n    and Activity has \"modified\" \n    and EventData has '\"ObjectClass\">organizationalUnit'\n    and EventData has '<Data Name=\"AttributeLDAPDisplayName\">gPLink</Data>' \n    and (EventData has ';0]' \n        or EventData has ';1]' \n        or EventData has ';2]')\n    and EventData has '\"OperationType\">%%14674'\n| extend ObjectName = extract(\"<Data Name=\\\"ObjectDN\\\">((?i)OU=[^,]+(,OU=[^,]+)*),(?i)DC=\", 1, EventData)\n| extend AttributeLDAP = extract(\"<Data Name=\\\"AttributeLDAPDisplayName\\\">([^<]+)</Data>\", 1, EventData)\n| extend AttributeValue = extract(\"\\\\[([^\\\\]]+)\\\\]\", 1, EventData)\n| extend LastThreeChars = substring(AttributeValue, strlen(AttributeValue) - 2, 3)\n| extend AttributeValueDescription = case(\n    LastThreeChars == \";0\", \"Linked\",\n    LastThreeChars == \";1\", \"Unlinked\",\n    LastThreeChars == \";2\", \"Enforced\",\n    \"Unknown\")\n| where AttributeValueDescription == \"Enforced\"\n| extend ObjectClass = extract(\"<Data Name=\\\"ObjectClass\\\">([^<]+)</Data>\", 1, EventData)\n| extend ObjectTier = \"Outside Tier Model\"\n| extend Domain = extract(\"([^.]+\\\\.[^.]+)$\", 1, Computer)\n| project TimeGenerated\n   , ObjectName\n   , ObjectTier\n   , ObjectClass\n   , ActivityType = AttributeValueDescription\n   , AttributeLDAP\n   , Account\n   , Domain\n   , Computer\n   , Channel\n   , EventID\n   , EventData\n"
       }
     }
   ]
