@@ -14,77 +14,77 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "RedRays - Profile Parameters",
-        "severity": "Medium",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "description": "Identifies new or materially changed, actionable profile parameter checks from RedRays. Checks marked VULNERABLE raise Medium severity alerts under the integration's policy. Initial findings raise alerts only if you enable baseline alerting in RedRays. The ATT&CK mapping describes how an adversary could abuse weakened SAP security settings, not evidence of an attack. Records outside the one-day query window do not trigger this rule.",
-        "tactics": [
-          "DefenseEvasion",
-          "CredentialAccess"
-        ],
-        "triggerThreshold": 0,
+        "status": "InPreview",
         "queryPeriod": "1d",
+        "queryFrequency": "15m",
+        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysProfileChecks_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceStatus == \"VULNERABLE\"\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
             "enabled": true,
+            "lookbackDuration": "PT24H",
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
             "groupByCustomDetails": [
               "FindingKey"
-            ],
-            "reopenClosedIncident": false,
-            "lookbackDuration": "PT24H",
-            "matchingMethod": "Selected"
+            ]
           }
         },
         "triggerOperator": "gt",
+        "description": "Identifies new or materially changed, actionable profile parameter checks from RedRays. Checks marked VULNERABLE raise Medium severity alerts under the integration's policy. Initial findings raise alerts only if you enable baseline alerting in RedRays. The ATT&CK mapping describes how an adversary could abuse weakened SAP security settings, not evidence of an attack. Records outside the one-day query window do not trigger this rule.",
+        "severity": "Medium",
+        "customDetails": {
+          "FindingKey": "FindingKey",
+          "SystemId": "SystemId",
+          "SapClient": "SapClient",
+          "SourceStatus": "SourceStatus",
+          "Module": "Module",
+          "SourceUrl": "SourceUrl",
+          "EventId": "EventId",
+          "ProductInstanceId": "ProductInstanceId",
+          "SourceSeverity": "SourceSeverity"
+        },
+        "name": "RedRays - Profile Parameters",
         "entityMappings": [
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "EntityHost",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "EntityHost"
               }
-            ],
-            "entityType": "Host"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "EntityIP",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "EntityIP"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
-                "columnName": "EntityUrl",
-                "identifier": "Url"
+                "identifier": "Url",
+                "columnName": "EntityUrl"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
         ],
+        "triggerThreshold": 0,
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "RedRays: {{Title}}"
         },
-        "query": "// Map each ProductInstanceId to its RedRays origin to resolve relative source links.\n// Example: dynamic({\"<ProductInstanceId>\": \"https://redrays.example\"})\nlet redRaysPortalUrls = dynamic({});\nlet observations = RedRaysProfileChecks_CL\n| where TimeGenerated >= ago(1d)\n| extend ArrivedAt = ingestion_time()\n| summarize arg_min(ArrivedAt, *) by EventId;\nlet candidates = observations\n| where IsAlertCandidate == true and ArrivedAt > ago(15m)\n| project FindingKey, AlertFingerprint, AlertEventId = EventId, AlertArrivedAt = ArrivedAt\n| summarize arg_min(AlertArrivedAt, *) by FindingKey, AlertFingerprint;\nobservations\n| summarize arg_max(Revision, *) by FindingKey\n| where IsActionable == true\n| where SourceStatus == \"VULNERABLE\"\n| join kind=inner candidates on FindingKey, AlertFingerprint\n| extend EventId = AlertEventId\n| extend EntityHost = trim_end(@\"\\.\", trim(@\"\\s+\", tostring(Host)))\n| extend EntityIP = iff(EntityHost !contains \"/\" and isnotempty(parse_ipv6(EntityHost)), EntityHost, \"\")\n| extend EntityHost = iff(isempty(EntityIP) and strlen(EntityHost) <= 253\n    and EntityHost matches regex @\"(?i)^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$\"\n    and not(EntityHost matches regex @\"^[0-9.]+$\"), tolower(EntityHost), \"\")\n| extend _portalOrigin = tostring(redRaysPortalUrls[tostring(ProductInstanceId)]), _sourceLink = tostring(SourceUrl)\n| extend _entityUrlCandidate = case(\n    _sourceLink startswith \"/app/\" and _portalOrigin matches regex @\"(?i)^https?://[^/?#@\\s\\\\]+/?$\",\n    strcat(trim_end(@\"/+\", _portalOrigin), _sourceLink),\n    _sourceLink)\n| extend _parsedEntityUrl = parse_url(_entityUrlCandidate)\n| extend EntityUrl = iff(tostring(_parsedEntityUrl.Scheme) in~ (\"https\", \"http\")\n    and isnotempty(tostring(_parsedEntityUrl.Host))\n    and isempty(tostring(_parsedEntityUrl.Username)) and isempty(tostring(_parsedEntityUrl.Password))\n    and not(_entityUrlCandidate matches regex @\"[\\s\\\\]\"), _entityUrlCandidate, \"\")\n| project-away _portalOrigin, _sourceLink, _entityUrlCandidate, _parsedEntityUrl",
-        "status": "InPreview",
-        "customDetails": {
-          "EventId": "EventId",
-          "SourceStatus": "SourceStatus",
-          "ProductInstanceId": "ProductInstanceId",
-          "SapClient": "SapClient",
-          "SourceUrl": "SourceUrl",
-          "SourceSeverity": "SourceSeverity",
-          "FindingKey": "FindingKey",
-          "SystemId": "SystemId",
-          "Module": "Module"
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
         },
-        "queryFrequency": "15m"
+        "tactics": [
+          "DefenseEvasion",
+          "CredentialAccess"
+        ]
       }
     }
   ]
