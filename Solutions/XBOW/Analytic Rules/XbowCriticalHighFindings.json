@@ -14,22 +14,16 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "High",
-        "triggerOperator": "gt",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "matchingMethod": "Selected",
-            "lookbackDuration": "24h",
-            "reopenClosedIncident": false,
-            "groupByCustomDetails": [
-              "FindingID"
-            ],
-            "enabled": true
-          },
-          "createIncident": true
+        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
+        "name": "XbowCriticalHighFindings",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}",
+          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}"
         },
-        "status": "Available",
-        "queryFrequency": "30m",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "queryPeriod": "1h",
         "tactics": [
           "InitialAccess",
           "Execution",
@@ -37,40 +31,46 @@
           "DefenseEvasion",
           "Impact"
         ],
-        "description": "Creates an incident for each Critical or High severity finding reported by XBOW that\nis currently in an open state. These findings represent the most severe security issues\nand require immediate attention. Each alert is deduplicated per finding so re-ingestion\nof the same finding does not produce duplicate incidents.\n",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "{{Severity}} severity finding on {{AssetName}}. {{Summary}}",
-          "alertDisplayNameFormat": "XBOW {{Severity}}: {{FindingName}}"
-        },
+        "queryFrequency": "30m",
+        "triggerOperator": "gt",
         "triggerThreshold": 0,
+        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "enabled": true,
+            "lookbackDuration": "24h",
+            "groupByCustomDetails": [
+              "FindingID"
+            ],
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected"
+          },
+          "createIncident": true
+        },
+        "status": "Available",
+        "severity": "High",
+        "customDetails": {
+          "AssetName": "AssetName",
+          "FindingName": "FindingName",
+          "State": "State",
+          "Severity": "Severity",
+          "AssetID": "AssetId",
+          "FindingID": "FindingId",
+          "Mitigations": "Mitigations",
+          "CreatedAt": "CreatedAt",
+          "OrganizationID": "OrganizationId"
+        },
         "entityMappings": [
           {
+            "entityType": "URL",
             "fieldMappings": [
               {
                 "columnName": "StartUrl",
                 "identifier": "Url"
               }
-            ],
-            "entityType": "URL"
+            ]
           }
-        ],
-        "queryPeriod": "1h",
-        "name": "XbowCriticalHighFindings",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "query": "XbowFindings_CL\n| where TimeGenerated > ago(1h)\n| where tolower(Severity) in ('critical', 'high')\n| where isempty(State) or tolower(State) == 'open'\n| summarize arg_max(TimeGenerated, *) by FindingId\n| join kind=leftouter (\n    XbowAssets_CL\n    | summarize arg_max(TimeGenerated, *) by AssetId\n    | project AssetId, StartUrl\n) on AssetId\n| project\n    TimeGenerated,\n    FindingId,\n    FindingName,\n    Severity,\n    State,\n    Summary,\n    Impact,\n    Mitigations,\n    Recipe,\n    AssetId,\n    AssetName,\n    OrganizationId,\n    CreatedAt,\n    StartUrl\n",
-        "customDetails": {
-          "State": "State",
-          "AssetName": "AssetName",
-          "Severity": "Severity",
-          "AssetID": "AssetId",
-          "CreatedAt": "CreatedAt",
-          "OrganizationID": "OrganizationId",
-          "Mitigations": "Mitigations",
-          "FindingName": "FindingName",
-          "FindingID": "FindingId"
-        }
+        ]
       }
     }
   ]

@@ -14,9 +14,22 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
+        "description": "Detects an interaction with a HoneyForge deception sensor. Any activity\ninvolving a HoneyForge sensor must be treated as potentially unauthorised\nuntil validated by the security operations team.\n\nHoneyForge sensors are passive decoy devices  - legitimate systems and users\nshould never communicate with them. Any detected interaction may indicate\nnetwork scanning, lateral movement, or an actively compromised device.\n",
+        "name": "HoneyForge - Deception Sensor Interaction",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "suppressionDuration": "5h",
-        "severity": "High",
+        "queryPeriod": "5m",
+        "tactics": [
+          "Reconnaissance",
+          "InitialAccess"
+        ],
+        "queryFrequency": "5m",
+        "suppressionEnabled": false,
         "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    SrcIpAddr = tostring(SourceIP),\n    DstIpAddr = tostring(DestinationIP),\n    SensorID = tostring(DeviceCustomString1),\n    CustomerID = tostring(DeviceCustomString2),\n    SensorName = iff(\n        isempty(tostring(DeviceCustomString3)),\n        tostring(Computer),\n        tostring(DeviceCustomString3)\n    ),\n    EventType = iff(\n        isempty(tostring(DeviceEventClassID)),\n        \"unknown\",\n        tostring(DeviceEventClassID)\n    ),\n    EventActivity = tostring(Activity),\n    EventProtocol = tostring(Protocol)\n| where isnotempty(SrcIpAddr)\n| where isnotempty(DstIpAddr)\n| summarize\n    TimeGenerated = max(TimeGenerated),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    EventCount = count(),\n    SourcePorts = make_set(tostring(SourcePort), 20),\n    DestinationPorts = make_set(tostring(DestinationPort), 20),\n    Protocols = make_set(EventProtocol, 10),\n    Activities = make_set(EventActivity, 20),\n    CEFSeverities = make_set(tostring(LogSeverity), 10),\n    DeviceVersions = make_set(tostring(DeviceVersion), 10),\n    Collectors = make_set(tostring(Computer), 10)\n    by\n        SrcIpAddr,\n        DstIpAddr,\n        SensorID,\n        CustomerID,\n        SensorName,\n        EventType\n| extend\n    SourcePortList = strcat_array(SourcePorts, \", \"),\n    DestinationPortList = strcat_array(DestinationPorts, \", \"),\n    ProtocolList = strcat_array(Protocols, \", \"),\n    ActivityList = strcat_array(Activities, \", \"),\n    CEFSeverityList = strcat_array(CEFSeverities, \", \"),\n    DeviceVersionList = strcat_array(DeviceVersions, \", \"),\n    CollectorList = strcat_array(Collectors, \", \")\n| project\n    TimeGenerated,\n    FirstSeen,\n    LastSeen,\n    EventCount,\n    SrcIpAddr,\n    DstIpAddr,\n    SourcePortList,\n    DestinationPortList,\n    ProtocolList,\n    SensorID,\n    SensorName,\n    CustomerID,\n    EventType,\n    ActivityList,\n    CEFSeverityList,\n    DeviceVersionList,\n    CollectorList\n",
         "incidentConfiguration": {
           "groupingConfiguration": {
             "lookbackDuration": "4h",
@@ -24,78 +37,65 @@
               "IP"
             ],
             "enabled": true,
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
             "groupByCustomDetails": [
               "Customer",
               "Sensor"
-            ]
+            ],
+            "matchingMethod": "Selected",
+            "reopenClosedIncident": false
           },
           "createIncident": true
         },
         "status": "Available",
-        "queryFrequency": "5m",
-        "tactics": [
-          "Reconnaissance",
-          "InitialAccess"
-        ],
-        "description": "Detects an interaction with a HoneyForge deception sensor. Any activity\ninvolving a HoneyForge sensor must be treated as potentially unauthorised\nuntil validated by the security operations team.\n\nHoneyForge sensors are passive decoy devices  - legitimate systems and users\nshould never communicate with them. Any detected interaction may indicate\nnetwork scanning, lateral movement, or an actively compromised device.\n",
         "alertDetailsOverride": {
           "alertDescriptionFormat": "HoneyForge detected {{EventCount}} event(s) targeting {{DstIpAddr}}\nusing {{ProtocolList}}. Treat this activity as unauthorised until validated.\n",
           "alertDisplayNameFormat": "HoneyForge: {{EventType}} from {{SrcIpAddr}} on {{SensorName}}"
         },
-        "suppressionEnabled": false,
-        "triggerThreshold": 0,
+        "severity": "High",
+        "customDetails": {
+          "Protocol": "ProtocolList",
+          "LastSeen": "LastSeen",
+          "Customer": "CustomerID",
+          "DestinationPorts": "DestinationPortList",
+          "Sensor": "SensorID",
+          "SourcePorts": "SourcePortList",
+          "EventType": "EventType",
+          "FirstSeen": "FirstSeen",
+          "SensorName": "SensorName",
+          "Activity": "ActivityList",
+          "EventCount": "EventCount",
+          "Collector": "CollectorList",
+          "DeviceVersion": "DeviceVersionList"
+        },
         "entityMappings": [
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "SrcIpAddr",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
                 "columnName": "DstIpAddr",
                 "identifier": "Address"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
                 "columnName": "SensorName",
                 "identifier": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
-        ],
-        "queryPeriod": "5m",
-        "name": "HoneyForge - Deception Sensor Interaction",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "query": "CommonSecurityLog\n| where DeviceVendor =~ \"BUI\"\n| where DeviceProduct =~ \"HoneyForge\"\n| extend\n    SrcIpAddr = tostring(SourceIP),\n    DstIpAddr = tostring(DestinationIP),\n    SensorID = tostring(DeviceCustomString1),\n    CustomerID = tostring(DeviceCustomString2),\n    SensorName = iff(\n        isempty(tostring(DeviceCustomString3)),\n        tostring(Computer),\n        tostring(DeviceCustomString3)\n    ),\n    EventType = iff(\n        isempty(tostring(DeviceEventClassID)),\n        \"unknown\",\n        tostring(DeviceEventClassID)\n    ),\n    EventActivity = tostring(Activity),\n    EventProtocol = tostring(Protocol)\n| where isnotempty(SrcIpAddr)\n| where isnotempty(DstIpAddr)\n| summarize\n    TimeGenerated = max(TimeGenerated),\n    FirstSeen = min(TimeGenerated),\n    LastSeen = max(TimeGenerated),\n    EventCount = count(),\n    SourcePorts = make_set(tostring(SourcePort), 20),\n    DestinationPorts = make_set(tostring(DestinationPort), 20),\n    Protocols = make_set(EventProtocol, 10),\n    Activities = make_set(EventActivity, 20),\n    CEFSeverities = make_set(tostring(LogSeverity), 10),\n    DeviceVersions = make_set(tostring(DeviceVersion), 10),\n    Collectors = make_set(tostring(Computer), 10)\n    by\n        SrcIpAddr,\n        DstIpAddr,\n        SensorID,\n        CustomerID,\n        SensorName,\n        EventType\n| extend\n    SourcePortList = strcat_array(SourcePorts, \", \"),\n    DestinationPortList = strcat_array(DestinationPorts, \", \"),\n    ProtocolList = strcat_array(Protocols, \", \"),\n    ActivityList = strcat_array(Activities, \", \"),\n    CEFSeverityList = strcat_array(CEFSeverities, \", \"),\n    DeviceVersionList = strcat_array(DeviceVersions, \", \"),\n    CollectorList = strcat_array(Collectors, \", \")\n| project\n    TimeGenerated,\n    FirstSeen,\n    LastSeen,\n    EventCount,\n    SrcIpAddr,\n    DstIpAddr,\n    SourcePortList,\n    DestinationPortList,\n    ProtocolList,\n    SensorID,\n    SensorName,\n    CustomerID,\n    EventType,\n    ActivityList,\n    CEFSeverityList,\n    DeviceVersionList,\n    CollectorList\n",
-        "customDetails": {
-          "FirstSeen": "FirstSeen",
-          "Customer": "CustomerID",
-          "SourcePorts": "SourcePortList",
-          "LastSeen": "LastSeen",
-          "Protocol": "ProtocolList",
-          "Activity": "ActivityList",
-          "EventType": "EventType",
-          "EventCount": "EventCount",
-          "DeviceVersion": "DeviceVersionList",
-          "Sensor": "SensorID",
-          "SensorName": "SensorName",
-          "Collector": "CollectorList",
-          "DestinationPorts": "DestinationPortList"
-        }
+        ]
       }
     }
   ]
