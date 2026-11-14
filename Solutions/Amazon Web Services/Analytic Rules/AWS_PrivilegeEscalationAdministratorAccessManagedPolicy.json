@@ -14,13 +14,15 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "queryFrequency": "1d",
-        "status": "Available",
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching AdministratorAccess in account {{RecipientAccountId}}.",
-          "alertDisplayNameFormat": "AWS AdministratorAccess policy attachment by {{AccountName}}"
+        "customDetails": {
+          "EventName": "EventName",
+          "EventSource": "EventSource",
+          "AWSRegion": "AWSRegion",
+          "UserIdentityArn": "UserIdentityArn"
         },
-        "triggerThreshold": 0,
+        "queryPeriod": "1d",
+        "queryFrequency": "1d",
+        "severity": "Medium",
         "entityMappings": [
           {
             "entityType": "Account",
@@ -49,22 +51,20 @@
             ]
           }
         ],
+        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements, RecipientAccountId, AccountName, AccountUPNSuffix\n",
+        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "Detects successful attachment of the AWS managed AdministratorAccess policy to users, roles, or groups.\nThis action can immediately grant full administrative permissions and is a high-risk privilege escalation pattern\nthat should be validated against approved administrative activity.\n",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Detected {{EventName}} from {{SourceIpAddress}} attaching AdministratorAccess in account {{RecipientAccountId}}.",
+          "alertDisplayNameFormat": "AWS AdministratorAccess policy attachment by {{AccountName}}"
+        },
+        "triggerThreshold": 0,
+        "name": "AWSCloudTrail - Privilege escalation with AdministratorAccess managed policy",
         "tactics": [
           "PrivilegeEscalation",
           "Persistence"
-        ],
-        "description": "Detects successful attachment of the AWS managed AdministratorAccess policy to users, roles, or groups.\nThis action can immediately grant full administrative permissions and is a high-risk privilege escalation pattern\nthat should be validated against approved administrative activity.\n",
-        "query": "AWSCloudTrail\n| where  EventName in (\"AttachUserPolicy\",\"AttachRolePolicy\",\"AttachGroupPolicy\") and isempty(ErrorCode) and isempty(ErrorMessage)\n| where tostring(parse_json(RequestParameters).policyArn) startswith \"arn:aws:iam::aws:policy/AdministratorAccess\"\n| extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)\n| extend UserName = tostring(split(UserIdentityArn, '/')[-1])\n| extend AccountName = case( UserIdentityPrincipalid == \"Anonymous\", \"Anonymous\", isempty(UserIdentityUserName), UserName, UserIdentityUserName)\n| extend AccountName = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 0)[0]), AccountName),\n  AccountUPNSuffix = iif(AccountName contains \"@\", tostring(split(AccountName, '@', 1)[0]), \"\")\n| project TimeGenerated, EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent,UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, RequestParameters, UserIdentityArn, ResponseElements, RecipientAccountId, AccountName, AccountUPNSuffix\n",
-        "customDetails": {
-          "UserIdentityArn": "UserIdentityArn",
-          "EventName": "EventName",
-          "AWSRegion": "AWSRegion",
-          "EventSource": "EventSource"
-        },
-        "name": "AWSCloudTrail - Privilege escalation with AdministratorAccess managed policy",
-        "queryPeriod": "1d",
-        "triggerOperator": "gt",
-        "severity": "Medium"
+        ]
       }
     }
   ]

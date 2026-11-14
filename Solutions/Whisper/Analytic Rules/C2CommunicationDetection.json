@@ -14,18 +14,14 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
+        "customDetails": {
+          "ThreatScore": "threatScore",
+          "FeedNames": "feedNames",
+          "ThreatLevel": "threatLevel"
         },
+        "queryPeriod": "1h",
         "queryFrequency": "5m",
-        "status": "Available",
-        "triggerThreshold": 0,
+        "severity": "High",
         "entityMappings": [
           {
             "entityType": "IP",
@@ -55,20 +51,24 @@
             ]
           }
         ],
+        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
+        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "triggerThreshold": 0,
+        "name": "Whisper Security - C2 Communication Detection",
         "tactics": [
           "CommandAndControl"
-        ],
-        "description": "Detects command-and-control communication by joining CommonSecurityLog with Whisper threat intelligence data. Fires when network traffic matches a known C2 indicator with a threat score above 60.\n",
-        "query": "// MITRE ATT&CK: T1071 - Application Layer Protocol\n// Tactic: Command and Control\n// Detects C2 communication by correlating network logs with Whisper threat intel\nlet timeRange = 1h;\nlet threatThreshold = 60;\nlet c2Indicators = WhisperThreatIntel_CL\n    | where TimeGenerated > ago(timeRange)\n    | where isC2 == true\n    | where threatScore > threatThreshold\n    | project indicator, threatScore, threatLevel, feedNames, explanation, lastSeen;\nlet CommonSecurityLogSafe = union isfuzzy=true CommonSecurityLog, (datatable(TimeGenerated:datetime, DestinationIP:string, DestinationHostName:string, SourceIP:string, DeviceProduct:string, DeviceAction:string)[]);\nCommonSecurityLogSafe\n    | where TimeGenerated > ago(timeRange)\n    | where isnotempty(DestinationIP) or isnotempty(DestinationHostName)\n    | extend matchIndicator = coalesce(DestinationHostName, DestinationIP)\n    | join kind=inner (c2Indicators) on $left.matchIndicator == $right.indicator\n    | extend SourceIP = SourceIP, DestinationIP = DestinationIP, DnsDomain = DestinationHostName\n    | project TimeGenerated, SourceIP, DestinationIP, DnsDomain, DeviceProduct, DeviceAction, threatScore, threatLevel, feedNames, explanation\n",
-        "customDetails": {
-          "FeedNames": "feedNames",
-          "ThreatScore": "threatScore",
-          "ThreatLevel": "threatLevel"
-        },
-        "name": "Whisper Security - C2 Communication Detection",
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
-        "severity": "High"
+        ]
       }
     }
   ]

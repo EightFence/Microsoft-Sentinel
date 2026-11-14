@@ -17,18 +17,9 @@
         "subTechniques": [
           "T1590.005"
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "lookbackDuration": "PT5H",
-            "enabled": true,
-            "matchingMethod": "AllEntities",
-            "reopenClosedIncident": false
-          },
-          "createIncident": true
-        },
+        "queryPeriod": "1h",
         "queryFrequency": "1h",
-        "status": "Available",
-        "triggerThreshold": 0,
+        "severity": "High",
         "entityMappings": [
           {
             "entityType": "IP",
@@ -49,15 +40,24 @@
             ]
           }
         ],
+        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(1h)\n      | extend SiteName = tostring(Meta.name),\n               currentIp = tostring(SiteStatistics.wans.WAN.externalIp)\n      | where isnotempty(currentIp)\n      | summarize DistinctIps = make_set(currentIp), arg_max(TimeGenerated, currentIp) by SiteId, SiteName\n      | where array_length(DistinctIps) > 1\n      | extend Activity = strcat('WAN IP changed; observed: ', tostring(DistinctIps))\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentIp = currentIp, ObservedIps = DistinctIps\n",
+        "status": "Available",
+        "triggerOperator": "gt",
+        "description": "Identifies when a site reports more than one distinct WAN external IP within an hour, which may indicate ISP DHCP refresh, WAN reconfiguration, or routing hijack.\n",
+        "incidentConfiguration": {
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "lookbackDuration": "PT5H",
+            "matchingMethod": "AllEntities",
+            "enabled": true
+          },
+          "createIncident": true
+        },
+        "triggerThreshold": 0,
+        "name": "UniFi Site Manager: External WAN IP changed",
         "tactics": [
           "Reconnaissance"
-        ],
-        "description": "Identifies when a site reports more than one distinct WAN external IP within an hour, which may indicate ISP DHCP refresh, WAN reconfiguration, or routing hijack.\n",
-        "query": "Unifi_SiteManager_Sites_CL\n      | where TimeGenerated > ago(1h)\n      | extend SiteName = tostring(Meta.name),\n               currentIp = tostring(SiteStatistics.wans.WAN.externalIp)\n      | where isnotempty(currentIp)\n      | summarize DistinctIps = make_set(currentIp), arg_max(TimeGenerated, currentIp) by SiteId, SiteName\n      | where array_length(DistinctIps) > 1\n      | extend Activity = strcat('WAN IP changed; observed: ', tostring(DistinctIps))\n      | project TimeGenerated, SiteId, SiteName, Activity, CurrentIp = currentIp, ObservedIps = DistinctIps\n",
-        "name": "UniFi Site Manager: External WAN IP changed",
-        "queryPeriod": "1h",
-        "triggerOperator": "gt",
-        "severity": "High"
+        ]
       }
     }
   ]
