@@ -14,63 +14,49 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "description": "'Identifies SharePoint, OneDrive and Teams files that Filewall for Microsoft 365 blocked because an antivirus engine found malware (High severity), or because static analysis flagged the file or its content does not match its file type (Medium severity).\nFiles blocked only by a policy rule (file type, size or encryption) and files sanitized by CDR are not malware verdicts and do not raise this alert; they stay available in the FilewallM365FileEvent parser.\nThe alert maps the file owner, the file and its original hashes, so Microsoft Defender XDR can correlate it with other evidence for the same file or user, and it links to the file in the Filewall console.'\n",
-        "severity": "High",
-        "triggerThreshold": 0,
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "tactics": [
-          "LateralMovement"
-        ],
-        "triggerOperator": "gt",
-        "queryPeriod": "1h",
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "lookbackDuration": "PT5H",
-            "groupByEntities": [
-              "FileHash"
-            ],
-            "enabled": true,
-            "matchingMethod": "Selected"
-          },
-          "createIncident": true
-        },
+        "queryFrequency": "5m",
         "status": "Available",
         "customDetails": {
-          "Site": "site_name",
-          "Drive": "drive_name",
-          "PolicyName": "policy_name",
           "BlockReason": "block_reason",
-          "Workload": "TargetFilePathType",
-          "FilewallReport": "EventReportUrl",
-          "Verdict": "ThreatVerdict",
           "Detail": "summary",
-          "OriginalSHA256": "OriginalFileSha256"
+          "OriginalSHA256": "OriginalFileSha256",
+          "PolicyName": "policy_name",
+          "Workload": "TargetFilePathType",
+          "Verdict": "ThreatVerdict",
+          "FilewallReport": "EventReportUrl",
+          "Drive": "drive_name",
+          "Site": "site_name"
         },
         "alertDetailsOverride": {
           "alertDisplayNameFormat": "Filewall blocked a {{ThreatVerdict}} file in {{TargetFilePathType}} - {{TargetFileName}}",
           "alertDynamicProperties": [
             {
-              "alertProperty": "AlertLink",
-              "value": "EventReportUrl"
+              "value": "EventReportUrl",
+              "alertProperty": "AlertLink"
             }
           ],
-          "alertDescriptionFormat": "Filewall for Microsoft 365 blocked the file {{TargetFileName}} owned by {{ActorUsername}}, block reason {{block_reason}}. The custom details hold the original file hash, site and policy, and the alert link opens the file in the Filewall console.",
-          "alertSeverityColumnName": "EventSeverity"
+          "alertSeverityColumnName": "EventSeverity",
+          "alertDescriptionFormat": "Filewall for Microsoft 365 blocked the file {{TargetFileName}} owned by {{ActorUsername}}, block reason {{block_reason}}. The custom details hold the original file hash, site and policy, and the alert link opens the file in the Filewall console."
         },
+        "description": "'Identifies SharePoint, OneDrive and Teams files that Filewall for Microsoft 365 blocked because an antivirus engine found malware (High severity), or because static analysis flagged the file or its content does not match its file type (Medium severity).\nFiles blocked only by a policy rule (file type, size or encryption) and files sanitized by CDR are not malware verdicts and do not raise this alert; they stay available in the FilewallM365FileEvent parser.\nThe alert maps the file owner, the file and its original hashes, so Microsoft Defender XDR can correlate it with other evidence for the same file or user, and it links to the file in the Filewall console.'\n",
+        "severity": "High",
+        "queryPeriod": "1h",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerThreshold": 0,
+        "query": "// A file can be ingested well after its TimeGenerated, so the rule looks back an hour and takes\n// each file once, by when it was ingested.\nFilewallM365FileEvent()\n| where IngestionTime > ago(5m)\n| where ThreatVerdict in (\"Malicious\", \"Suspicious\")\n| extend OwnerAccountName = tostring(split(ActorUsername, \"@\")[0]), OwnerUPNSuffix = tostring(split(ActorUsername, \"@\")[1])\n| extend Sha256Algorithm = \"SHA256\", Sha1Algorithm = \"SHA1\"\n| project TimeGenerated, ThreatVerdict, EventSeverity, TargetFileName, TargetFileDirectory, TargetFilePathType, TargetFileExtension, block_reason, summary, OriginalFileSha256, OriginalFileSha1, Sha256Algorithm, Sha1Algorithm, ActorUsername, OwnerAccountName, OwnerUPNSuffix, site_name, drive_name, policy_name, EventReportUrl\n",
         "entityMappings": [
           {
             "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "OwnerAccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "OwnerAccountName"
               },
               {
-                "columnName": "OwnerUPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "OwnerUPNSuffix"
               }
             ]
           },
@@ -78,12 +64,12 @@
             "entityType": "File",
             "fieldMappings": [
               {
-                "columnName": "TargetFileName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "TargetFileName"
               },
               {
-                "columnName": "TargetFileDirectory",
-                "identifier": "Directory"
+                "identifier": "Directory",
+                "columnName": "TargetFileDirectory"
               }
             ]
           },
@@ -91,12 +77,12 @@
             "entityType": "FileHash",
             "fieldMappings": [
               {
-                "columnName": "Sha256Algorithm",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "Sha256Algorithm"
               },
               {
-                "columnName": "OriginalFileSha256",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "OriginalFileSha256"
               }
             ]
           },
@@ -104,19 +90,33 @@
             "entityType": "FileHash",
             "fieldMappings": [
               {
-                "columnName": "Sha1Algorithm",
-                "identifier": "Algorithm"
+                "identifier": "Algorithm",
+                "columnName": "Sha1Algorithm"
               },
               {
-                "columnName": "OriginalFileSha1",
-                "identifier": "Value"
+                "identifier": "Value",
+                "columnName": "OriginalFileSha1"
               }
             ]
           }
         ],
-        "queryFrequency": "5m",
-        "name": "Filewall - Malicious or suspicious file blocked in SharePoint, OneDrive or Teams",
-        "query": "// A file can be ingested well after its TimeGenerated, so the rule looks back an hour and takes\n// each file once, by when it was ingested.\nFilewallM365FileEvent()\n| where IngestionTime > ago(5m)\n| where ThreatVerdict in (\"Malicious\", \"Suspicious\")\n| extend OwnerAccountName = tostring(split(ActorUsername, \"@\")[0]), OwnerUPNSuffix = tostring(split(ActorUsername, \"@\")[1])\n| extend Sha256Algorithm = \"SHA256\", Sha1Algorithm = \"SHA1\"\n| project TimeGenerated, ThreatVerdict, EventSeverity, TargetFileName, TargetFileDirectory, TargetFilePathType, TargetFileExtension, block_reason, summary, OriginalFileSha256, OriginalFileSha1, Sha256Algorithm, Sha1Algorithm, ActorUsername, OwnerAccountName, OwnerUPNSuffix, site_name, drive_name, policy_name, EventReportUrl\n"
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "lookbackDuration": "PT5H",
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "matchingMethod": "Selected",
+            "groupByEntities": [
+              "FileHash"
+            ]
+          }
+        },
+        "triggerOperator": "gt",
+        "tactics": [
+          "LateralMovement"
+        ],
+        "name": "Filewall - Malicious or suspicious file blocked in SharePoint, OneDrive or Teams"
       }
     }
   ]
