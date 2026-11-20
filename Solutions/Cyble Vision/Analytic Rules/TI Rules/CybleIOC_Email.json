@@ -1,0 +1,98 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9e2b4c6d-8f1a-4b3c-a5d7-1f2a3b4c5da4')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9e2b4c6d-8f1a-4b3c-a5d7-1f2a3b4c5da4')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ObservableValue",
+                "identifier": "MailboxPrimaryAddress"
+              }
+            ],
+            "entityType": "Mailbox"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "MalwareName",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "Malware"
+          }
+        ],
+        "queryPeriod": "14d",
+        "tactics": [
+          "InitialAccess"
+        ],
+        "customDetails": {
+          "TargetedCountries": "TargetCountries",
+          "IocType": "IocType",
+          "RiskScore": "RiskScore",
+          "LastSeen": "LastSeen",
+          "BehaviourTags": "BehaviourTags",
+          "FirstSeen": "FirstSeen",
+          "ThreatActors": "ThreatActors",
+          "TargetedIndustries": "TargetIndustries",
+          "TargetedRegions": "TargetRegions",
+          "ConfidenceRating": "ConfidenceRating",
+          "ValidUntil": "ValidUntil",
+          "Sources": "Sources",
+          "IndicatorID": "IndicatorId",
+          "RelatedMalwares": "RelatedMalware"
+        },
+        "name": "Cyble IOC - Email",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": true,
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "Mailbox"
+            ],
+            "groupByCustomDetails": [
+              "IndicatorID"
+            ],
+            "matchingMethod": "Selected",
+            "lookbackDuration": "P7D"
+          }
+        },
+        "subTechniques": [
+          "T1566.001",
+          "T1566.002"
+        ],
+        "triggerThreshold": 0,
+        "queryFrequency": "1h",
+        "description": "'Creates an incident when Cyble Vision publishes a new malicious email address indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
+        "suppressionDuration": "PT5H",
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"email-addr:value\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
+        "alertDetailsOverride": {
+          "alertDynamicProperties": [],
+          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}",
+          "alertDisplayNameFormat": "Cyble IOC - Email: {{ObservableValue}}",
+          "alertSeverityColumnName": "AlertSeverity"
+        },
+        "suppressionEnabled": false,
+        "triggerOperator": "gt",
+        "severity": "Medium"
+      }
+    }
+  ]
+}
