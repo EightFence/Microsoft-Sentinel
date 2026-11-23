@@ -17,16 +17,39 @@
         "eventGroupingSettings": {
           "aggregationKind": "AlertPerResult"
         },
-        "suppressionDuration": "PT5H",
-        "queryFrequency": "1h",
-        "alertDetailsOverride": {
-          "alertDynamicProperties": [],
-          "alertSeverityColumnName": "AlertSeverity",
-          "alertDisplayNameFormat": "Cyble IOC - Email: {{ObservableValue}}",
-          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}"
+        "queryPeriod": "14d",
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "groupByEntities": [
+              "Mailbox"
+            ],
+            "lookbackDuration": "P7D",
+            "groupByCustomDetails": [
+              "IndicatorID"
+            ],
+            "matchingMethod": "Selected",
+            "enabled": true
+          }
         },
-        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"email-addr:value\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
-        "triggerOperator": "gt",
+        "triggerThreshold": 0,
+        "customDetails": {
+          "FirstSeen": "FirstSeen",
+          "TargetedCountries": "TargetCountries",
+          "BehaviourTags": "BehaviourTags",
+          "IocType": "IocType",
+          "LastSeen": "LastSeen",
+          "IndicatorID": "IndicatorId",
+          "TargetedIndustries": "TargetIndustries",
+          "ThreatActors": "ThreatActors",
+          "ValidUntil": "ValidUntil",
+          "TargetedRegions": "TargetRegions",
+          "ConfidenceRating": "ConfidenceRating",
+          "Sources": "Sources",
+          "RelatedMalwares": "RelatedMalware",
+          "RiskScore": "RiskScore"
+        },
         "entityMappings": [
           {
             "fieldMappings": [
@@ -47,51 +70,28 @@
             "entityType": "Malware"
           }
         ],
-        "description": "'Creates an incident when Cyble Vision publishes a new malicious email address indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
+        "suppressionEnabled": false,
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Cyble IOC - Email: {{ObservableValue}}",
+          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}",
+          "alertDynamicProperties": [],
+          "alertSeverityColumnName": "AlertSeverity"
+        },
+        "tactics": [
+          "InitialAccess"
+        ],
+        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"email-addr:value\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
         "status": "Available",
         "subTechniques": [
           "T1566.001",
           "T1566.002"
         ],
-        "incidentConfiguration": {
-          "groupingConfiguration": {
-            "groupByEntities": [
-              "Mailbox"
-            ],
-            "reopenClosedIncident": false,
-            "enabled": true,
-            "matchingMethod": "Selected",
-            "lookbackDuration": "P7D",
-            "groupByCustomDetails": [
-              "IndicatorID"
-            ]
-          },
-          "createIncident": true
-        },
         "severity": "Medium",
-        "customDetails": {
-          "TargetedRegions": "TargetRegions",
-          "IocType": "IocType",
-          "RelatedMalwares": "RelatedMalware",
-          "ThreatActors": "ThreatActors",
-          "ConfidenceRating": "ConfidenceRating",
-          "TargetedCountries": "TargetCountries",
-          "ValidUntil": "ValidUntil",
-          "Sources": "Sources",
-          "IndicatorID": "IndicatorId",
-          "LastSeen": "LastSeen",
-          "TargetedIndustries": "TargetIndustries",
-          "FirstSeen": "FirstSeen",
-          "BehaviourTags": "BehaviourTags",
-          "RiskScore": "RiskScore"
-        },
-        "suppressionEnabled": false,
-        "queryPeriod": "14d",
         "name": "Cyble IOC - Email",
-        "tactics": [
-          "InitialAccess"
-        ],
-        "triggerThreshold": 0
+        "queryFrequency": "1h",
+        "description": "'Creates an incident when Cyble Vision publishes a new malicious email address indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
+        "triggerOperator": "gt",
+        "suppressionDuration": "PT5H"
       }
     }
   ]
