@@ -14,42 +14,7 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
-        "queryPeriod": "14d",
-        "incidentConfiguration": {
-          "createIncident": true,
-          "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "groupByEntities": [
-              "DNS"
-            ],
-            "lookbackDuration": "P7D",
-            "groupByCustomDetails": [
-              "IndicatorID"
-            ],
-            "matchingMethod": "Selected",
-            "enabled": true
-          }
-        },
-        "triggerThreshold": 0,
-        "customDetails": {
-          "FirstSeen": "FirstSeen",
-          "TargetedCountries": "TargetCountries",
-          "BehaviourTags": "BehaviourTags",
-          "IocType": "IocType",
-          "LastSeen": "LastSeen",
-          "IndicatorID": "IndicatorId",
-          "TargetedIndustries": "TargetIndustries",
-          "ThreatActors": "ThreatActors",
-          "ValidUntil": "ValidUntil",
-          "TargetedRegions": "TargetRegions",
-          "ConfidenceRating": "ConfidenceRating",
-          "Sources": "Sources",
-          "RelatedMalwares": "RelatedMalware",
-          "RiskScore": "RiskScore"
-        },
+        "description": "'Creates an incident when Cyble Vision publishes a new malicious domain indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
         "entityMappings": [
           {
             "fieldMappings": [
@@ -70,28 +35,63 @@
             "entityType": "Malware"
           }
         ],
-        "suppressionEnabled": false,
+        "queryFrequency": "1h",
+        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"domain-name:value\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n// Optional: skip sinkholed domains (no longer attacker-controlled)\n// | where BehaviourTags !has \"sinkholed\"\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
+        "status": "Available",
+        "suppressionDuration": "PT5H",
+        "subTechniques": [
+          "T1583.001"
+        ],
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Cyble IOC - Domain: {{ObservableValue}}",
           "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}",
-          "alertDynamicProperties": [],
-          "alertSeverityColumnName": "AlertSeverity"
+          "alertDisplayNameFormat": "Cyble IOC - Domain: {{ObservableValue}}",
+          "alertSeverityColumnName": "AlertSeverity",
+          "alertDynamicProperties": []
         },
+        "name": "Cyble IOC - Domain",
+        "triggerThreshold": 0,
+        "suppressionEnabled": false,
+        "triggerOperator": "gt",
         "tactics": [
           "CommandAndControl",
           "ResourceDevelopment"
         ],
-        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"domain-name:value\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n// Optional: skip sinkholed domains (no longer attacker-controlled)\n// | where BehaviourTags !has \"sinkholed\"\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
-        "status": "Available",
-        "subTechniques": [
-          "T1583.001"
-        ],
         "severity": "Medium",
-        "name": "Cyble IOC - Domain",
-        "queryFrequency": "1h",
-        "description": "'Creates an incident when Cyble Vision publishes a new malicious domain indicator to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
-        "triggerOperator": "gt",
-        "suppressionDuration": "PT5H"
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "reopenClosedIncident": false,
+            "matchingMethod": "Selected",
+            "groupByCustomDetails": [
+              "IndicatorID"
+            ],
+            "lookbackDuration": "P7D",
+            "groupByEntities": [
+              "DNS"
+            ],
+            "enabled": true
+          }
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "customDetails": {
+          "Sources": "Sources",
+          "FirstSeen": "FirstSeen",
+          "TargetedIndustries": "TargetIndustries",
+          "IndicatorID": "IndicatorId",
+          "BehaviourTags": "BehaviourTags",
+          "ValidUntil": "ValidUntil",
+          "TargetedCountries": "TargetCountries",
+          "RiskScore": "RiskScore",
+          "ThreatActors": "ThreatActors",
+          "LastSeen": "LastSeen",
+          "IocType": "IocType",
+          "RelatedMalwares": "RelatedMalware",
+          "ConfidenceRating": "ConfidenceRating",
+          "TargetedRegions": "TargetRegions"
+        },
+        "queryPeriod": "14d"
       }
     }
   ]
