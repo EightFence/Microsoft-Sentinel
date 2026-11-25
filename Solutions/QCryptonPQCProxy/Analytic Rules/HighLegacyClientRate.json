@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/47a5a834-60f3-4a3f-ac03-dc9c77dfde9b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/47a5a834-60f3-4a3f-ac03-dc9c77dfde9b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "queryFrequency": "1d",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "ProxyHost"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "severity": "Informational",
+        "queryPeriod": "1d",
+        "query": "PQCProxy_CL\n| where TimeGenerated > ago(1d)\n| where EventType == \"handshake\"\n| summarize Total = count(), Classical = countif(QuantumPosture == \"classical\") by ProxyHost, ProxyInstanceId\n| where Classical * 100.0 / Total > 50\n| extend ClassicalPct = round(100.0 * Classical / Total, 1)\n| project ProxyHost, ProxyInstanceId, Total, Classical, ClassicalPct\n| order by ClassicalPct desc\n",
+        "name": "High percentage of clients connecting without PQC support",
+        "description": "Identifies PQC Proxy instances where more than 50% of TLS handshakes in the last 24 hours\nused classical (non-PQC) key exchange because clients did not offer any post-quantum groups.\nThis is an adoption tracking signal - these clients are not protected against\nharvest-now-decrypt-later attacks. Consider requiring client TLS library upgrades or\ncommunicating PQC requirements to connecting services.\n",
+        "status": "Available",
+        "tactics": [
+          "Discovery"
+        ]
+      }
+    }
+  ]
+}

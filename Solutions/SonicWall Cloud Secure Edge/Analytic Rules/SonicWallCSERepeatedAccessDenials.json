@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9bcdb741-9d3d-485d-a6f2-e227c2c1d881')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9bcdb741-9d3d-485d-a6f2-e227c2c1d881')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UserEmail"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "HostName"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{UserEmail}} was denied {{Denials}} times, starting at {{FirstDenial}}.",
+          "alertDisplayNameFormat": "SonicWall CSE: {{Denials}} access denials for {{UserEmail}}"
+        },
+        "queryPeriod": "2d",
+        "customDetails": {
+          "Denials": "Denials",
+          "Services": "Services",
+          "Reasons": "Reasons"
+        },
+        "query": "let DenialThreshold = 5;\nCSEEvents\n| where IngestedAt > ago(1h)\n| where (EventType == \"Access\" and Action == \"Unauthorized\")\n    or (EventType == \"Identity\" and Action == \"Deny\")\n| where isnotempty(UserEmail)\n| summarize\n    Denials = count(),\n    FirstDenial = min(EventTime),\n    LastDenial = max(EventTime),\n    Reasons = make_set(Message, 10),\n    Services = make_set_if(ServiceName, isnotempty(ServiceName), 10),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    DeviceSerialNumber = take_anyif(DeviceSerialNumber, isnotempty(DeviceSerialNumber)),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))\n    by UserEmail, Hour = bin(EventTime, 1h)\n| where Denials >= DenialThreshold\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(tostring(Devices[0]), DeviceSerialNumber)\n",
+        "name": "SonicWall CSE - Repeated access denials for one user",
+        "description": "'One user was denied by SonicWall Cloud Secure Edge (CSE) repeatedly within an hour: blocked\nconnections or requests (Access Unauthorized) and refused sign-ins (Identity Deny), for\nexample a revoked certificate, a trust score that is too low, or roles with no access to the\nservice. Repeated denials can indicate a compromised or non-compliant device, an account\ntrying resources it is not entitled to, or a misconfigured policy.\nMatches on type and action, not severity. Each event counts once. Denials are counted per hour of event time.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.'\n",
+        "tactics": [
+          "InitialAccess",
+          "Discovery"
+        ]
+      }
+    }
+  ]
+}

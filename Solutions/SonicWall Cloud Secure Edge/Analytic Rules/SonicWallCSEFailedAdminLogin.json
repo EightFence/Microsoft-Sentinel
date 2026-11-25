@@ -1,0 +1,69 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/efeba9d3-9f43-47b5-8fff-be22e0c62208')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/efeba9d3-9f43-47b5-8fff-be22e0c62208')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "UserEmail"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "AccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "ClientIp"
+              }
+            ]
+          }
+        ],
+        "triggerThreshold": 0,
+        "severity": "Medium",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "Failed Command Center sign-in for {{UserEmail}} between {{FirstFailure}} and {{LastFailure}}.",
+          "alertDisplayNameFormat": "SonicWall CSE: {{FailedLogins}} failed admin login(s) for {{UserEmail}}"
+        },
+        "queryPeriod": "2d",
+        "customDetails": {
+          "ClientIps": "ClientIps",
+          "FailedLogins": "FailedLogins",
+          "SubTypes": "SubTypes"
+        },
+        "query": "CSEEvents\n| where IngestedAt > ago(1h)\n| where EventType == \"AdminLogin\" and Action == \"Deny\"\n| summarize\n    FailedLogins = count(),\n    FirstFailure = min(EventTime),\n    LastFailure = max(EventTime),\n    SubTypes = make_set(EventSubType),\n    ClientIps = make_set_if(ClientIp, isnotempty(ClientIp), 10),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),\n    UserAgent = take_any(ClientUserAgent)\n    by UserEmail, UserName\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n",
+        "name": "SonicWall CSE - Failed Command Center admin login",
+        "description": "'A sign-in to the SonicWall Cloud Secure Edge (CSE) Command Center failed (AdminLogin Deny).\nCSE logs failed admin logins at INFO severity, so alerting on severity misses them. Admin\nsign-in normally goes through MySonicWall single sign-on; a failed sign-in with a local\naccount, such as the built-in provisioning account, deserves review.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.'\n",
+        "tactics": [
+          "CredentialAccess",
+          "InitialAccess"
+        ]
+      }
+    }
+  ]
+}
