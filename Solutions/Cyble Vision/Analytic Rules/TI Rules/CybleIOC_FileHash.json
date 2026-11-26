@@ -14,9 +14,25 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "status": "Available",
+        "severity": "Medium",
+        "customDetails": {
+          "TargetedRegions": "TargetRegions",
+          "IocType": "IocType",
+          "TargetedIndustries": "TargetIndustries",
+          "IndicatorID": "IndicatorId",
+          "LastSeen": "LastSeen",
+          "BehaviourTags": "BehaviourTags",
+          "FirstSeen": "FirstSeen",
+          "TargetedCountries": "TargetCountries",
+          "ConfidenceRating": "ConfidenceRating",
+          "RelatedMalwares": "RelatedMalware",
+          "RiskScore": "RiskScore",
+          "ValidUntil": "ValidUntil",
+          "Sources": "Sources",
+          "ThreatActors": "ThreatActors"
+        },
+        "name": "Cyble IOC - File Hash",
         "queryFrequency": "1h",
-        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"file:hashes.MD5\", \"file:hashes.'SHA-1'\", \"file:hashes.'SHA-256'\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend HashAlgorithm = case(ObservableKey has \"MD5\", \"MD5\", ObservableKey has \"SHA-1\", \"SHA1\", \"SHA256\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, HashAlgorithm, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
         "entityMappings": [
           {
             "entityType": "FileHash",
@@ -41,60 +57,44 @@
             ]
           }
         ],
-        "triggerThreshold": 0,
-        "subTechniques": [
-          "T1204.002"
-        ],
-        "triggerOperator": "gt",
-        "severity": "Medium",
-        "alertDetailsOverride": {
-          "alertSeverityColumnName": "AlertSeverity",
-          "alertDynamicProperties": [],
-          "alertDisplayNameFormat": "Cyble IOC - File Hash ({{HashAlgorithm}}): {{ObservableValue}}",
-          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}"
-        },
-        "queryPeriod": "14d",
-        "customDetails": {
-          "TargetedCountries": "TargetCountries",
-          "Sources": "Sources",
-          "LastSeen": "LastSeen",
-          "IndicatorID": "IndicatorId",
-          "IocType": "IocType",
-          "ThreatActors": "ThreatActors",
-          "TargetedRegions": "TargetRegions",
-          "ValidUntil": "ValidUntil",
-          "ConfidenceRating": "ConfidenceRating",
-          "BehaviourTags": "BehaviourTags",
-          "RelatedMalwares": "RelatedMalware",
-          "FirstSeen": "FirstSeen",
-          "RiskScore": "RiskScore",
-          "TargetedIndustries": "TargetIndustries"
-        },
-        "name": "Cyble IOC - File Hash",
-        "suppressionDuration": "PT5H",
-        "description": "'Creates an incident when Cyble Vision publishes a new malicious file hash indicator (MD5, SHA-1 or SHA-256) to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
-        },
         "incidentConfiguration": {
           "createIncident": true,
           "groupingConfiguration": {
-            "reopenClosedIncident": false,
-            "groupByCustomDetails": [
-              "IndicatorID"
-            ],
             "groupByEntities": [
               "FileHash"
             ],
-            "lookbackDuration": "P7D",
+            "groupByCustomDetails": [
+              "IndicatorID"
+            ],
             "matchingMethod": "Selected",
+            "reopenClosedIncident": false,
+            "lookbackDuration": "P7D",
             "enabled": true
           }
         },
+        "subTechniques": [
+          "T1204.002"
+        ],
+        "description": "'Creates an incident when Cyble Vision publishes a new malicious file hash indicator (MD5, SHA-1 or SHA-256) to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
+        "suppressionDuration": "PT5H",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "Cyble IOC - File Hash ({{HashAlgorithm}}): {{ObservableValue}}",
+          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}",
+          "alertSeverityColumnName": "AlertSeverity",
+          "alertDynamicProperties": []
+        },
+        "status": "Available",
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
         "suppressionEnabled": false,
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
         "tactics": [
           "Execution"
-        ]
+        ],
+        "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"file:hashes.MD5\", \"file:hashes.'SHA-1'\", \"file:hashes.'SHA-256'\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend HashAlgorithm = case(ObservableKey has \"MD5\", \"MD5\", ObservableKey has \"SHA-1\", \"SHA1\", \"SHA256\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, HashAlgorithm, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
+        "queryPeriod": "14d"
       }
     }
   ]

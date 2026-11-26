@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ad4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ad4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "severity": "Informational",
+        "name": "High percentage of classical-only clients on PQC Engine",
+        "queryFrequency": "1d",
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "identifier": "HostName",
+                "columnName": "Hostname"
+              }
+            ]
+          }
+        ],
+        "description": "More than 50% of TLS handshakes on a PQC Engine instance in the last 24 hours were from\nclassical-only clients that did not offer any post-quantum key exchange groups. These\nconnections are not protected against harvest-now-decrypt-later attacks. Consider requiring\nPQC-capable TLS libraries or upgrading connecting services to OpenSSL 3.5+ or BoringSSL with\nML-KEM support.\n",
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "tactics": [
+          "Discovery"
+        ],
+        "query": "PQCEngine_CL\n| where TimeGenerated > ago(1d)\n| where EventType == \"handshake\"\n| summarize Total = count(), Classical = countif(ClientClass in (\"classical\", \"legacy\")) by Hostname, InstanceId\n| extend ClassicalPct = round(100.0 * Classical / Total, 1)\n| where ClassicalPct > 50\n| project Hostname, InstanceId, Total, Classical, ClassicalPct\n| order by ClassicalPct desc\n",
+        "queryPeriod": "1d"
+      }
+    }
+  ]
+}
