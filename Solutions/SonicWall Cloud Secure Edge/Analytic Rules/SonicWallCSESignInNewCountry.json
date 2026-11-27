@@ -14,54 +14,54 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "customDetails": {
-          "Country": "ClientCountry",
-          "KnownCountries": "KnownCountries",
-          "Granted": "Granted"
-        },
         "name": "SonicWall CSE - Sign-in from a new country for a user",
-        "queryFrequency": "1h",
-        "entityMappings": [
-          {
-            "entityType": "Account",
-            "fieldMappings": [
-              {
-                "identifier": "FullName",
-                "columnName": "UserEmail"
-              },
-              {
-                "identifier": "Name",
-                "columnName": "AccountName"
-              },
-              {
-                "identifier": "UPNSuffix",
-                "columnName": "UPNSuffix"
-              }
-            ]
-          },
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "ClientIp"
-              }
-            ]
-          }
-        ],
-        "alertDetailsOverride": {
-          "alertDescriptionFormat": "First sign-in from {{ClientCountry}} for {{UserEmail}} in 14 days, at {{FirstSeen}}.",
-          "alertDisplayNameFormat": "SonicWall CSE: {{UserEmail}} signed in from a new country, {{ClientCountry}}"
-        },
         "description": "'A user signed in to, or was refused by, SonicWall Cloud Secure Edge (CSE) from a country not\nseen for that user in the previous 14 days. This can indicate stolen credentials or a stolen\ndevice, and also normal travel. Users with no earlier sign-ins in the period are skipped, so\nnew users do not alert; the \"New users\" hunting query lists them.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. Country is from the CSE sign-in\nevent (Identity events); the query period of 14 days is the history compared against.'\n",
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
+        "alertDetailsOverride": {
+          "alertDisplayNameFormat": "SonicWall CSE: {{UserEmail}} signed in from a new country, {{ClientCountry}}",
+          "alertDescriptionFormat": "First sign-in from {{ClientCountry}} for {{UserEmail}} in 14 days, at {{FirstSeen}}."
+        },
         "tactics": [
           "InitialAccess"
         ],
+        "queryFrequency": "1h",
+        "severity": "Medium",
+        "customDetails": {
+          "KnownCountries": "KnownCountries",
+          "Country": "ClientCountry",
+          "Granted": "Granted"
+        },
+        "triggerThreshold": 0,
+        "triggerOperator": "gt",
+        "queryPeriod": "14d",
         "query": "let RunWindow = 1h;\nlet SignIns = CSEEvents\n    | where EventType == \"Identity\" and Action in (\"Grant\", \"Deny\")\n    | where isnotempty(UserEmail) and isnotempty(ClientCountry);\nlet Known = SignIns\n    | where IngestedAt <= ago(RunWindow)\n    | summarize KnownCountries = make_set(ClientCountry, 50) by UserEmail;\nSignIns\n| where IngestedAt > ago(RunWindow)\n| join kind=inner Known on UserEmail\n| where not(set_has_element(KnownCountries, ClientCountry))\n| summarize\n    SignIns = count(),\n    Granted = countif(Action == \"Grant\"),\n    FirstSeen = min(EventTime),\n    LastSeen = max(EventTime),\n    Cities = make_set_if(ClientCity, isnotempty(ClientCity), 5),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp)),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    KnownCountries = take_any(KnownCountries)\n    by UserEmail, ClientCountry\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1])\n",
-        "queryPeriod": "14d"
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "UserEmail",
+                "identifier": "FullName"
+              },
+              {
+                "columnName": "AccountName",
+                "identifier": "Name"
+              },
+              {
+                "columnName": "UPNSuffix",
+                "identifier": "UPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ClientIp",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ]
       }
     }
   ]

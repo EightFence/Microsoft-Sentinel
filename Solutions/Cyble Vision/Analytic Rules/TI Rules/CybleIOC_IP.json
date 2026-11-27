@@ -14,82 +14,82 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "severity": "Medium",
-        "customDetails": {
-          "TargetedRegions": "TargetRegions",
-          "IocType": "IocType",
-          "TargetedIndustries": "TargetIndustries",
-          "IndicatorID": "IndicatorId",
-          "LastSeen": "LastSeen",
-          "BehaviourTags": "BehaviourTags",
-          "FirstSeen": "FirstSeen",
-          "TargetedCountries": "TargetCountries",
-          "ConfidenceRating": "ConfidenceRating",
-          "RelatedMalwares": "RelatedMalware",
-          "RiskScore": "RiskScore",
-          "ValidUntil": "ValidUntil",
-          "Sources": "Sources",
-          "ThreatActors": "ThreatActors"
-        },
         "name": "Cyble IOC - IP",
-        "queryFrequency": "1h",
-        "entityMappings": [
-          {
-            "entityType": "IP",
-            "fieldMappings": [
-              {
-                "identifier": "Address",
-                "columnName": "ObservableValue"
-              }
-            ]
-          },
-          {
-            "entityType": "Malware",
-            "fieldMappings": [
-              {
-                "identifier": "Name",
-                "columnName": "MalwareName"
-              }
-            ]
-          }
-        ],
         "incidentConfiguration": {
-          "createIncident": true,
           "groupingConfiguration": {
-            "groupByEntities": [
-              "IP"
-            ],
             "groupByCustomDetails": [
               "IndicatorID"
             ],
-            "matchingMethod": "Selected",
-            "reopenClosedIncident": false,
             "lookbackDuration": "P7D",
-            "enabled": true
-          }
-        },
-        "subTechniques": [],
-        "description": "'Creates an incident when Cyble Vision publishes a new malicious IP indicator (IPv4 or IPv6) to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
-        "suppressionDuration": "PT5H",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "Cyble IOC - IP: {{ObservableValue}}",
-          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}",
-          "alertSeverityColumnName": "AlertSeverity",
-          "alertDynamicProperties": []
+            "reopenClosedIncident": false,
+            "enabled": true,
+            "groupByEntities": [
+              "IP"
+            ],
+            "matchingMethod": "Selected"
+          },
+          "createIncident": true
         },
         "status": "Available",
-        "eventGroupingSettings": {
-          "aggregationKind": "AlertPerResult"
+        "suppressionDuration": "PT5H",
+        "alertDetailsOverride": {
+          "alertSeverityColumnName": "AlertSeverity",
+          "alertDynamicProperties": [],
+          "alertDisplayNameFormat": "Cyble IOC - IP: {{ObservableValue}}",
+          "alertDescriptionFormat": "Risk score {{RiskScore}}, confidence {{ConfidenceRating}}, malware {{RelatedMalware}}"
         },
-        "suppressionEnabled": false,
-        "triggerThreshold": 0,
-        "triggerOperator": "gt",
         "tactics": [
           "CommandAndControl",
           "Reconnaissance"
         ],
+        "queryFrequency": "1h",
+        "customDetails": {
+          "IocType": "IocType",
+          "Sources": "Sources",
+          "LastSeen": "LastSeen",
+          "TargetedRegions": "TargetRegions",
+          "RiskScore": "RiskScore",
+          "IndicatorID": "IndicatorId",
+          "FirstSeen": "FirstSeen",
+          "ThreatActors": "ThreatActors",
+          "ConfidenceRating": "ConfidenceRating",
+          "RelatedMalwares": "RelatedMalware",
+          "TargetedCountries": "TargetCountries",
+          "BehaviourTags": "BehaviourTags",
+          "ValidUntil": "ValidUntil",
+          "TargetedIndustries": "TargetIndustries"
+        },
+        "suppressionEnabled": false,
+        "severity": "Medium",
+        "triggerThreshold": 0,
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "triggerOperator": "gt",
+        "subTechniques": [],
+        "description": "'Creates an incident when Cyble Vision publishes a new malicious IP indicator (IPv4 or IPv6) to the ThreatIntelIndicators table. Repeated ingestions of the same indicator within 14 days do not create new incidents.'\n",
+        "queryPeriod": "14d",
         "query": "let lookback = 1h;\nlet iocFilter = dynamic([\"ipv4-addr:value\", \"ipv6-addr:value\"]);\nlet known = ThreatIntelIndicators\n    | where TimeGenerated between (ago(14d) .. ago(lookback))\n    | where SourceSystem == \"CybleVisionIOC\"\n    | distinct Id;\nThreatIntelIndicators\n| where TimeGenerated > ago(lookback)\n| where SourceSystem == \"CybleVisionIOC\"\n| where ObservableKey in (iocFilter)\n| summarize arg_max(TimeGenerated, *) by Id\n| where IsActive == true and ValidUntil > now()\n| join kind=leftanti known on Id\n| extend ConfidenceRating = tostring(AdditionalFields.confidenceRating)\n| extend AlertSeverity = case(ConfidenceRating =~ \"high\", \"High\", ConfidenceRating =~ \"medium\", \"Medium\", ConfidenceRating =~ \"low\", \"Low\", \"Informational\")\n| extend IndicatorId      = Id,\n         IocType          = tostring(AdditionalFields.iocType),\n         RiskScore        = Confidence,\n         Sources          = strcat_array(AdditionalFields.sources, \", \"),\n         BehaviourTags    = strcat_array(AdditionalFields.behaviourTags, \", \"),\n         RelatedMalware   = strcat_array(AdditionalFields.relatedMalware, \", \"),\n         ThreatActors     = strcat_array(AdditionalFields.relatedThreatActors, \", \"),\n         TargetCountries  = strcat_array(AdditionalFields.targetCountries, \", \"),\n         TargetIndustries = strcat_array(AdditionalFields.targetIndustries, \", \"),\n         TargetRegions    = strcat_array(AdditionalFields.targetRegions, \", \"),\n         FirstSeen        = todatetime(AdditionalFields.firstSeen),\n         LastSeen         = todatetime(AdditionalFields.lastSeen),\n         MalwareName      = tostring(AdditionalFields.relatedMalware[0])\n| project TimeGenerated, IndicatorId, ObservableKey, ObservableValue, IocType, RiskScore, ConfidenceRating, AlertSeverity,\n          Sources, BehaviourTags, RelatedMalware, MalwareName, ThreatActors, TargetCountries, TargetIndustries, TargetRegions,\n          FirstSeen, LastSeen, ValidUntil\n",
-        "queryPeriod": "14d"
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "columnName": "ObservableValue",
+                "identifier": "Address"
+              }
+            ],
+            "entityType": "IP"
+          },
+          {
+            "fieldMappings": [
+              {
+                "columnName": "MalwareName",
+                "identifier": "Name"
+              }
+            ],
+            "entityType": "Malware"
+          }
+        ]
       }
     }
   ]
