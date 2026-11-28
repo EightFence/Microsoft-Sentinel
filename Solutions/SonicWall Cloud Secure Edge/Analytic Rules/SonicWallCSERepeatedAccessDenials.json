@@ -14,62 +14,62 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "SonicWall CSE - Repeated access denials for one user",
         "description": "'One user was denied by SonicWall Cloud Secure Edge (CSE) repeatedly within an hour: blocked\nconnections or requests (Access Unauthorized) and refused sign-ins (Identity Deny), for\nexample a revoked certificate, a trust score that is too low, or roles with no access to the\nservice. Repeated denials can indicate a compromised or non-compliant device, an account\ntrying resources it is not entitled to, or a misconfigured policy.\nMatches on type and action, not severity. Each event counts once. Denials are counted per hour of event time.\nEvaluates events by when they reached Sentinel, so events that arrive late (connector\ndelay or a backfill) are evaluated once, when they arrive. The query period is 2 days to\ninclude backfilled events, which keep their own time for up to 48 hours.'\n",
+        "name": "SonicWall CSE - Repeated access denials for one user",
+        "triggerThreshold": 0,
+        "queryPeriod": "2d",
+        "severity": "Medium",
         "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SonicWall CSE: {{Denials}} access denials for {{UserEmail}}",
-          "alertDescriptionFormat": "{{UserEmail}} was denied {{Denials}} times, starting at {{FirstDenial}}."
+          "alertDescriptionFormat": "{{UserEmail}} was denied {{Denials}} times, starting at {{FirstDenial}}.",
+          "alertDisplayNameFormat": "SonicWall CSE: {{Denials}} access denials for {{UserEmail}}"
         },
+        "query": "let DenialThreshold = 5;\nCSEEvents\n| where IngestedAt > ago(1h)\n| where (EventType == \"Access\" and Action == \"Unauthorized\")\n    or (EventType == \"Identity\" and Action == \"Deny\")\n| where isnotempty(UserEmail)\n| summarize\n    Denials = count(),\n    FirstDenial = min(EventTime),\n    LastDenial = max(EventTime),\n    Reasons = make_set(Message, 10),\n    Services = make_set_if(ServiceName, isnotempty(ServiceName), 10),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    DeviceSerialNumber = take_anyif(DeviceSerialNumber, isnotempty(DeviceSerialNumber)),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))\n    by UserEmail, Hour = bin(EventTime, 1h)\n| where Denials >= DenialThreshold\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(tostring(Devices[0]), DeviceSerialNumber)\n",
+        "customDetails": {
+          "Services": "Services",
+          "Reasons": "Reasons",
+          "Denials": "Denials"
+        },
+        "queryFrequency": "1h",
         "tactics": [
           "InitialAccess",
           "Discovery"
         ],
-        "queryFrequency": "1h",
-        "severity": "Medium",
-        "customDetails": {
-          "Denials": "Denials",
-          "Services": "Services",
-          "Reasons": "Reasons"
-        },
-        "triggerThreshold": 0,
         "triggerOperator": "gt",
-        "queryPeriod": "2d",
-        "query": "let DenialThreshold = 5;\nCSEEvents\n| where IngestedAt > ago(1h)\n| where (EventType == \"Access\" and Action == \"Unauthorized\")\n    or (EventType == \"Identity\" and Action == \"Deny\")\n| where isnotempty(UserEmail)\n| summarize\n    Denials = count(),\n    FirstDenial = min(EventTime),\n    LastDenial = max(EventTime),\n    Reasons = make_set(Message, 10),\n    Services = make_set_if(ServiceName, isnotempty(ServiceName), 10),\n    Devices = make_set_if(DeviceName, isnotempty(DeviceName), 5),\n    DeviceSerialNumber = take_anyif(DeviceSerialNumber, isnotempty(DeviceSerialNumber)),\n    ClientIp = take_anyif(ClientIp, isnotempty(ClientIp))\n    by UserEmail, Hour = bin(EventTime, 1h)\n| where Denials >= DenialThreshold\n| extend\n    AccountName = tostring(split(UserEmail, \"@\")[0]),\n    UPNSuffix = tostring(split(UserEmail, \"@\")[1]),\n    HostName = coalesce(tostring(Devices[0]), DeviceSerialNumber)\n",
         "entityMappings": [
           {
+            "entityType": "Account",
             "fieldMappings": [
               {
-                "columnName": "UserEmail",
-                "identifier": "FullName"
+                "identifier": "FullName",
+                "columnName": "UserEmail"
               },
               {
-                "columnName": "AccountName",
-                "identifier": "Name"
+                "identifier": "Name",
+                "columnName": "AccountName"
               },
               {
-                "columnName": "UPNSuffix",
-                "identifier": "UPNSuffix"
+                "identifier": "UPNSuffix",
+                "columnName": "UPNSuffix"
               }
-            ],
-            "entityType": "Account"
+            ]
           },
           {
+            "entityType": "IP",
             "fieldMappings": [
               {
-                "columnName": "ClientIp",
-                "identifier": "Address"
+                "identifier": "Address",
+                "columnName": "ClientIp"
               }
-            ],
-            "entityType": "IP"
+            ]
           },
           {
+            "entityType": "Host",
             "fieldMappings": [
               {
-                "columnName": "HostName",
-                "identifier": "HostName"
+                "identifier": "HostName",
+                "columnName": "HostName"
               }
-            ],
-            "entityType": "Host"
+            ]
           }
         ]
       }

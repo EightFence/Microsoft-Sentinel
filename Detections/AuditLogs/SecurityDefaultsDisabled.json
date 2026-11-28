@@ -1,0 +1,99 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8fdfa0c5-0a81-4b07-a36b-311a3130090e')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8fdfa0c5-0a81-4b07-a36b-311a3130090e')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "status": "InPreview",
+        "name": "Entra ID security defaults disabled",
+        "description": "Identifies when security defaults are turned off in Microsoft Entra ID.\nSecurity defaults require all users to register for MFA, require MFA for administrators and when necessary for users, protect access to the Azure portal and other management tools, and block legacy authentication and device code flow.\nAn attacker with the Conditional Access Administrator role or higher can turn them off so that stolen passwords work without MFA.\nTurning them off is also a normal step when moving to Conditional Access, so check for a planned change.\nThe alert shows the setting before and after the change.\nRef: https://learn.microsoft.com/entra/fundamentals/security-defaults\n",
+        "tactics": [
+          "CredentialAccess",
+          "DefenseEvasion",
+          "Persistence"
+        ],
+        "query": "AuditLogs\n| where TimeGenerated > ago(2h)\n| where ingestion_time() > ago(1h)\n| where OperationName =~ \"Update security defaults\"\n| where Result !~ \"failure\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| extend TargetResourceName = tostring(TargetResources[0].displayName)\n| extend TargetResourceType = tostring(TargetResources[0].type)\n| extend ModifiedProperties = TargetResources[0].modifiedProperties\n| mv-apply Property = ModifiedProperties on (\n    extend PropertyOld = parse_json(tostring(Property.oldValue)), PropertyNew = parse_json(tostring(Property.newValue))\n    | where isnotempty(tostring(PropertyNew.isEnabled)) or isnotempty(tostring(PropertyOld.isEnabled))\n    | project SecurityDefaultsEnabledBefore = tostring(PropertyOld.isEnabled), SecurityDefaultsEnabledAfter = tostring(PropertyNew.isEnabled)\n    | extend IsDisableChange = iff(SecurityDefaultsEnabledAfter =~ \"false\" and not(SecurityDefaultsEnabledBefore =~ \"false\"), 1, 0)\n    | top 1 by IsDisableChange desc\n    | project-away IsDisableChange\n  )\n| where SecurityDefaultsEnabledAfter =~ \"false\"\n| where not(SecurityDefaultsEnabledBefore =~ \"false\")\n| project-reorder TimeGenerated, OperationName, TargetResourceName, TargetResourceType, SecurityDefaultsEnabledBefore, SecurityDefaultsEnabledAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress, ModifiedProperties\n",
+        "queryPeriod": "2h",
+        "customDetails": {
+          "EnabledBefore": "SecurityDefaultsEnabledBefore",
+          "Operation": "OperationName",
+          "InitiatingApp": "InitiatingAppName",
+          "EnabledAfter": "SecurityDefaultsEnabledAfter",
+          "TargetType": "TargetResourceType",
+          "TargetName": "TargetResourceName"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingAccountUPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "InitiatingAadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "InitiatingIPAddress"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "descambiado"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection",
+              "Identity"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

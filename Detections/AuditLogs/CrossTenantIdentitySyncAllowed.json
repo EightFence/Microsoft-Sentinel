@@ -1,0 +1,98 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7ca69a51-4328-4104-8ceb-69d371e362f0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7ca69a51-4328-4104-8ceb-69d371e362f0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "status": "InPreview",
+        "name": "Entra ID cross-tenant identity sync allowed",
+        "description": "Identifies when cross-tenant identity synchronization from a partner tenant is allowed in Microsoft Entra ID, either by creating the setting with inbound sync allowed or by changing an existing one to allowed.\nWhen inbound sync is allowed, administrators of the partner tenant can create, update and delete B2B users in this tenant without anyone here creating them.\nAn attacker with at least the Security Administrator role here could allow sync from a tenant they control and use it to push accounts in.\nMicrosoft intends cross-tenant sync for tenants of the same organization, so a partner outside it is worth checking first.\nTurning sync off or deleting the setting does not alert, and the update record does not carry the partner tenant id, so take it from the create record or from the cross-tenant access settings.\nRef: https://learn.microsoft.com/entra/identity/multi-tenant-organizations/cross-tenant-synchronization-overview\n",
+        "tactics": [
+          "InitialAccess",
+          "Persistence",
+          "DefenseEvasion"
+        ],
+        "query": "AuditLogs\n| where TimeGenerated > ago(2h)\n| where ingestion_time() > ago(1h)\n| where OperationName in~ (\"Create a partner cross-tenant identity sync setting\", \"Update a partner cross-tenant identity sync setting\")\n| where Result !~ \"failure\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| mv-apply Target = TargetResources on (\n    mv-expand Property = Target.modifiedProperties\n    | summarize PropertyBag = make_bag(bag_pack(tostring(Property.displayName), bag_pack(\"old\", tostring(Property.oldValue), \"new\", tostring(Property.newValue))))\n  )\n| extend PartnerTenantId = tostring(parse_json(tostring(PropertyBag.PartnerIdentifier.new))[0])\n| extend DetailBefore = parse_json(tostring(parse_json(tostring(PropertyBag.PartnerPolicyDetail.old))[0].Detail))\n| extend DetailAfter = parse_json(tostring(parse_json(tostring(PropertyBag.PartnerPolicyDetail.new))[0].Detail))\n| extend SyncAllowedBefore = tostring(DetailBefore.UserSyncInbound.IsSyncAllowed)\n| extend SyncAllowedAfter = tostring(DetailAfter.UserSyncInbound.IsSyncAllowed)\n| where (SyncAllowedAfter =~ \"true\" and SyncAllowedBefore !~ \"true\") or (isempty(SyncAllowedAfter) and isnotempty(tostring(PropertyBag.PartnerPolicyDetail.new)))\n| project-reorder TimeGenerated, OperationName, PartnerTenantId, SyncAllowedBefore, SyncAllowedAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress\n",
+        "queryPeriod": "2h",
+        "customDetails": {
+          "SyncAllowedBefore": "SyncAllowedBefore",
+          "SyncAllowedAfter": "SyncAllowedAfter",
+          "InitiatingApp": "InitiatingAppName",
+          "PartnerTenantId": "PartnerTenantId",
+          "Operation": "OperationName"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingAccountUPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "InitiatingAadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "InitiatingIPAddress"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "descambiado"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection",
+              "Identity"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "Parameters": {
+    "Workspace": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f59e08b0-c9c0-4af8-8065-f868f2e8a040')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f59e08b0-c9c0-4af8-8065-f868f2e8a040')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2021-03-01-preview",
+      "properties": {
+        "status": "InPreview",
+        "name": "Entra ID authentication strength change",
+        "description": "Identifies when the allowed sign-in method combinations of a custom authentication strength are changed in Microsoft Entra ID.\nAn authentication strength lists the method combinations that satisfy a Conditional Access policy, for example phishing-resistant methods only.\nAn attacker with the Conditional Access Administrator role could add a weaker method to a strength that a policy already uses, so the policy stays in place but accepts weaker sign-ins.\nCreating or deleting a whole strength is not covered, and neither are the advanced options (AAGUIDs and certificate issuers).\nThe alert shows the combinations before and after the change and the id of the strength.\nRef: https://learn.microsoft.com/entra/identity/authentication/concept-authentication-strengths\n",
+        "tactics": [
+          "CredentialAccess",
+          "DefenseEvasion",
+          "Persistence"
+        ],
+        "query": "AuditLogs\n| where TimeGenerated > ago(2h)\n| where ingestion_time() > ago(1h)\n| where OperationName =~ \"Authentication Strength Policy Update\"\n| where Result !~ \"failure\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| mv-apply Target = TargetResources on (\n    mv-expand Property = Target.modifiedProperties\n    | summarize PropertyBag = make_bag(bag_pack(tostring(Property.displayName), bag_pack(\"old\", tostring(Property.oldValue), \"new\", tostring(Property.newValue))))\n  )\n| extend CombinationsBefore = trim('\"', tostring(PropertyBag.AllowedCombinations.old))\n| extend CombinationsAfter = trim('\"', tostring(PropertyBag.AllowedCombinations.new))\n| extend StrengthId = trim('\"', tostring(PropertyBag.Id.new))\n| where isnotempty(CombinationsAfter)\n| mv-apply Combination = split(CombinationsBefore, \"|\") to typeof(string) on (\n    extend Methods = strcat_array(array_sort_asc(split(replace_string(Combination, \" \", \"\"), \",\")), \",\")\n    | where isnotempty(Methods)\n    | summarize NormalizedBefore = tostring(array_sort_asc(make_set(Methods)))\n  )\n| mv-apply Combination = split(CombinationsAfter, \"|\") to typeof(string) on (\n    extend Methods = strcat_array(array_sort_asc(split(replace_string(Combination, \" \", \"\"), \",\")), \",\")\n    | where isnotempty(Methods)\n    | summarize NormalizedAfter = tostring(array_sort_asc(make_set(Methods)))\n  )\n| where NormalizedBefore != NormalizedAfter\n| project-away NormalizedBefore, NormalizedAfter\n| project-reorder TimeGenerated, OperationName, StrengthId, CombinationsBefore, CombinationsAfter, InitiatingUserPrincipalName, InitiatingAppName, InitiatingIPAddress\n",
+        "queryPeriod": "2h",
+        "customDetails": {
+          "StrengthId": "StrengthId",
+          "InitiatingApp": "InitiatingAppName",
+          "CombinationsAfter": "CombinationsAfter",
+          "CombinationsBefore": "CombinationsBefore",
+          "Operation": "OperationName"
+        },
+        "eventGroupingSettings": {
+          "aggregationKind": "AlertPerResult"
+        },
+        "entityMappings": [
+          {
+            "fieldMappings": [
+              {
+                "identifier": "FullName",
+                "columnName": "InitiatingUserPrincipalName"
+              },
+              {
+                "identifier": "Name",
+                "columnName": "InitiatingAccountName"
+              },
+              {
+                "identifier": "UPNSuffix",
+                "columnName": "InitiatingAccountUPNSuffix"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "AadUserId",
+                "columnName": "InitiatingAadUserId"
+              }
+            ],
+            "entityType": "Account"
+          },
+          {
+            "fieldMappings": [
+              {
+                "identifier": "Address",
+                "columnName": "InitiatingIPAddress"
+              }
+            ],
+            "entityType": "IP"
+          }
+        ],
+        "severity": "Medium",
+        "triggerOperator": "gt",
+        "queryFrequency": "1h",
+        "triggerThreshold": 0,
+        "metadata": {
+          "source": {
+            "kind": "Community"
+          },
+          "author": {
+            "name": "descambiado"
+          },
+          "support": {
+            "tier": "Community"
+          },
+          "categories": {
+            "domains": [
+              "Security - Threat Protection",
+              "Identity"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

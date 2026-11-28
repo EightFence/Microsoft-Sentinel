@@ -14,34 +14,34 @@
       "kind": "Scheduled",
       "apiVersion": "2021-03-01-preview",
       "properties": {
-        "name": "SonicWall CSE - Event connector failing to fetch data",
         "description": "'The SonicWall Cloud Secure Edge (CSE) event connector reported a failed data fetch, for\nexample HTTP 401 after the API key was deleted or expired. While it fails, no CSE events are\ningested, and events from the failure period are not fetched later: after fixing the cause,\ndisconnect and connect the connector, then backfill the gap.\nThe rule matches both health records the poller writes: a \"Data fetch status change\" with\nStatus Failure (written once, when the status changes) and the hourly \"Data fetch failure\nsummary\" (written while failures continue). A poller that stops polling without failing\nwrites neither; the rule \"SonicWall CSE - No events ingested\" covers that case.'\n",
-        "alertDetailsOverride": {
-          "alertDisplayNameFormat": "SonicWall CSE connector fetch failure: {{StatusCode}}",
-          "alertDescriptionFormat": "{{StatusMessage}}"
-        },
-        "tactics": [
-          "DefenseEvasion"
-        ],
-        "queryFrequency": "15m",
+        "name": "SonicWall CSE - Event connector failing to fetch data",
+        "triggerThreshold": 0,
+        "queryPeriod": "1h",
         "severity": "High",
+        "alertDetailsOverride": {
+          "alertDescriptionFormat": "{{StatusMessage}}",
+          "alertDisplayNameFormat": "SonicWall CSE connector fetch failure: {{StatusCode}}"
+        },
+        "query": "// Only records ingested since the previous run, so each record alerts once although the\n// query period overlaps runs to allow for health ingestion delay.\nSentinelHealth\n| where ingestion_time() > ago(15m)\n| where SentinelResourceType == \"Data connector\" and SentinelResourceKind == \"ApiPolling\"\n| where SentinelResourceName endswith \"CSEEventsPoller\"\n| where Status == \"Failure\" or OperationName == \"Data fetch failure summary\"\n| extend Failures = ExtendedProperties.FailureSummary\n| mv-expand Failure = iff(array_length(Failures) > 0, Failures, dynamic([{}]))\n| extend\n    StatusCode = coalesce(tostring(Failure.StatusCode), Reason),\n    FailureType = tostring(Failure.HealthResultType),\n    StatusMessage = coalesce(tostring(Failure.StatusMessage), Description),\n    FailureStart = todatetime(ExtendedProperties.StartTime),\n    FailureEnd = todatetime(ExtendedProperties.EndTime)\n| project TimeGenerated, SentinelResourceName, OperationName, Status, StatusCode, FailureType,\n    StatusMessage, FailureStart, FailureEnd, SentinelResourceId\n",
         "customDetails": {
           "FailureType": "FailureType",
           "StatusCode": "StatusCode"
         },
-        "triggerThreshold": 0,
+        "queryFrequency": "15m",
+        "tactics": [
+          "DefenseEvasion"
+        ],
         "triggerOperator": "gt",
-        "queryPeriod": "1h",
-        "query": "// Only records ingested since the previous run, so each record alerts once although the\n// query period overlaps runs to allow for health ingestion delay.\nSentinelHealth\n| where ingestion_time() > ago(15m)\n| where SentinelResourceType == \"Data connector\" and SentinelResourceKind == \"ApiPolling\"\n| where SentinelResourceName endswith \"CSEEventsPoller\"\n| where Status == \"Failure\" or OperationName == \"Data fetch failure summary\"\n| extend Failures = ExtendedProperties.FailureSummary\n| mv-expand Failure = iff(array_length(Failures) > 0, Failures, dynamic([{}]))\n| extend\n    StatusCode = coalesce(tostring(Failure.StatusCode), Reason),\n    FailureType = tostring(Failure.HealthResultType),\n    StatusMessage = coalesce(tostring(Failure.StatusMessage), Description),\n    FailureStart = todatetime(ExtendedProperties.StartTime),\n    FailureEnd = todatetime(ExtendedProperties.EndTime)\n| project TimeGenerated, SentinelResourceName, OperationName, Status, StatusCode, FailureType,\n    StatusMessage, FailureStart, FailureEnd, SentinelResourceId\n",
         "entityMappings": [
           {
+            "entityType": "AzureResource",
             "fieldMappings": [
               {
-                "columnName": "SentinelResourceId",
-                "identifier": "ResourceId"
+                "identifier": "ResourceId",
+                "columnName": "SentinelResourceId"
               }
-            ],
-            "entityType": "AzureResource"
+            ]
           }
         ]
       }
